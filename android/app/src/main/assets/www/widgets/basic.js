@@ -247,7 +247,7 @@ W.media = {
           q('.m-artist').textContent = t('w.pressToResume');
           q('.fill').style.width = '0';
           q('.m-pos').textContent = q('.m-dur').textContent = '0:00';
-          ariaSec = -1; paintAria(0);
+          ariaSec = -1; paintAria(0); bar.setAttribute('aria-disabled', 'true');
           if (artId !== 0) { artId = 0; img.classList.remove('on'); setArtColor(null); }
           return;
         }
@@ -264,8 +264,16 @@ W.media = {
           q('.m-dur').textContent = fmtTime(m.durMs);
         }
         // the slider's range and value for assistive technology (its maximum defaults to 100 without this)
-        bar.setAttribute('aria-valuemax', Math.max(1, Math.round((m.durMs || 0) / 1000)));
-        if (m.durMs > 0 && media && !scrub) { ariaSec = Math.floor(nowMs() / 1000); paintAria(nowMs()); }
+        if (m.durMs > 0) {
+          bar.setAttribute('aria-valuemax', Math.max(1, Math.round(m.durMs / 1000)));
+          bar.setAttribute('aria-disabled', String(!m.canSeek));
+          if (media && !scrub) { ariaSec = Math.floor(nowMs() / 1000); paintAria(nowMs()); }
+        } else {
+          // no known length (a live stream): no range to move on, and nothing left over from the song before
+          bar.setAttribute('aria-valuemax', '0');
+          bar.setAttribute('aria-disabled', 'true');
+          ariaSec = -1; paintAria(0);
+        }
         if (m.artId !== artId) {
           artId = m.artId;
           if (m.artId) img.src = `${API}/art?id=${m.artId}`;

@@ -90,7 +90,35 @@ public class AudioSetVolumeTests
         Assert.Equal(expected, AudioControl.MutedAfterSet(clearsMute, new AudioSnapshot(50, wasMuted, true)));
 
     [Fact]
-    public void WithNoEarlierReadingASetIsNotMuted() => Assert.False(AudioControl.MutedAfterSet(false, null));
+    public void WithNoEarlierReadingAVolumeOnlyWriteLeavesTheMuteStateUnknown()
+    {
+        Assert.Null(AudioControl.MutedAfterSet(false, null)); // not "unmuted": nobody knows
+        Assert.False(AudioControl.MutedAfterSet(true, null));  // a write that clears mute does know
+    }
+
+    [Fact]
+    public void AToggleFlipsTheRememberedMuteAtOnce()
+    {
+        var toggles = 0;
+        var audio = new AudioControl(() => new AudioSnapshot(50, false, true), set: _ => true, toggleMute: () => { toggles++; return true; });
+        audio.Current();
+        Assert.True(audio.ToggleMute());
+        Assert.Equal(1, toggles);
+        var shown = audio.Snapshot()!;
+        Assert.True(shown.Muted); // not the old reading until a background read catches up
+        Assert.Equal(50, shown.Volume);
+        Assert.True(audio.ToggleMute());
+        Assert.False(audio.Snapshot()!.Muted);
+    }
+
+    [Fact]
+    public void AFailedToggleKeepsNothingStale()
+    {
+        var audio = new AudioControl(() => new AudioSnapshot(50, false, true), set: _ => true, toggleMute: () => false);
+        audio.Current();
+        Assert.False(audio.ToggleMute());
+        Assert.False(audio.Snapshot()!.Muted);
+    }
 
     [Theory]
     [InlineData(new[] { true, true }, true)]    // stereo, both written
@@ -104,5 +132,28 @@ public class AudioSetVolumeTests
     {
         Assert.True(MacAudioProbe.AllWritten([true, null]));  // the second channel does not exist
         Assert.False(MacAudioProbe.AllWritten([null, null])); // nothing to write
+    }
+
+    [Fact]
+    public void AMuteThatCannotBeReadIsOnlyFineWhenThereIsNoMuteToClear()
+    {
+        Assert.True(MacAudioProbe.Unmuted(0, true, () => throw new Exception("must not write")));  // not muted: nothing to clear
+        Assert.True(MacAudioProbe.Unmuted(1, true, () => true));    // muted, cleared
+        Assert.False(MacAudioProbe.Unmuted(1, true, () => false));  // muted, could not be cleared
+        Assert.False(MacAudioProbe.Unmuted(null, true, () => true)); // it has a mute but it cannot be read: the fallback decides
+        Assert.True(MacAudioProbe.Unmuted(null, false, () => throw new Exception("must not write"))); // an output with no mute at all
+    }
+
+    [Theory]
+    [InlineData(new[] { 0.2f, 0.8f }, 0.25f, new[] { 0.1f, 0.4f })]   // halved: the balance stays 1 : 4
+    [InlineData(new[] { 0.2f, 0.8f }, 0.5f, new[] { 0.2f, 0.8f })]    // already at the target: untouched
+    [InlineData(new[] { 0.2f, 0.8f }, 0.9f, new[] { 0.36f, 1.0f })]   // the louder channel stops at 1
+    [InlineData(new[] { 0f, 0f }, 0.5f, new[] { 0.5f, 0.5f })]        // silent: nothing to keep, both go to the target
+    [InlineData(new[] { 0.6f }, 0.3f, new[] { 0.3f })]                // mono
+    public void ChannelsKeepTheirBalanceWhenTheVolumeChanges(float[] current, float target, float[] expected)
+    {
+        var got = MacAudioProbe.ScaleChannels(current, target);
+        Assert.Equal(expected.Length, got.Length);
+        for (var i = 0; i < expected.Length; i++) Assert.Equal(expected[i], got[i], 3);
     }
 }

@@ -20,11 +20,12 @@ public sealed partial class AudioControl
 
     private const int SetTimeoutMs = 8000; // a busy computer can need seconds; giving up kills the helper and nothing is set
     private readonly Func<int, bool>? _set;
+    private readonly Func<bool>? _toggleMute;
 
-    public AudioControl() : this(Read, null) { }
+    public AudioControl() : this(Read, null, null) { }
 
-    /// <summary>For tests: a fake reader (and optionally setter) instead of osascript / wpctl / pactl.</summary>
-    internal AudioControl(Func<AudioSnapshot?> read, Func<int, bool>? set = null) { _read = read; _set = set; }
+    /// <summary>For tests: a fake reader (and optionally setter and mute toggle) instead of osascript / wpctl / pactl.</summary>
+    internal AudioControl(Func<AudioSnapshot?> read, Func<int, bool>? set = null, Func<bool>? toggleMute = null) { _read = read; _set = set; _toggleMute = toggleMute; }
 
     internal bool Refreshing => Volatile.Read(ref _refreshing) == 1;
 
@@ -85,12 +86,10 @@ public sealed partial class AudioControl
             var ok = _set?.Invoke(level) ?? SetOnThisSystem(level);
             // On success the new volume is what the next state shows: the old reading would make the slider snap back until
             // the background read (seconds, on a busy computer) catches up, which then looks like "nothing changed".
-            if (ok)
-            {
-                AudioSnapshot? before;
-                lock (_lock) before = _cached;
-                Remember(new AudioSnapshot(level, MutedAfterSet(_set is not null || ClearsMute(level), before), true));
-            }
+            AudioSnapshot? before;
+            lock (_lock) before = _cached;
+            // a write that leaves mute alone with no earlier reading says nothing about mute: do not cache a guess, read it
+            if (ok && MutedAfterSet(_set is not null || ClearsMute(level), before) is { } muted) Remember(new AudioSnapshot(level, muted, true));
             else Invalidate();
             return ok;
         }
@@ -98,9 +97,9 @@ public sealed partial class AudioControl
 
     /// <summary>
     /// The mute state a volume write leaves behind. A write that also clears mute leaves the sink unmuted; one that only sets
-    /// the volume (pactl, wpctl at 0) leaves it as it was.
+    /// the volume (pactl, wpctl at 0) leaves it as it was, which is unknown (null) when there was no earlier reading.
     /// </summary>
-    internal static bool MutedAfterSet(bool clearsMute, AudioSnapshot? before) => !clearsMute && before?.Muted == true;
+    internal static bool? MutedAfterSet(bool clearsMute, AudioSnapshot? before) => clearsMute ? false : before?.Muted;
 
     /// <summary>Whether the write that SetOnThisSystem makes for this level also unmutes: macOS always does, wpctl above 0.</summary>
     private static bool ClearsMute(int level) => OperatingSystem.IsMacOS() || (Sh.Which("wpctl") is not null && level > 0);
@@ -134,16 +133,23 @@ public sealed partial class AudioControl
         if (OperatingSystem.IsMacOS() && Current() is not { CanControl: true }) return false;
         lock (_controlGate)
         {
-            var ok = OperatingSystem.IsMacOS()
-                ? MacAudioProbe.ToggleMute()
-                  || Sh.RunWithTimeout(SetTimeoutMs, "osascript", "-e", "set volume output muted (not (output muted of (get volume settings)))") is not null
-                : Sh.Which("wpctl") is not null
-                    ? Sh.Run("wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle") is not null
-                    : Sh.Run("pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle") is not null;
-            Invalidate();
+            var ok = _toggleMute?.Invoke() ?? ToggleOnThisSystem();
+            AudioSnapshot? before;
+            lock (_lock) before = _cached;
+            // the flipped state is what the next state shows (and what a later volume-only write must start from); with no
+            // earlier reading, or after a failure, the next read decides
+            if (ok && before is not null) Remember(before with { Muted = !before.Muted });
+            else Invalidate();
             return ok;
         }
     }
+
+    private static bool ToggleOnThisSystem() => OperatingSystem.IsMacOS()
+        ? MacAudioProbe.ToggleMute()
+          || Sh.RunWithTimeout(SetTimeoutMs, "osascript", "-e", "set volume output muted (not (output muted of (get volume settings)))") is not null
+        : Sh.Which("wpctl") is not null
+            ? Sh.Run("wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle") is not null
+            : Sh.Run("pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle") is not null;
 
     private void Invalidate() { lock (_lock) { _at = 0; _gen++; } }
 

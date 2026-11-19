@@ -162,3 +162,19 @@ test('the bar tells assistive technology the range and the current time, also du
   await page.evaluate(async () => (await import('/panel/main.js')).emit('fast'));
   expect(Number(await bar(page).getAttribute('aria-valuenow'))).toBeGreaterThanOrEqual(now + 1);
 });
+
+test('a track with no length (a live stream) leaves no stale range on the bar, and the next song brings it back', async ({ page }) => {
+  await apply(page, track(90000));
+  await expect(bar(page)).toHaveAttribute('aria-valuemax', '200');
+  await expect(bar(page)).toHaveAttribute('aria-disabled', 'false');
+
+  await apply(page, { app: 'Internet Radio', title: 'Live', artist: '', album: '', playing: true, posMs: 5000, durMs: 0, canSeek: false, ageMs: 0 });
+  await expect(bar(page)).toHaveAttribute('aria-valuenow', '0'); // not 90 with a range of 1
+  await expect(bar(page)).toHaveAttribute('aria-valuemax', '0');
+  await expect(bar(page)).toHaveAttribute('aria-disabled', 'true');
+
+  await apply(page, track(40000, { title: 'Back' }));
+  await expect(bar(page)).toHaveAttribute('aria-valuemax', '200');
+  await expect(bar(page)).toHaveAttribute('aria-disabled', 'false');
+  expect(Number(await bar(page).getAttribute('aria-valuenow'))).toBeGreaterThanOrEqual(40);
+});

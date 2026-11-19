@@ -83,16 +83,44 @@ internal static class MacAudioProbe
             var ok = WriteFloat(device.Value, VirtualMain, 0, value) || WriteFloat(device.Value, Volume, 0, value);
             if (!ok)
             {
-                // a channel that does not exist (the second of a mono output) is skipped, but one that exists and refuses
-                // the write makes the whole set fail, so the caller's fallback runs instead of reporting half a change
-                bool? Channel(uint element) => Float(device.Value, Volume, Output, element) is null ? null : WriteFloat(device.Value, Volume, element, value);
+                // an output with only per-channel volumes: each channel moves by the same factor, so the balance the user set
+                // (left 0.2, right 0.8) survives; a channel that does not exist (the second of a mono output) is skipped, but
+                // one that exists and refuses the write makes the whole set fail, so the caller's fallback runs
+                var current = new[] { Float(device.Value, Volume, Output, 1), Float(device.Value, Volume, Output, 2) };
+                var targets = ScaleChannels(current.Where(c => c is not null).Select(c => c!.Value).ToArray(), value);
+                var next = 0;
+                bool? Channel(uint element) => current[element - 1] is null ? null : WriteFloat(device.Value, Volume, element, targets[next++]);
                 ok = AllWritten([Channel(1), Channel(2)]);
             }
-            // an output that stays muted is not "set": clearing mute only matters, and can only fail, when it is muted
-            if (ok && UInt(device.Value, Mute, Output, 0) is { } muted && muted != 0) ok = WriteUInt(device.Value, Mute, 0, 0);
+            // an output that stays muted is not "set": see Unmuted
+            if (ok) ok = Unmuted(UInt(device.Value, Mute, Output, 0), IsWritable(device.Value, Mute, 0), () => WriteUInt(device.Value, Mute, 0, 0));
             return ok;
         }
         catch { return false; }
+    }
+
+    /// <summary>
+    /// Whether the output ends up unmuted: not muted already, or muted and cleared. A mute that cannot be read is only fine
+    /// when the output has no mute to clear at all; otherwise the caller falls back to osascript.
+    /// </summary>
+    internal static bool Unmuted(uint? muted, bool writable, Func<bool> clear) => muted is { } m ? m == 0 || clear() : !writable;
+
+    /// <summary>
+    /// The levels to write to channels that are at <paramref name="current"/> so their average becomes
+    /// <paramref name="target"/> with the same balance between them; a channel that would pass 1 stops there.
+    /// </summary>
+    internal static float[] ScaleChannels(float[] current, float target)
+    {
+        var average = current.Length == 0 ? 0 : current.Average();
+        if (average <= 0) return current.Select(_ => target).ToArray(); // silent: no balance to keep
+        var factor = target / average;
+        return current.Select(c => Math.Clamp(c * factor, 0f, 1f)).ToArray();
+    }
+
+    private static bool IsWritable(uint device, uint selector, uint element)
+    {
+        var address = new Address(selector, Output, element);
+        return IsSettable(device, ref address, out var writable) == 0 && writable != 0;
     }
 
     /// <summary>Channel writes, in order: null for a channel that does not exist. Done when at least one exists and all written.</summary>
