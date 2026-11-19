@@ -6947,6 +6947,8 @@
       'Monospace': 'Monospace',
       'it is between': 'είναι μεταξύ',
       'Long-lived access tokens': 'Διακριτικά πρόσβασης μακράς διάρκειας',
+      'Cursor': 'Cursor',
+      'Grok': 'Grok',
     },
     vi: {
       // Categories
