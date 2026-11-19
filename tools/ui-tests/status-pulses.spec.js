@@ -22,14 +22,14 @@ async function load(page) {
   await page.evaluate(() => import('/panel/main.js'));
   await page.clock.pauseAt(new Date('2026-01-01T12:01:00Z')); // time moves only with runFor, so a loaded machine cannot skew it
 }
-const mount = (page, html) => page.evaluate((h) => {
+const mount = (page, html, place = 'left: 0; top: 0') => page.evaluate(([h, at]) => {
   document.getElementById('pulse-fixture')?.remove();
   const box = document.createElement('div');
   box.id = 'pulse-fixture';
-  box.style.cssText = 'position: fixed; left: 0; top: 0; width: 300px; height: 150px';
+  box.style.cssText = 'position: fixed; width: 300px; height: 150px; ' + at;
   box.innerHTML = h;
   document.body.append(box);
-}, html);
+}, [html, place]);
 // what the element looks like at each of the next `n` ticks of 250 ms
 async function sample(page, sel, prop, n = 24) {
   const out = [];
@@ -76,6 +76,18 @@ test('the beat does not run while nothing on screen pulses', async ({ page }) =>
   await page.clock.runFor(5000);
   expect(await page.evaluate(() => document.documentElement.className)).toBe(before);
 });
+
+// every page is mounted at once (they sit side by side), and a stack shows one card at a time, so an element that pulses can be
+// in the page but not on screen: the beat must wait for it as well
+for (const [name, place] of [['on another page', 'left: 2000px; top: 0'], ['in a card that is not shown', 'left: 0; top: 0; display: none'], ['below the screen', 'left: 0; top: 5000px']]) {
+  test(`the beat does not run for a pulse ${name}`, async ({ page }) => {
+    await load(page);
+    await mount(page, FIXTURES['waiting session dot'].html, place);
+    const before = await page.evaluate(() => document.documentElement.className);
+    await page.clock.runFor(5000);
+    expect(await page.evaluate(() => document.documentElement.className)).toBe(before);
+  });
+}
 
 test('the beat waits while the panel is not visible', async ({ page }) => {
   await load(page);
