@@ -586,6 +586,69 @@ W.sessions = {
     // is on) is the main label and the folder goes under it; without a title the folder is the label, as before.
     const titleOf = (s) => s.title || s.project || s.name;
     const folderOf = (s) => (s.title ? s.project : '');
+    // A Claude Code chat's recent steps, last exchange and message list. The agent sends them only when Settings › Claude Code
+    // › "Show the conversation on the phone" is on. Returns the function that stops the refresh.
+    const conversationSection = (panel, s) => {
+      const box = h('div', 'session-conv');
+      panel.append(box);
+      let data = null, expanded = false, gone = false, asked = 0, applied = 0;
+      const toolName = (n) => n.startsWith('mcp__') ? n.slice(5).replace(/__/g, ' › ') : n;
+      const clip = (text, n) => text.length > n ? text.slice(0, n) + '…' : text;
+      const message = (m, full) => h('div', 'conv-msg ' + m.role,
+        h('span', 'conv-who', m.role === 'user' ? 'You' : 'Claude'),
+        h('div', full ? 'conv-text' : 'conv-text clamp', full ? m.text : clip(m.text, 500)));
+      const render = () => {
+        const prevList = box.querySelector('.conv-list');
+        const top = prevList ? prevList.scrollTop : null;
+        if (!data.enabled) {
+          box.replaceChildren(h('p', 'session-note', 'The conversation is off. Turn it on in Settings › Claude Code › Show the conversation on the phone.'));
+          return;
+        }
+        const messages = data.messages || [], steps = data.steps || [];
+        const kids = [];
+        if (steps.length) {
+          kids.push(h('div', 'conv-h', 'Recent steps'));
+          for (const st of [...steps].reverse().slice(0, 6)) {
+            kids.push(h('div', 'conv-step' + (st.running ? ' on' : ''),
+              h('span', 'cs-t', toolName(st.tool)), h('span', 'cs-d', st.detail || ''),
+              h('span', 'cs-a', st.running ? (st.at ? 'running ' + shortDur(Date.now() - st.at) : 'running') : st.at ? ageText(st.at) : '')));
+          }
+        }
+        if (!messages.length) kids.push(h('p', 'session-note', 'No messages yet.'));
+        else if (expanded) {
+          kids.push(h('div', 'conv-h', 'Conversation'), h('div', 'conv-list', messages.map((m) => message(m, true))));
+        } else {
+          const lastOf = (role) => [...messages].reverse().find((m) => m.role === role);
+          kids.push(h('div', 'conv-h', 'Last exchange'));
+          for (const m of [lastOf('user'), lastOf('assistant')]) if (m) kids.push(message(m, false));
+        }
+        if (messages.length) {
+          const toggle = h('button', 'conv-toggle', expanded ? 'Hide the conversation' : `Show the conversation (${messages.length})`);
+          toggle.type = 'button';
+          toggle.addEventListener('click', () => { haptic(); expanded = !expanded; render(); });
+          kids.push(toggle);
+        }
+        box.replaceChildren(...kids);
+        const list = box.querySelector('.conv-list');
+        if (list) list.scrollTop = top ?? list.scrollHeight; // a new view starts at the newest message
+      };
+      const load = async () => {
+        const mine = ++asked;
+        try {
+          const d = await api('/work/conversation?id=' + encodeURIComponent(s.id), 'GET', 5000);
+          // A slower earlier request can finish after a newer one: its answer is older, and must not replace it (for
+          // example a "turned off" answer that has already been shown).
+          if (gone || mine < applied) return;
+          applied = mine;
+          if (JSON.stringify(d) !== JSON.stringify(data)) { data = d; render(); }
+        } catch (_) {
+          if (!gone && !data) box.replaceChildren(h('p', 'session-note', 'Could not read the conversation.'));
+        }
+      };
+      load();
+      const timer = setInterval(load, 3000);
+      return () => { gone = true; clearInterval(timer); };
+    };
     const openDetails = (s) => {
       haptic();
       const backdrop = h('div', 'session-backdrop');
@@ -595,8 +658,9 @@ W.sessions = {
       const title = h('h2', null, titleOf(s));
       const close = h('button', 'session-close', icon('x'));
       close.setAttribute('aria-label', 'Close session details');
+      let stopConversation = () => {};
       const onKey = (e) => { if (e.key === 'Escape') dismiss(); };
-      const dismiss = () => { backdrop.remove(); document.removeEventListener('keydown', onKey); };
+      const dismiss = () => { stopConversation(); backdrop.remove(); document.removeEventListener('keydown', onKey); };
       close.addEventListener('click', dismiss);
       backdrop.addEventListener('click', (e) => { if (e.target === backdrop) dismiss(); });
       panel.append(h('div', 'session-panel-head', h('span', null, s.tool === 'codex' ? '◎ Codex' : s.tool === 'cursor' ? '◆ Cursor' : '✳ Claude Code'), close), title);
@@ -618,6 +682,7 @@ W.sessions = {
       panel.append(h('div', 'session-grid', rows.filter(([, value]) => value != null)
         .map(([label, value]) => h('div', 'session-cell', h('span', null, label), h('strong', null, value)))));
       if (s.tool === 'codex') panel.append(h('p', 'session-note', 'Token totals are for this local session, not your account allowance.'));
+      if (s.tool === 'claude') stopConversation = conversationSection(panel, s);
       backdrop.append(panel);
       document.body.append(backdrop);
       close.focus();

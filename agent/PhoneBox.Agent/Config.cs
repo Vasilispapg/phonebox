@@ -213,6 +213,9 @@ public sealed class ClaudeConfig
     public bool PhoneApprovals { get; set; } = true;
     /// <summary>How long the phone may take before Claude Code asks in the terminal instead.</summary>
     public int TimeoutSec { get; set; } = 90;
+    /// <summary>Let the phone open a Claude Code session's recent messages and steps, read from its chat file on this
+    /// computer. They are your prompts and Claude's replies, so this stays off until you turn it on.</summary>
+    public bool ShareConversation { get; set; }
     /// <summary>Only use the phone when the PC has been idle for a minute (you are away from the keyboard).</summary>
     public bool OnlyWhenAway { get; set; }
     /// <summary>Show each Claude Code chat's title on the phone. The title is the name you gave the chat or the one

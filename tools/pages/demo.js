@@ -551,6 +551,22 @@
       return json({});
     }
     if (path === '/api/quotas') return json(quotas());
+    // made-up recent messages and steps of a Claude Code session (the real ones come from its chat file, and only when switched on)
+    if (path === '/api/work/conversation') {
+      const n = Date.now();
+      return json({ enabled: true,
+        messages: [
+          { role: 'user', text: 'Add a retry to the upload helper', at: n - 9 * 60e3 },
+          { role: 'assistant', text: 'I added three retries with a short pause between them and a test for the failing case.', at: n - 7 * 60e3 },
+          { role: 'user', text: 'Does it also cover timeouts?', at: n - 2 * 60e3 },
+          { role: 'assistant', text: 'Yes, a timeout counts as a failed attempt and is retried the same way.', at: n - 60e3 },
+        ],
+        steps: [
+          { tool: 'Read', detail: 'upload.js', at: n - 8 * 60e3, running: false },
+          { tool: 'Edit', detail: 'upload.js', at: n - 7 * 60e3, running: false },
+          { tool: 'Bash', detail: 'npm', at: n - 20e3, running: true },
+        ] });
+    }
     if (path === '/api/calendar') return json(calendar());
     if (path === '/api/docker') return json({ ...docker(), control: allows(await config(), (t) => t === 'docker') });
     if (path === '/api/obs') { const c = await config(); return json({ ...obsState(), enabled: c.obs?.enabled !== false, control: widgets(c).some((w) => w.type === 'obs' && w.options?.control === true) }); }

@@ -27,6 +27,13 @@ Last updated: 2026-11-15 (PhoneBox 0.9.6).
   load comes from the GPU usage counters in other processes' `/proc/<pid>/fdinfo` (the counters only, nothing those
   programs draw or compute); processes of other users are read only when Linux allows the agent to read them (normally
   as root or with `CAP_SYS_PTRACE`).
+- **Claude Code conversation** (off by default): with Settings › Claude Code › "Show the conversation on the phone" on,
+  tapping a Claude Code session in the sessions widget asks the agent for its last 30 messages (your prompts and
+  Claude's replies, each cut at 4000 characters) and its last 12 steps. The agent reads them from that chat's file in
+  `~/.claude/projects` and sends them only to your phone, only for a session that is running, and only while the
+  details are open. A step is the tool name plus a file name, the program a command starts with (never the command
+  line) or a web host; tool output, thinking and file contents are never sent. Nothing is stored on the phone or the
+  computer. With the switch off the agent refuses the request and no prompt or reply text is sent.
 - **Cursor sessions** (off by default; **Settings › General › Cursor sessions**): while enabled, the agent scans recent
   `*.jsonl` files under `~/.cursor/projects/*/agent-transcripts` (about every 30 seconds for discovery) and reads a
   bounded tail of each file to parse the last record's `role` in memory. Only that role and the file times are kept for

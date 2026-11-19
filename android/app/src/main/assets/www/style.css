@@ -465,6 +465,20 @@ body.offline .offline-msg { display: flex; }
 .session-cell span { display: block; color: var(--muted); font-size: 9px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .session-cell strong { display: block; margin-top: 1px; font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
 @media (max-width: 420px) { .session-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.session-conv { margin-top: 12px; border-top: 1px solid var(--line); }
+.conv-h { margin: 12px 0 6px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.conv-step { display: flex; align-items: baseline; gap: 8px; padding: 3px 0; font-size: 12px; }
+.conv-step .cs-t { font-weight: 600; white-space: nowrap; }
+.conv-step .cs-d { flex: 1; min-width: 0; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conv-step .cs-a { color: var(--dim); font-size: 11px; white-space: nowrap; }
+.conv-step.on .cs-a { color: #d97757; }
+.conv-list { max-height: 42vh; overflow-y: auto; padding-right: 4px; }
+.conv-msg { margin: 0 0 8px; padding: 8px 10px; border-radius: 10px; background: #ffffff0d; font-size: 12px; line-height: 1.4; }
+.conv-msg.assistant { background: #d977571a; }
+.conv-who { display: block; margin-bottom: 2px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.conv-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.conv-text.clamp { display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
+.conv-toggle { width: 100%; margin-top: 4px; padding: 9px; border: 1px solid var(--line); border-radius: 10px; background: transparent; color: var(--text); font-size: 12px; font-weight: 600; cursor: pointer; }
 .gh-bell { font-size: 11.5px; padding: 2px 8px; border-radius: 8px; background: rgba(255, 255, 255, .08); white-space: nowrap; }
 .gh-sec { display: flex; justify-content: space-between; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 3px 0; font-weight: 600; }
 .gh-sec b { color: var(--text); }

@@ -20,6 +20,11 @@
   (off by default in Settings › General › Cursor sessions). Only the last message's role is kept; chat text is never
   shown, stored or sent. Project names use the folder basename from Cursor's `workspaceStorage`
   (#259, [ajaybali9](https://github.com/ajaybali9)).
+- Sessions widget: tap a Claude Code session to see what it is doing. The details list its recent steps (tool name and
+  file, with how long a running one has taken), the last exchange, and a scrollable list of the last 30 messages. Your
+  prompts and Claude's replies leave the computer only when you turn on Settings › Claude Code › **Show the
+  conversation on the phone**, which is off by default (#261 follow-up,
+  [Vasilispapg](https://github.com/Vasilispapg)).
 
 **Panel**
 - Pomodoro: the Vietnamese example for your own sequence uses the words the timer understands (`25 focus, 5 break`);
