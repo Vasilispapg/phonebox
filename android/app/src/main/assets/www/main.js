@@ -577,9 +577,27 @@ export function setVolDragging(control, dragging) {
   if (dragging) volDragging = control;
   else if (volDragging === control) volDragging = null;
 }
+// the agent says how old the position was when it sent it (it was read up to a second before the 1 s tick sent it);
+// counting from "that long before it arrived" keeps the bar from running behind. Capped: a bogus age must not jump it.
+const mediaSampleAt = (m) => performance.now() - Math.min(Math.max(Number(m?.ageMs) || 0, 0), 5000);
+// The next sample of the same track is not trusted blindly: the bar is counted on the phone between samples, and each
+// sample is a second old and read at a slightly different moment, so taking it as is makes the time stutter. A bar
+// within 0.3 s of the sample stays as it is, up to 1.5 s off it moves 30 % of the way, and anything bigger (a seek, a
+// pause, a new track, a different source) snaps.
+export function mediaFrom(prev, m) {
+  if (!m) return null;
+  const next = { ...m, at: mediaSampleAt(m) };
+  if (!prev || !prev.playing || !m.playing || prev.title !== m.title || prev.app !== m.app || prev.durMs !== m.durMs) return next;
+  const now = performance.now();
+  const shown = prev.posMs + (now - prev.at);
+  const off = next.posMs + (now - next.at) - shown;
+  if (Math.abs(off) < 300) return { ...next, posMs: prev.posMs, at: prev.at };
+  if (Math.abs(off) < 1500) return { ...next, posMs: shown + off * 0.3, at: now };
+  return next;
+}
 export const setMediaState = (m) => {
   if (D.state) D.state.media = m || null;
-  media = m ? { ...m, at: performance.now() } : null;
+  media = mediaFrom(media, m);
   emit('state');
 };
 // The background glow: the accent colour (Settings › Display), or the album art's colour while music plays.
@@ -1950,7 +1968,7 @@ export function applyState(s, replayGen = null) {
   if (fresh || replayGen === evGen) for (const e of s.events || []) evOffer(e);
   if (!fresh) return replayGen === evGen;
   D.state = s;
-  media = s.media ? { ...s.media, at: performance.now() } : null;
+  media = mediaFrom(media, s.media);
   setOnline(true);
   if (s.cfgVersion !== undefined && cfgVersion !== null && s.cfgVersion !== cfgVersion) loadConfig();
   if (s.pushVersion !== undefined && s.pushVersion !== pushVersion) loadPush();

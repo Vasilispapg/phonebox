@@ -26,6 +26,13 @@ public sealed class MediaMonitor(ILogger<MediaMonitor> log) : BackgroundService
     private long _macPositionMs;
     private long _macLastRawPositionMs;
     private DateTimeOffset _macPositionAt;
+    private string _macAnchorKey = "";
+    private bool _macAnchorPlaying;
+    private DateTimeOffset _macAnchorAt;
+    private static readonly TimeSpan AnchorEvery = TimeSpan.FromSeconds(5);
+
+    /// <summary>Where the player itself says playback is (ms), or null when it cannot be asked. Replaced in tests.</summary>
+    internal Func<string, long?> AppPosition { get; set; } = ReadAppPosition;
     private string _macSourceKey = "";
     private string _macSource = "";
     private DateTimeOffset _macSourceAt;
@@ -49,10 +56,11 @@ public sealed class MediaMonitor(ILogger<MediaMonitor> log) : BackgroundService
         try
         {
             var (snap, art) = OperatingSystem.IsMacOS() ? ReadMac() : ReadLinux();
+            var sampledAt = System.Diagnostics.Stopwatch.GetTimestamp(); // the position was read just now (the artwork below can take a while)
             if (snap is null) { _snap = null; Art = null; _macArtKey = ""; _macArtEncoded = ""; _macPositionKey = ""; _artUrl = ""; return; }
             if (_macSystemMedia)
             {
-                _snap = snap with { ArtId = Art is null ? 0 : _artId };
+                _snap = snap with { ArtId = Art is null ? 0 : _artId, SampledAt = sampledAt };
                 return;
             }
             if (_macArtKey.Length > 0) { _macArtKey = ""; _macArtEncoded = ""; _artUrl = "\0"; }
@@ -63,7 +71,7 @@ public sealed class MediaMonitor(ILogger<MediaMonitor> log) : BackgroundService
                 if (loaded is null) Art = null;
                 else if (Art is null || Art.Mime != loaded.Mime || !Art.Bytes.AsSpan().SequenceEqual(loaded.Bytes)) { Art = loaded; _artId++; }
             }
-            _snap = snap with { ArtId = Art is null ? 0 : _artId };
+            _snap = snap with { ArtId = Art is null ? 0 : _artId, SampledAt = sampledAt };
         }
         finally
         {
@@ -150,6 +158,27 @@ public sealed class MediaMonitor(ILogger<MediaMonitor> log) : BackgroundService
                 _macPositionMs = rawPosition != _macLastRawPositionMs ? rawPosition : predicted;
                 _macLastRawPositionMs = rawPosition;
             }
+            // ElapsedTime is only valid as of the Timestamp the source published it with (browsers publish it on play,
+            // pause and seek, not while playing), so the real position is that plus the time since, at the playback rate
+            if (MacPublishedAt(data, prefix + "Timestamp", now) is { } publishedAt)
+            {
+                var rate = Num("PlaybackRate");
+                _macPositionMs = rawPosition + (playing ? (long)(Math.Max(0, (now - publishedAt).TotalMilliseconds) * rate) : 0);
+                _macLastRawPositionMs = rawPosition;
+            }
+            else if (bundle is "com.spotify.client" or "com.apple.Music")
+            {
+                // Since macOS 15.4 these often report ElapsedTime 0 for the whole track and no Timestamp at all (Spotify on
+                // macOS 26: checked), so nothing here says where playback is. The player does: ask it when the track or
+                // play/pause changes and every few seconds (a seek), and count from that in between.
+                if (positionKey != _macAnchorKey || playing != _macAnchorPlaying || now - _macAnchorAt >= AnchorEvery)
+                {
+                    _macAnchorKey = positionKey;
+                    _macAnchorPlaying = playing;
+                    _macAnchorAt = now; // also after a refusal: it is not asked again every second
+                    if (AppPosition(bundle) is { } fromPlayer) { _macPositionMs = fromPlayer; _macLastRawPositionMs = rawPosition; }
+                }
+            }
             _macPositionAt = now;
             var durationMs = (long)(duration * 1000);
             if (durationMs > 0) _macPositionMs = Math.Min(_macPositionMs, durationMs);
@@ -181,6 +210,30 @@ public sealed class MediaMonitor(ILogger<MediaMonitor> log) : BackgroundService
                 _macPositionMs, durationMs, Art is null ? 0 : _artId, duration > 0), "");
         }
         catch (JsonException) { _macPositionKey = ""; return (null, ""); }
+    }
+
+    /// <summary>
+    /// When the source published the position, from the "Timestamp" of the now-playing info: a date string
+    /// (<c>2026-11-19T10:00:00Z</c>) or seconds since 1970 (a number; a count from 2001 or in milliseconds is not
+    /// guessed). Null when it is missing, unreadable or implausible, so the caller falls back to advancing the sample.
+    /// </summary>
+    internal static DateTimeOffset? MacPublishedAt(JsonElement data, string key, DateTimeOffset now)
+    {
+        if (!data.TryGetProperty(key, out var value)) return null;
+        DateTimeOffset at;
+        if (value.ValueKind == JsonValueKind.String)
+        {
+            if (!DateTimeOffset.TryParse(value.GetString(), CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out at)) return null;
+        }
+        else if (value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out var seconds) && double.IsFinite(seconds)
+                 && seconds is > 1e9 and < 1e11)
+            at = DateTimeOffset.FromUnixTimeMilliseconds((long)(seconds * 1000));
+        else return null;
+        // up to a few seconds ahead is clock noise (the date string is cut to whole seconds); further, or over half a day
+        // back, means this is not a time we can rely on
+        var age = now - at;
+        return age < TimeSpan.FromSeconds(-5) || age > TimeSpan.FromHours(12) ? null : at;
     }
 
     private static string ReadYouTubeSource(string bundle, string title)
@@ -264,6 +317,17 @@ public sealed class MediaMonitor(ILogger<MediaMonitor> log) : BackgroundService
             }
         }
         catch (Exception) { return null; }
+    }
+
+    /// <summary>Spotify's or Music's own "player position" (about 150 ms; never launches the app).</summary>
+    private static long? ReadAppPosition(string bundle)
+    {
+        var app = bundle == "com.spotify.client" ? "Spotify" : "Music";
+        var text = Sh.Run("osascript", "-e",
+            $"if application \"{app}\" is running then tell application \"{app}\" to return (player position as string)")?.Trim();
+        // the decimal separator follows the Mac's language ("16,32")
+        return !string.IsNullOrEmpty(text) && double.TryParse(text.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out var s)
+            && double.IsFinite(s) && s >= 0 ? (long)(s * 1000) : null;
     }
 
     private static (MediaSnapshot?, string) ReadMacAppleScript()
