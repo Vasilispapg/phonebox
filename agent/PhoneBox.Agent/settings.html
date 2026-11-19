@@ -2879,6 +2879,7 @@ function applyLanguageUi(langPref) {
   if ($('langSel')) $('langSel').value = I18n.getPref();
   if ($('displayLangSel')) $('displayLangSel').value = I18n.getPref();
   I18n.applyDom();
+  fitLeads(); // translated intros can be shorter or longer than the old text
 }
 
 function bindLanguage() {
@@ -3059,27 +3060,34 @@ async function load() {
   changed(); loadInfo(); loadPhones();
 }
 
-async function save() {
+// one save at a time: pressing Save or Ctrl/Cmd+S again while it runs joins the save in flight, and the busy
+// indicator stays until that save has fully finished
+let saving = null;
+function save() {
+  if (saving) return saving;
+  const btn = $('save');
+  btn.classList.add('busy'); btn.setAttribute('aria-busy', 'true');
+  saving = doSave().finally(() => {
+    saving = null;
+    btn.classList.remove('busy'); btn.removeAttribute('aria-busy');
+  });
+  return saving;
+}
+async function doSave() {
   const headers = { 'Content-Type': 'application/json' };
   if (cfgVersion) headers['X-Config-Version'] = cfgVersion;
   let r;
-  const btn = $('save');
-  btn.classList.add('busy'); btn.setAttribute('aria-busy', 'true');
   try {
-    try {
-      r = await fetch('/api/settings', { method: 'PUT', headers, body: JSON.stringify(cfg) });
-    } catch (_) {
-      toast(t('s.couldNotSave'), true);
-      return false;
-    }
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) { toast(j.error || t('s.couldNotSave'), true); return false; }
-    await load();
-    toast(t('s.savedToast'));
-    return true;
-  } finally {
-    btn.classList.remove('busy'); btn.removeAttribute('aria-busy');
+    r = await fetch('/api/settings', { method: 'PUT', headers, body: JSON.stringify(cfg) });
+  } catch (_) {
+    toast(t('s.couldNotSave'), true);
+    return false;
   }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { toast(j.error || t('s.couldNotSave'), true); return false; }
+  await load();
+  toast(t('s.savedToast'));
+  return true;
 }
 
 $('save').onclick = save;
