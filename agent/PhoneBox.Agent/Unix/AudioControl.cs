@@ -88,8 +88,7 @@ public sealed partial class AudioControl
             var reached = _set is not null ? _set(level) : SetOnThisSystem(level);
             // On success the new volume is what the next state shows: the old reading would make the slider snap back until
             // the background read (seconds, on a busy computer) catches up, which then looks like "nothing changed".
-            AudioSnapshot? before;
-            lock (_lock) before = _cached;
+            var before = KnownReading();
             // a write that leaves mute alone with no earlier reading says nothing about mute: do not cache a guess, read it
             if (reached is { } now && MutedAfterSet(_set is not null || ClearsMute(level), before) is { } muted) Remember(new AudioSnapshot(now, muted, true));
             else Invalidate();
@@ -133,6 +132,12 @@ public sealed partial class AudioControl
         return known is { CanControl: true } || Current() is { CanControl: true };
     }
 
+    /// <summary>
+    /// The last reading, or null when there is none or it was invalidated (after a failed action, or one that changed
+    /// something the reading does not say): an invalidated reading is unknown, not a baseline to build on.
+    /// </summary>
+    internal AudioSnapshot? KnownReading() { lock (_lock) return _at != 0 ? _cached : null; }
+
     /// <summary>Takes a known volume as the current reading and drops any read that started before it.</summary>
     private void Remember(AudioSnapshot s) { lock (_lock) { _cached = s; _at = Environment.TickCount64; _gen++; } }
 
@@ -145,15 +150,16 @@ public sealed partial class AudioControl
         {
             // the reading the flip starts from is taken before the toggle: a read that lands while the toggle is in progress
             // may already include it, and flipping that again would show the opposite of the truth
-            AudioSnapshot? before;
-            lock (_lock) before = _cached;
+            var before = KnownReading();
             var ok = _toggleMute?.Invoke() ?? ToggleOnThisSystem();
-            bool untouched;
-            lock (_lock) untouched = ReferenceEquals(_cached, before);
             // the flipped state is what the next state shows (and what a later volume-only write must start from); after a
-            // failure, with no earlier reading, or if a read landed meanwhile, the next read decides
-            if (ok && before is not null && untouched) Remember(before with { Muted = !before.Muted });
-            else Invalidate();
+            // failure, with no valid earlier reading, or if a read landed meanwhile, the next read decides. The comparison and
+            // the publish are one hold of the lock: a read cannot land between them and then be overwritten as if it were stale
+            lock (_lock)
+            {
+                if (ok && before is not null && _at != 0 && ReferenceEquals(_cached, before)) Remember(before with { Muted = !before.Muted });
+                else Invalidate();
+            }
             return ok;
         }
     }

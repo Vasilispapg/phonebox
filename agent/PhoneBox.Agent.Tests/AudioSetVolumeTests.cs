@@ -135,19 +135,22 @@ public class AudioSetVolumeTests
     }
 
     [Fact]
-    public void AMuteThatCannotBeReadIsOnlyFineWhenThereIsNoMuteToClear()
+    public void AMuteThatCannotBeReadIsOnlyFineWhenTheOutputIsKnownToHaveNone()
     {
-        Assert.True(MacAudioProbe.Unmuted(0, true, () => throw new Exception("must not write")));  // not muted: nothing to clear
-        Assert.True(MacAudioProbe.Unmuted(1, true, () => true));    // muted, cleared
-        Assert.False(MacAudioProbe.Unmuted(1, true, () => false));  // muted, could not be cleared
+        Assert.True(MacAudioProbe.Unmuted(0, true, () => throw new Exception("must not write")));   // not muted: nothing to clear
+        Assert.True(MacAudioProbe.Unmuted(1, true, () => true));     // muted, cleared
+        Assert.False(MacAudioProbe.Unmuted(1, true, () => false));   // muted, could not be cleared
         Assert.False(MacAudioProbe.Unmuted(null, true, () => true)); // it has a mute but it cannot be read: the fallback decides
-        Assert.True(MacAudioProbe.Unmuted(null, false, () => throw new Exception("must not write"))); // an output with no mute at all
+        Assert.False(MacAudioProbe.Unmuted(null, null, () => true)); // the question itself failed: unknown, not "no mute"
+        Assert.True(MacAudioProbe.Unmuted(null, false, () => throw new Exception("must not write"))); // known to have no mute
     }
 
     [Theory]
     [InlineData(new[] { 0.2f, 0.8f }, 0.25f, new[] { 0.1f, 0.4f })]   // halved: the balance stays 1 : 4
     [InlineData(new[] { 0.2f, 0.8f }, 0.5f, new[] { 0.2f, 0.8f })]    // already at the target: untouched
-    [InlineData(new[] { 0.2f, 0.8f }, 0.9f, new[] { 0.36f, 1.0f })]   // the louder channel stops at 1
+    [InlineData(new[] { 0.2f, 0.8f }, 0.9f, new[] { 0.8f, 1.0f })]    // the louder one stops at 1: the rest goes to the other, so the level is reached
+    [InlineData(new[] { 0.5f, 1.0f }, 1.0f, new[] { 1.0f, 1.0f })]   // everything up
+    [InlineData(new[] { 0.9f, 0.9f }, 1.0f, new[] { 1.0f, 1.0f })]
     [InlineData(new[] { 0f, 0f }, 0.5f, new[] { 0.5f, 0.5f })]        // silent: nothing to keep, both go to the target
     [InlineData(new[] { 0.6f }, 0.3f, new[] { 0.3f })]                // mono
     public void ChannelsKeepTheirBalanceWhenTheVolumeChanges(float[] current, float target, float[] expected)
@@ -194,5 +197,35 @@ public class AudioSetVolumeTests
         audio.Current(); // unmuted
         Assert.True(audio.ToggleMute());
         Assert.True(audio.Snapshot()!.Muted);
+    }
+
+    [Fact]
+    public void AFailedActionMakesTheNextOneStartFromAFreshRead()
+    {
+        // a failed action invalidates the reading; the sink is then muted from outside; the next toggle must not flip the
+        // stale "unmuted" and call it fresh
+        var muted = false;
+        var audio = new AudioControl(() => new AudioSnapshot(50, muted, true), set: _ => null, toggleMute: () => { muted = !muted; return true; });
+        Assert.False(audio.Current()!.Muted);
+        Assert.False(audio.SetVolume(60)); // fails: the reading is invalidated
+        muted = true;                      // muted from outside (the keyboard, another app)
+
+        Assert.True(audio.ToggleMute());   // the sink is now unmuted
+        Assert.False(audio.Current()!.Muted); // not the stale reading flipped to "muted"
+    }
+
+    [Fact]
+    public void AnInvalidatedReadingIsUnknownNotABaseline()
+    {
+        // the rule the toggle and the volume write rely on, checked directly because on macOS both re-read first and so
+        // cannot show it
+        var audio = new AudioControl(() => new AudioSnapshot(50, false, true), set: level => (level == 60 ? null : level));
+        Assert.Null(audio.KnownReading());          // nothing read yet
+        audio.Current();
+        Assert.NotNull(audio.KnownReading());       // a reading
+        Assert.False(audio.SetVolume(60));          // a failed action invalidates it
+        Assert.Null(audio.KnownReading());
+        Assert.True(audio.SetVolume(40));           // a successful one gives a new known reading
+        Assert.Equal(40, audio.KnownReading()?.Volume);
     }
 }
