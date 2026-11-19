@@ -2218,13 +2218,27 @@ export async function poll() {
   setTimeout(poll, 1000);
 }
 
+// The status pulses (session dots, OBS LED, on-air sign, dictation mic, radio equalizer) are stepped here, not by CSS animations:
+// an animation that never ends makes the browser draw a frame on every display refresh while it is on screen, and for these
+// that cost the panel 50 to 100 percentage points of a core each on a 120 Hz phone. beat-N is on during every other run of N
+// ticks of 250 ms (N = 2 is a half-second on, a half-second off). It only moves while something that pulses is on screen,
+// and the tick above is skipped when the panel is not visible or the night screen is up.
+const PULSING = '.sess.busy, .sess.shell, .sess.waiting, .obs-pill.on, .w-onair.on, .dc-mic.on, .radio-card.is-playing';
+let beatN = 0;
+function beat() {
+  if (!document.querySelector(PULSING)) return;
+  beatN++;
+  const cl = document.documentElement.classList;
+  for (const n of [2, 3, 4]) cl.toggle('beat-' + n, Math.floor(beatN / n) % 2 === 1);
+}
+
 // ---------------------------------------------------------------- start
 buildLayout();
 applyDisplay();
 tick();
 loadWeather();
 setInterval(loadWeather, 15 * 60_000);
-setInterval(() => { if (!nightOn && !idle()) emit('fast'); }, 250);
+setInterval(() => { if (!nightOn && !idle()) { emit('fast'); beat(); } }, 250);
 setInterval(() => { if (online && !idle() && anyNeeds('quotas')) loadQuotas(); }, 30_000);
 setInterval(() => { if (online && !idle() && anyNeeds('calendar')) loadCalendar(); }, 120_000);
 setInterval(() => { if (online && !idle() && anyNeeds('work') && !streaming()) loadWork(); }, 3000);
