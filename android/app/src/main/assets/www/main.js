@@ -2222,13 +2222,13 @@ export async function poll() {
 // an animation that never ends makes the browser draw a frame on every display refresh while it is on screen, and for these
 // that cost the panel 50 to 100 percentage points of a core each on a 120 Hz phone. beat-N is on during every other run of N
 // ticks of 250 ms (N = 2 is a half-second on, a half-second off). It only moves while something that pulses is on screen
-// (every page is mounted, side by side, and a stack shows one card at a time, so being in the page is not enough), and the
+// (every page is mounted, side by side, and a stack keeps its other cards in place at opacity 0, so being in the page is not enough), and the
 // tick above is skipped when the panel is not visible or the night screen is up.
 const PULSING = '.sess.busy, .sess.shell, .sess.waiting, .obs-pill.on, .w-onair.on, .dc-mic.on, .radio-card.is-playing';
-const shown = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.right > 0 && r.left < innerWidth && r.bottom > 0 && r.top < innerHeight; };
+const pulseShown = (el) => { if (el.closest('.stack-item:not(.active)')) return false; const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.right > 0 && r.left < innerWidth && r.bottom > 0 && r.top < innerHeight; };
 let beatN = 0;
 function beat() {
-  if (![...document.querySelectorAll(PULSING)].some(shown)) return;
+  if (![...document.querySelectorAll(PULSING)].some(pulseShown)) return;
   beatN++;
   const cl = document.documentElement.classList;
   for (const n of [2, 3, 4]) cl.toggle('beat-' + n, Math.floor(beatN / n) % 2 === 1);

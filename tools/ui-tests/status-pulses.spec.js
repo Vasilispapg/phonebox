@@ -89,6 +89,24 @@ for (const [name, place] of [['on another page', 'left: 2000px; top: 0'], ['in a
   });
 }
 
+// a stack keeps its other cards in place at opacity 0, with a real size and inside the viewport
+const STACK = (a, b) => `<div class="w-stack"><div class="stack-wrap"><div class="stack-item active">${a}</div><div class="stack-item">${b}</div></div></div>`;
+const DOT = FIXTURES['waiting session dot'].html;
+test('the beat does not run for a pulse in a stack card that is not the active one', async ({ page }) => {
+  await load(page);
+  await mount(page, STACK('<div class="sess idle"><span class="st"></span></div>', DOT));
+  const before = await page.evaluate(() => document.documentElement.className);
+  await page.clock.runFor(5000);
+  expect(await page.evaluate(() => document.documentElement.className)).toBe(before);
+});
+test('the beat runs for a pulse in the active stack card', async ({ page }) => {
+  await load(page);
+  await mount(page, STACK(DOT, '<div class="sess idle"><span class="st"></span></div>'));
+  const before = await page.evaluate(() => document.documentElement.className);
+  await page.clock.runFor(1000);
+  expect(await page.evaluate(() => document.documentElement.className)).not.toBe(before);
+});
+
 test('the beat waits while the panel is not visible', async ({ page }) => {
   await load(page);
   await mount(page, FIXTURES['waiting session dot'].html);
