@@ -251,6 +251,8 @@ public static partial class ClaudeTranscript
             {
                 if (c == quote) quote = '\0';
                 else if (c == '\\' && quote == '"' && i + 1 < command.Length) text.Append(command[++i]);
+                // inside double quotes a substitution still runs, and its own quotes would end this one: no telling what is what
+                else if (quote == '"' && (c == '`' || (c == '$' && i + 1 < command.Length && command[i + 1] is '(' or '{'))) return null;
                 else text.Append(c);
                 continue;
             }

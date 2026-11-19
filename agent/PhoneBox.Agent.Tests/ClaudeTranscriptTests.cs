@@ -87,6 +87,13 @@ public sealed class ClaudeTranscriptTests : IDisposable
     [InlineData("\\HELPER=prod PRIVATE_TOKEN", null)]
     [InlineData("HELPER=\"prod x\" git status", "git")]
     [InlineData("A=1 B='x y' dotnet test", "dotnet")]
+    [InlineData("VALUE=\"$(printf \"x; 123456789 \" z)\" git status", null)]
+    [InlineData("echo \"$(date)\"", null)]
+    [InlineData("echo \"`date`\"", null)]
+    [InlineData("echo \"${HOME}\"", null)]
+    [InlineData("echo \"$HOME\"", "echo")]
+    [InlineData("echo '$(not run); ${x}'", "echo")]
+    [InlineData("echo \"\\$(literal)\"", "echo")]
     [InlineData("(git status)", "git")]
     [InlineData("ls\\ -la", null)] // an escaped space makes one word: not something to name
     public void ACommandIsShownAsTheProgramItRuns(string command, string? expected) =>
