@@ -23,7 +23,7 @@
 - Sessions widget: tap a Claude Code session to see what it is doing. The details list its recent steps (tool name and
   file, with how long a running one has taken), the last exchange, and a scrollable list of the last 30 messages. Your
   prompts and Claude's replies leave the computer only when you turn on Settings › Claude Code › **Show the
-  conversation on the phone**, which is off by default (#261 follow-up,
+  conversation on the phone**, which is off by default (#266,
   [Vasilispapg](https://github.com/Vasilispapg)).
 
 **Panel**
