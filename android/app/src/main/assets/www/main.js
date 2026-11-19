@@ -975,7 +975,7 @@ setInterval(tickApproval, 1000);
 // while it was down is never replayed. An approval lost that way leaves the command waiting in the dark with nothing
 // on screen, so ask for the list outright as well instead of relying on the event alone. Only while the panel is on
 // screen: the answer is needed when someone is looking, and a phone in a pocket should not poll all night.
-setInterval(() => { if (!PREVIEW && !document.hidden) loadApprovals(); }, 5000);
+setInterval(() => { if (!PREVIEW && !idle()) loadApprovals(); }, 5000);
 
 export async function decide(decision) {
   const a = approvals[0];
@@ -2003,9 +2003,30 @@ window.onAgentStream = (event, data) => {
 };
 export const streaming = () => streamOn && Date.now() - lastStateAt < 3000;
 
+// Nobody can see the panel: the screen is off or another app is in front (the shell tells us — WebView.onPause() does not
+// stop JavaScript — and a browser tab reports it as hidden). The shell closes the stream then, and the polling that
+// would take over, the 250 ms refresh and the periodic loads below all wait. Clocks, timers and alarms keep running.
+let appPaused = false;
+export const idle = () => appPaused || document.hidden;
+window.onAppPause = (paused) => {
+  const was = idle();
+  appPaused = !!paused;
+  if (was && !idle()) wokeUp();
+};
+document.addEventListener('visibilitychange', () => { if (!document.hidden && !appPaused) wokeUp(); });
+// what the paused panel skipped is fetched at once, not at the next interval
+function wokeUp() {
+  if (!online) return;
+  loadConfig(); loadPush(); loadApprovals();
+  if (anyNeeds('quotas')) loadQuotas();
+  if (anyNeeds('calendar')) loadCalendar();
+  if (anyNeeds('work') && !streaming()) loadWork();
+}
+
 export async function poll() {
   // a pending replay must go through even while the stream is live: the stream only sends events newer than
   // its own connect, so the poll is the only way to get the ones the restarted agent queued before it
+  if (idle()) { setTimeout(poll, 2000); return; }
   if (!streaming() || evReplay) {
     const replay = evReplay, gen = evGen;
     try {
@@ -2025,12 +2046,12 @@ applyDisplay();
 tick();
 loadWeather();
 setInterval(loadWeather, 15 * 60_000);
-setInterval(() => { if (!nightOn) emit('fast'); }, 250);
-setInterval(() => { if (online && anyNeeds('quotas')) loadQuotas(); }, 30_000);
-setInterval(() => { if (online && anyNeeds('calendar')) loadCalendar(); }, 120_000);
-setInterval(() => { if (online && anyNeeds('work') && !streaming()) loadWork(); }, 3000);
-setInterval(() => { if (online && pageOf('procs')) loadProcs(); if (online && sheet) loadSheet(); }, 2000);
-setInterval(() => { if (online) loadConfig(); }, 60_000);
+setInterval(() => { if (!nightOn && !idle()) emit('fast'); }, 250);
+setInterval(() => { if (online && !idle() && anyNeeds('quotas')) loadQuotas(); }, 30_000);
+setInterval(() => { if (online && !idle() && anyNeeds('calendar')) loadCalendar(); }, 120_000);
+setInterval(() => { if (online && !idle() && anyNeeds('work') && !streaming()) loadWork(); }, 3000);
+setInterval(() => { if (idle()) return; if (online && pageOf('procs')) loadProcs(); if (online && sheet) loadSheet(); }, 2000);
+setInterval(() => { if (online && !idle()) loadConfig(); }, 60_000);
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && lastHour12 !== null && hour12() !== lastHour12) {
     buildLayout();
