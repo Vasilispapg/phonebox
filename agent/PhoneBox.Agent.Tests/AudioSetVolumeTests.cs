@@ -135,14 +135,15 @@ public class AudioSetVolumeTests
     }
 
     [Fact]
-    public void AMuteThatCannotBeReadIsOnlyFineWhenTheOutputIsKnownToHaveNone()
+    public void AMuteThatCannotBeReadIsOnlyFineWhenTheOutputHasNoMuteProperty()
     {
         Assert.True(MacAudioProbe.Unmuted(0, true, () => throw new Exception("must not write")));   // not muted: nothing to clear
         Assert.True(MacAudioProbe.Unmuted(1, true, () => true));     // muted, cleared
         Assert.False(MacAudioProbe.Unmuted(1, true, () => false));   // muted, could not be cleared
-        Assert.False(MacAudioProbe.Unmuted(null, true, () => true)); // it has a mute but it cannot be read: the fallback decides
-        Assert.False(MacAudioProbe.Unmuted(null, null, () => true)); // the question itself failed: unknown, not "no mute"
-        Assert.True(MacAudioProbe.Unmuted(null, false, () => throw new Exception("must not write"))); // known to have no mute
+        // the property exists but cannot be read (it may even be read-only: that is not "absent"): unknown, so the fallback runs
+        Assert.False(MacAudioProbe.Unmuted(null, true, () => true));
+        Assert.False(MacAudioProbe.Unmuted(null, null, () => true)); // not known whether it exists
+        Assert.True(MacAudioProbe.Unmuted(null, false, () => throw new Exception("must not write"))); // there is no mute at all
     }
 
     [Theory]

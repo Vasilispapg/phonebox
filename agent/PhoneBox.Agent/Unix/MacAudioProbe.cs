@@ -37,6 +37,8 @@ internal static class MacAudioProbe
     private static extern int SetUInt(uint id, ref Address address, uint qualifierSize, nint qualifier, uint size, ref uint value);
     [DllImport(CoreAudio, EntryPoint = "AudioObjectIsPropertySettable")]
     private static extern int IsSettable(uint id, ref Address address, out byte settable);
+    [DllImport(CoreAudio, EntryPoint = "AudioObjectHasProperty")]
+    private static extern byte HasProperty(uint id, ref Address address);
     [DllImport(CoreFoundation)] [return: MarshalAs(UnmanagedType.I1)] private static extern bool CFStringGetCString(nint value, byte[] buffer, nint bufferSize, uint encoding);
     [DllImport(CoreFoundation)] private static extern void CFRelease(nint value);
 
@@ -96,7 +98,7 @@ internal static class MacAudioProbe
                 reached = EffectiveLevel(targets); // a channel that stopped at 1 leaves the average below the request
             }
             // an output that stays muted is not "set": see Unmuted
-            if (ok) ok = Unmuted(UInt(device.Value, Mute, Output, 0), IsWritable(device.Value, Mute, 0), () => WriteUInt(device.Value, Mute, 0, 0));
+            if (ok) ok = Unmuted(UInt(device.Value, Mute, Output, 0), Exists(device.Value, Mute, 0), () => WriteUInt(device.Value, Mute, 0, 0));
             return ok ? reached : null;
         }
         catch { return null; }
@@ -104,10 +106,10 @@ internal static class MacAudioProbe
 
     /// <summary>
     /// Whether the output ends up unmuted: not muted already, or muted and cleared. A mute that cannot be read is only fine
-    /// when the output is known to have no mute to clear (<paramref name="writable"/> false); if it has one, or the question
-    /// itself failed (null), the state is unknown and the caller falls back to osascript.
+    /// when the output has no mute property at all (<paramref name="exists"/> false). If it has one (even a read-only one
+    /// that cannot be read), or the answer is not known (null), the state is unknown and the caller falls back to osascript.
     /// </summary>
-    internal static bool Unmuted(uint? muted, bool? writable, Func<bool> clear) => muted is { } m ? m == 0 || clear() : writable == false;
+    internal static bool Unmuted(uint? muted, bool? exists, Func<bool> clear) => muted is { } m ? m == 0 || clear() : exists == false;
 
     /// <summary>
     /// The levels to write to channels that are at <paramref name="current"/> so their average becomes
@@ -135,11 +137,11 @@ internal static class MacAudioProbe
     /// <summary>The level an output reports for these channel values: their average, in percent (what SelectedOutput reads back).</summary>
     internal static int EffectiveLevel(float[] written) => written.Length == 0 ? 0 : (int)Math.Round(Math.Clamp(written.Average(), 0f, 1f) * 100);
 
-    /// <summary>Whether the property can be written; null when the question itself failed (not the same as "no").</summary>
-    private static bool? IsWritable(uint device, uint selector, uint element)
+    /// <summary>Whether the output has the property at all (it can exist and still be read-only or unreadable).</summary>
+    private static bool Exists(uint device, uint selector, uint element)
     {
         var address = new Address(selector, Output, element);
-        return IsSettable(device, ref address, out var writable) == 0 ? writable != 0 : null;
+        return HasProperty(device, ref address) != 0;
     }
 
     /// <summary>Channel writes, in order: null for a channel that does not exist. Done when at least one exists and all written.</summary>
