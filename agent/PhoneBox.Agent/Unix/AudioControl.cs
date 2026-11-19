@@ -61,8 +61,15 @@ public sealed partial class AudioControl
 
     private void Store(long ticket, long gen, AudioSnapshot? s)
     {
+        bool changed;
         lock (_lock)
-            if (_gen == gen && ticket > _written) { _written = ticket; _cached = s; _at = Environment.TickCount64; }
+        {
+            if (_gen != gen || ticket <= _written) return;
+            // the volume moved from outside (the keyboard's volume keys, another app): the phone should see it now
+            changed = _cached is not null && s is not null && (_cached.Volume != s.Volume || _cached.Muted != s.Muted);
+            _written = ticket; _cached = s; _at = Environment.TickCount64;
+        }
+        if (changed) StateSignal.Poke();
     }
 
     public bool SetVolume(int level)

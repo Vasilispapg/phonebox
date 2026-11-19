@@ -53,6 +53,7 @@ public sealed class MediaMonitor(ILogger<MediaMonitor> log) : BackgroundService
     private async Task Poll()
     {
         await _pollGate.WaitAsync();
+        var before = _snap;
         try
         {
             var (snap, art) = OperatingSystem.IsMacOS() ? ReadMac() : ReadLinux();
@@ -76,6 +77,8 @@ public sealed class MediaMonitor(ILogger<MediaMonitor> log) : BackgroundService
         finally
         {
             _pollGate.Release();
+            // a new track, a pause or a seek reaches the phone now, not at its next whole-second state
+            if (StateSignal.MediaChanged(before, _snap)) StateSignal.Poke();
         }
     }
 
