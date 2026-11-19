@@ -12,7 +12,7 @@ public class AudioSetVolumeTests
     [Fact]
     public void ASuccessfulSetShowsTheNewVolumeAtOnce()
     {
-        var audio = new AudioControl(() => new AudioSnapshot(50, false, true), set: _ => true);
+        var audio = new AudioControl(() => new AudioSnapshot(50, false, true), set: level => level);
         Assert.Equal(50, audio.Current()?.Volume);
 
         Assert.True(audio.SetVolume(80));
@@ -31,7 +31,7 @@ public class AudioSetVolumeTests
         {
             if (Interlocked.Increment(ref reads) > 1) gate.Wait(TimeSpan.FromSeconds(10)); // the busy computer
             return new AudioSnapshot(50, false, true);
-        }, set: _ => true);
+        }, set: level => level);
         audio.Current();
         Thread.Sleep(1000); // the reading is now older than the cache allows (900 ms)
 
@@ -44,7 +44,7 @@ public class AudioSetVolumeTests
     [Fact]
     public void AFailedSetKeepsTheReadingAndReportsFailure()
     {
-        var audio = new AudioControl(() => new AudioSnapshot(50, false, true), set: _ => false);
+        var audio = new AudioControl(() => new AudioSnapshot(50, false, true), set: _ => null);
         audio.Current();
         Assert.False(audio.SetVolume(90));
         Assert.Equal(50, audio.Snapshot()?.Volume);
@@ -59,13 +59,13 @@ public class AudioSetVolumeTests
         using var releaseFirst = new ManualResetEventSlim(false);
         var gate = new object();
         int running = 0, maxRunning = 0, calls = 0;
-        var audio = new AudioControl(() => new AudioSnapshot(50, false, true), set: _ =>
+        var audio = new AudioControl(() => new AudioSnapshot(50, false, true), set: level =>
         {
             lock (gate) { running++; maxRunning = Math.Max(maxRunning, running); }
             try
             {
                 if (Interlocked.Increment(ref calls) == 1) { firstInside.Set(); releaseFirst.Wait(TimeSpan.FromSeconds(10)); }
-                return true;
+                return level;
             }
             finally { lock (gate) running--; }
         });
@@ -100,7 +100,7 @@ public class AudioSetVolumeTests
     public void AToggleFlipsTheRememberedMuteAtOnce()
     {
         var toggles = 0;
-        var audio = new AudioControl(() => new AudioSnapshot(50, false, true), set: _ => true, toggleMute: () => { toggles++; return true; });
+        var audio = new AudioControl(() => new AudioSnapshot(50, false, true), set: level => level, toggleMute: () => { toggles++; return true; });
         audio.Current();
         Assert.True(audio.ToggleMute());
         Assert.Equal(1, toggles);
@@ -114,7 +114,7 @@ public class AudioSetVolumeTests
     [Fact]
     public void AFailedToggleKeepsNothingStale()
     {
-        var audio = new AudioControl(() => new AudioSnapshot(50, false, true), set: _ => true, toggleMute: () => false);
+        var audio = new AudioControl(() => new AudioSnapshot(50, false, true), set: level => level, toggleMute: () => false);
         audio.Current();
         Assert.False(audio.ToggleMute());
         Assert.False(audio.Snapshot()!.Muted);
@@ -155,5 +155,44 @@ public class AudioSetVolumeTests
         var got = MacAudioProbe.ScaleChannels(current, target);
         Assert.Equal(expected.Length, got.Length);
         for (var i = 0; i < expected.Length; i++) Assert.Equal(expected[i], got[i], 3);
+    }
+
+    [Fact]
+    public void AWriteThatCouldNotReachTheLevelIsRememberedAtTheLevelItReached()
+    {
+        // channel scaling can stop short (a channel passes 1): the device then reports a lower average than was asked for,
+        // and the phone must not be shown the requested level for a moment before the next read corrects it
+        var audio = new AudioControl(() => new AudioSnapshot(50, false, true), set: level => Math.Min(level, 68));
+        audio.Current();
+        Assert.True(audio.SetVolume(90));
+        Assert.Equal(68, audio.Snapshot()?.Volume);
+        Assert.True(audio.SetVolume(40));
+        Assert.Equal(40, audio.Snapshot()?.Volume);
+    }
+
+    [Theory]
+    [InlineData(new[] { 0.36f, 1.0f }, 68)]  // [0.2, 0.8] asked for 0.9: the louder channel stopped at 1
+    [InlineData(new[] { 0.1f, 0.4f }, 25)]
+    [InlineData(new[] { 0.3f }, 30)]
+    public void TheEffectiveLevelIsTheAverageOfWhatWasWritten(float[] written, int expected) =>
+        Assert.Equal(expected, MacAudioProbe.EffectiveLevel(written));
+
+    [Fact]
+    public void AReadThatLandsDuringAToggleIsNotFlippedAgain()
+    {
+        // a background read can finish after the device has toggled but before the toggle call returns: it already holds the
+        // new mute state, and flipping the remembered one again would show the opposite of the truth
+        AudioControl? audio = null;
+        var reading = new AudioSnapshot(50, false, true);
+        audio = new AudioControl(() => reading, set: level => level, toggleMute: () =>
+        {
+            Thread.Sleep(1000);                       // the earlier reading is now too old to be reused (900 ms)
+            reading = new AudioSnapshot(50, true, true); // the device has toggled: a read now sees it muted
+            audio!.Current();                         // a read lands while the toggle is still in progress
+            return true;
+        });
+        audio.Current(); // unmuted
+        Assert.True(audio.ToggleMute());
+        Assert.True(audio.Snapshot()!.Muted);
     }
 }

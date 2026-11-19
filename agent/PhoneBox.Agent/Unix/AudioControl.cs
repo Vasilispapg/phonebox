@@ -19,13 +19,13 @@ public sealed partial class AudioControl
     private int _refreshing;   // 1 while a background read runs
 
     private const int SetTimeoutMs = 8000; // a busy computer can need seconds; giving up kills the helper and nothing is set
-    private readonly Func<int, bool>? _set;
+    private readonly Func<int, int?>? _set; // the level reached, or null when the write failed
     private readonly Func<bool>? _toggleMute;
 
     public AudioControl() : this(Read, null, null) { }
 
     /// <summary>For tests: a fake reader (and optionally setter and mute toggle) instead of osascript / wpctl / pactl.</summary>
-    internal AudioControl(Func<AudioSnapshot?> read, Func<int, bool>? set = null, Func<bool>? toggleMute = null) { _read = read; _set = set; _toggleMute = toggleMute; }
+    internal AudioControl(Func<AudioSnapshot?> read, Func<int, int?>? set = null, Func<bool>? toggleMute = null) { _read = read; _set = set; _toggleMute = toggleMute; }
 
     internal bool Refreshing => Volatile.Read(ref _refreshing) == 1;
 
@@ -83,15 +83,17 @@ public sealed partial class AudioControl
         level = Math.Clamp(level, 0, 100);
         lock (_controlGate)
         {
-            var ok = _set?.Invoke(level) ?? SetOnThisSystem(level);
+            // the level the write reached: the request, unless the output could not get there (channels that cannot all go
+            // as high), in which case it is what the output will report, not what was asked for
+            var reached = _set is not null ? _set(level) : SetOnThisSystem(level);
             // On success the new volume is what the next state shows: the old reading would make the slider snap back until
             // the background read (seconds, on a busy computer) catches up, which then looks like "nothing changed".
             AudioSnapshot? before;
             lock (_lock) before = _cached;
             // a write that leaves mute alone with no earlier reading says nothing about mute: do not cache a guess, read it
-            if (ok && MutedAfterSet(_set is not null || ClearsMute(level), before) is { } muted) Remember(new AudioSnapshot(level, muted, true));
+            if (reached is { } now && MutedAfterSet(_set is not null || ClearsMute(level), before) is { } muted) Remember(new AudioSnapshot(now, muted, true));
             else Invalidate();
-            return ok;
+            return reached is not null;
         }
     }
 
@@ -104,13 +106,21 @@ public sealed partial class AudioControl
     /// <summary>Whether the write that SetOnThisSystem makes for this level also unmutes: macOS always does, wpctl above 0.</summary>
     private static bool ClearsMute(int level) => OperatingSystem.IsMacOS() || (Sh.Which("wpctl") is not null && level > 0);
 
-    private static bool SetOnThisSystem(int level) => OperatingSystem.IsMacOS()
-        ? MacAudioProbe.SetVolume(level) // in-process; osascript only for an output CoreAudio cannot control
-          || Sh.RunWithTimeout(SetTimeoutMs, "osascript", "-e", $"set volume output volume {level} without output muted") is not null
-        : Sh.Which("wpctl") is not null
+    /// <summary>Sets the volume on this system; the level reached (null when it failed).</summary>
+    private static int? SetOnThisSystem(int level)
+    {
+        if (OperatingSystem.IsMacOS())
+        {
+            // in-process; osascript only for an output CoreAudio cannot control
+            if (MacAudioProbe.SetVolume(level) is { } reached) return reached;
+            return Sh.RunWithTimeout(SetTimeoutMs, "osascript", "-e", $"set volume output volume {level} without output muted") is not null ? level : null;
+        }
+        var ok = Sh.Which("wpctl") is not null
             ? Sh.RunWithTimeout(SetTimeoutMs, "wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", (level / 100.0).ToString("0.00", CultureInfo.InvariantCulture)) is not null
               && (level == 0 || Sh.RunWithTimeout(SetTimeoutMs, "wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "0") is not null)
             : Sh.RunWithTimeout(SetTimeoutMs, "pactl", "set-sink-volume", "@DEFAULT_SINK@", $"{level}%") is not null;
+        return ok ? level : null;
+    }
 
     /// <summary>
     /// Whether the output can be controlled, from the last reading however old: a fresh read first would put another
@@ -133,12 +143,16 @@ public sealed partial class AudioControl
         if (OperatingSystem.IsMacOS() && Current() is not { CanControl: true }) return false;
         lock (_controlGate)
         {
-            var ok = _toggleMute?.Invoke() ?? ToggleOnThisSystem();
+            // the reading the flip starts from is taken before the toggle: a read that lands while the toggle is in progress
+            // may already include it, and flipping that again would show the opposite of the truth
             AudioSnapshot? before;
             lock (_lock) before = _cached;
-            // the flipped state is what the next state shows (and what a later volume-only write must start from); with no
-            // earlier reading, or after a failure, the next read decides
-            if (ok && before is not null) Remember(before with { Muted = !before.Muted });
+            var ok = _toggleMute?.Invoke() ?? ToggleOnThisSystem();
+            bool untouched;
+            lock (_lock) untouched = ReferenceEquals(_cached, before);
+            // the flipped state is what the next state shows (and what a later volume-only write must start from); after a
+            // failure, with no earlier reading, or if a read landed meanwhile, the next read decides
+            if (ok && before is not null && untouched) Remember(before with { Muted = !before.Muted });
             else Invalidate();
             return ok;
         }

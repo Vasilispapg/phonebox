@@ -69,18 +69,20 @@ internal static class MacAudioProbe
     /// <summary>
     /// Sets the selected output's volume (0-100) and unmutes it, in-process. The same as AppleScript's
     /// "set volume output volume N without output muted" but without starting osascript, which takes seconds on a busy
-    /// computer. False when the output has no controllable volume: the caller falls back to osascript.
+    /// computer. Returns the level the output ended on (null when it has no controllable volume: the caller falls back to
+    /// osascript), which is the request unless channel scaling stopped short.
     /// </summary>
-    public static bool SetVolume(int level)
+    public static int? SetVolume(int level)
     {
-        if (!OperatingSystem.IsMacOS()) return false;
+        if (!OperatingSystem.IsMacOS()) return null;
         try
         {
             var device = UInt(1, DefaultOutput, Global, 0);
-            if (device is null or 0) return false;
+            if (device is null or 0) return null;
             var value = Math.Clamp(level, 0, 100) / 100f;
             // the virtual main volume first (what the system itself moves), then the main element, then the channels
             var ok = WriteFloat(device.Value, VirtualMain, 0, value) || WriteFloat(device.Value, Volume, 0, value);
+            var reached = Math.Clamp(level, 0, 100); // what the output will report: the request, unless channels clip below
             if (!ok)
             {
                 // an output with only per-channel volumes: each channel moves by the same factor, so the balance the user set
@@ -91,12 +93,13 @@ internal static class MacAudioProbe
                 var next = 0;
                 bool? Channel(uint element) => current[element - 1] is null ? null : WriteFloat(device.Value, Volume, element, targets[next++]);
                 ok = AllWritten([Channel(1), Channel(2)]);
+                reached = EffectiveLevel(targets); // a channel that stopped at 1 leaves the average below the request
             }
             // an output that stays muted is not "set": see Unmuted
             if (ok) ok = Unmuted(UInt(device.Value, Mute, Output, 0), IsWritable(device.Value, Mute, 0), () => WriteUInt(device.Value, Mute, 0, 0));
-            return ok;
+            return ok ? reached : null;
         }
-        catch { return false; }
+        catch { return null; }
     }
 
     /// <summary>
@@ -116,6 +119,9 @@ internal static class MacAudioProbe
         var factor = target / average;
         return current.Select(c => Math.Clamp(c * factor, 0f, 1f)).ToArray();
     }
+
+    /// <summary>The level an output reports for these channel values: their average, in percent (what SelectedOutput reads back).</summary>
+    internal static int EffectiveLevel(float[] written) => written.Length == 0 ? 0 : (int)Math.Round(Math.Clamp(written.Average(), 0f, 1f) * 100);
 
     private static bool IsWritable(uint device, uint selector, uint element)
     {
