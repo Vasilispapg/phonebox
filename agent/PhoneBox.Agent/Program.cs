@@ -176,9 +176,12 @@ app.Use(async (ctx, next) =>
     finally
     {
         var ms = (long)System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds;
-        var route = RequestTimings.Route(ctx.Request.Method, ctx.Request.Path);
-        timings.Add(route, ms);
-        if (ms >= RequestTimings.SlowMs && ctx.Request.Method != "GET") app.Logger.LogInformation("slow request: {Route} took {Ms} ms", route, ms);
+        // only a request that matched an endpoint (routing has run by now), so unknown paths cannot add rows
+        if (RequestTimings.RouteOf(ctx.GetEndpoint(), ctx.Request.Method) is { } route)
+        {
+            timings.Add(route, ms);
+            if (ms >= RequestTimings.SlowMs && ctx.Request.Method != "GET") app.Logger.LogInformation("slow request: {Route} took {Ms} ms", route, ms);
+        }
     }
 });
 app.MapGet("/api/latency", () => Results.Json(timings.Summary()));

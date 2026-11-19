@@ -132,8 +132,14 @@ W.media = {
     // the song will continue from; it seeks on release, not while moving. Meanwhile the once-a-second state and the 250 ms
     // refresh leave the bar alone (see update()).
     const bar = q('.bar'), tip = q('.scrub-tip');
-    let scrub = null, seekTimer = 0; // { id, ms } while held
+    let scrub = null, seekTimer = 0, ariaSec = -1; // scrub: { id, ms, key } while held
     const canScrub = () => !!(media && media.durMs > 0 && media.canSeek);
+    // which song a held bar belongs to: a different one underneath (next track) cancels the scrub instead of seeking it
+    const trackKey = () => (media ? [media.app, media.title, media.durMs].join('\n') : '');
+    const paintAria = (ms) => {
+      bar.setAttribute('aria-valuenow', Math.round(ms / 1000));
+      bar.setAttribute('aria-valuetext', fmtTime(ms));
+    };
     const nowMs = () => Math.min(media.durMs, media.posMs + (media.playing ? performance.now() - media.at : 0));
     const msFrom = (clientX) => {
       const r = bar.getBoundingClientRect();
@@ -144,22 +150,21 @@ W.media = {
       q('.fill').style.width = pct + '%';
       q('.m-pos').textContent = tip.textContent = fmtTime(ms);
       bar.style.setProperty('--tip', pct + '%');
-      bar.setAttribute('aria-valuenow', Math.round(ms / 1000));
-      bar.setAttribute('aria-valuetext', fmtTime(ms));
+      paintAria(ms);
     };
     const endScrub = (commit) => {
       clearTimeout(seekTimer);
       if (!scrub) return;
-      const ms = scrub.ms;
+      const { ms, key } = scrub;
       scrub = null;
       bar.classList.remove('scrubbing');
-      if (!commit || !canScrub()) return;
+      if (!commit || !canScrub() || key !== trackKey()) return; // checked again: the song may have changed since it was held
       haptic();
       // the bar stays where it was put until the agent has caught up: its next samples still hold the old position
       media.posMs = ms; media.at = performance.now(); media.hold = performance.now() + 2500;
       api('/media/seek?ms=' + ms, 'POST').catch(() => {});
     };
-    const startScrub = (id, ms) => { scrub = { id, ms }; bar.classList.add('scrubbing'); paintScrub(ms); };
+    const startScrub = (id, ms) => { scrub = { id, ms, key: trackKey() }; bar.classList.add('scrubbing'); paintScrub(ms); };
     bar.addEventListener('pointerdown', (e) => {
       if (!canScrub() || (e.pointerType === 'mouse' && e.button !== 0)) return;
       clearTimeout(seekTimer);
@@ -209,12 +214,14 @@ W.media = {
 
     return {
       update(kind) {
+        if (scrub && scrub.key !== trackKey()) endScrub(false); // the song changed under the finger
         if (kind === 'fast') {
           if (!media || scrub) return; // while the bar is held it shows the chosen time, not the song's
           if (media.durMs > 0) {
             const pos = Math.min(media.durMs, media.posMs + (media.playing ? performance.now() - media.at : 0));
             q('.fill').style.width = (pos / media.durMs) * 100 + '%';
             q('.m-pos').textContent = fmtTime(pos);
+            if (Math.floor(pos / 1000) !== ariaSec) { ariaSec = Math.floor(pos / 1000); paintAria(pos); } // once a second, not every 250 ms
           } else if (media.app === 'Internet Radio') {
             const pos = Math.max(0, (media.posMs || 0) + (media.playing ? performance.now() - media.at : 0));
             q('.fill').style.width = media.playing ? '100%' : '0';
@@ -240,6 +247,7 @@ W.media = {
           q('.m-artist').textContent = t('w.pressToResume');
           q('.fill').style.width = '0';
           q('.m-pos').textContent = q('.m-dur').textContent = '0:00';
+          ariaSec = -1; paintAria(0);
           if (artId !== 0) { artId = 0; img.classList.remove('on'); setArtColor(null); }
           return;
         }
@@ -255,6 +263,9 @@ W.media = {
         } else {
           q('.m-dur').textContent = fmtTime(m.durMs);
         }
+        // the slider's range and value for assistive technology (its maximum defaults to 100 without this)
+        bar.setAttribute('aria-valuemax', Math.max(1, Math.round((m.durMs || 0) / 1000)));
+        if (m.durMs > 0 && media && !scrub) { ariaSec = Math.floor(nowMs() / 1000); paintAria(nowMs()); }
         if (m.artId !== artId) {
           artId = m.artId;
           if (m.artId) img.src = `${API}/art?id=${m.artId}`;

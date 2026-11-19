@@ -31,6 +31,9 @@ public sealed class MediaMonitor(ILogger<MediaMonitor> log) : BackgroundService
     private DateTimeOffset _macAnchorAt;
     private static readonly TimeSpan AnchorEvery = TimeSpan.FromSeconds(5);
 
+    /// <summary>The clock reading (Stopwatch ticks) at which the last now-playing position was computed.</summary>
+    internal long LastSampleTicks { get; private set; }
+
     /// <summary>Where the player itself says playback is (ms), or null when it cannot be asked. Replaced in tests.</summary>
     internal Func<string, long?> AppPosition { get; set; } = ReadAppPosition;
     private string _macSourceKey = "";
@@ -57,7 +60,9 @@ public sealed class MediaMonitor(ILogger<MediaMonitor> log) : BackgroundService
         try
         {
             var (snap, art) = OperatingSystem.IsMacOS() ? ReadMac() : ReadLinux();
-            var sampledAt = System.Diagnostics.Stopwatch.GetTimestamp(); // the position was read just now (the artwork below can take a while)
+            // when the position was computed: for the now-playing info that is inside ReadMacSystemMedia, before the artwork is
+            // decoded (a TIFF is converted with sips, which can take seconds); otherwise it was read just now
+            var sampledAt = OperatingSystem.IsMacOS() && _macSystemMedia && LastSampleTicks != 0 ? LastSampleTicks : System.Diagnostics.Stopwatch.GetTimestamp();
             if (snap is null) { _snap = null; Art = null; _macArtKey = ""; _macArtEncoded = ""; _macPositionKey = ""; _artUrl = ""; return; }
             if (_macSystemMedia)
             {
@@ -149,11 +154,13 @@ public sealed class MediaMonitor(ILogger<MediaMonitor> log) : BackgroundService
             var rawPosition = (long)(Math.Max(0, Num("ElapsedTime")) * 1000);
             var positionKey = sourceKey + "\n" + Num("UniqueIdentifier").ToString(CultureInfo.InvariantCulture);
             var now = sampledAt ?? DateTimeOffset.UtcNow;
+            LastSampleTicks = System.Diagnostics.Stopwatch.GetTimestamp(); // the position is as of now, whatever the artwork below takes
             if (positionKey != _macPositionKey)
             {
                 _macPositionKey = positionKey;
                 _macPositionMs = rawPosition;
                 _macLastRawPositionMs = rawPosition;
+                _macAnchorAt = DateTimeOffset.MinValue; // a new position sequence (or the same track back after a gap): ask the player
             }
             else
             {

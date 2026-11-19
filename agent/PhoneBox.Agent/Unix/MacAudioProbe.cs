@@ -81,11 +81,25 @@ internal static class MacAudioProbe
             var value = Math.Clamp(level, 0, 100) / 100f;
             // the virtual main volume first (what the system itself moves), then the main element, then the channels
             var ok = WriteFloat(device.Value, VirtualMain, 0, value) || WriteFloat(device.Value, Volume, 0, value);
-            if (!ok) { var left = WriteFloat(device.Value, Volume, 1, value); var right = WriteFloat(device.Value, Volume, 2, value); ok = left || right; }
-            if (ok) WriteUInt(device.Value, Mute, 0, 0);
+            if (!ok)
+            {
+                // a channel that does not exist (the second of a mono output) is skipped, but one that exists and refuses
+                // the write makes the whole set fail, so the caller's fallback runs instead of reporting half a change
+                bool? Channel(uint element) => Float(device.Value, Volume, Output, element) is null ? null : WriteFloat(device.Value, Volume, element, value);
+                ok = AllWritten([Channel(1), Channel(2)]);
+            }
+            // an output that stays muted is not "set": clearing mute only matters, and can only fail, when it is muted
+            if (ok && UInt(device.Value, Mute, Output, 0) is { } muted && muted != 0) ok = WriteUInt(device.Value, Mute, 0, 0);
             return ok;
         }
         catch { return false; }
+    }
+
+    /// <summary>Channel writes, in order: null for a channel that does not exist. Done when at least one exists and all written.</summary>
+    internal static bool AllWritten(IEnumerable<bool?> results)
+    {
+        var existing = results.Where(r => r is not null).ToArray();
+        return existing.Length > 0 && existing.All(r => r == true);
     }
 
     /// <summary>Flips the selected output's mute in-process; false when it cannot be read or written.</summary>

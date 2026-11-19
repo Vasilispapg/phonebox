@@ -2,11 +2,13 @@ namespace PhoneBox.Agent;
 
 /// <summary>
 /// How long the agent takes to answer each kind of request, so "it feels slow" can be told from "the computer is busy".
-/// Counts every request but keeps only the latest few durations per route, so it never grows.
+/// Counts every request but keeps only the latest few durations per route, and only the first <c>maxRoutes</c> routes get a
+/// row of their own (the rest share <see cref="OtherRoute"/>), so it never grows.
 /// </summary>
-public sealed class RequestTimings(int keep = 200)
+public sealed class RequestTimings(int keep = 200, int maxRoutes = 64)
 {
     public const long SlowMs = 300;
+    public const string OtherRoute = "(other)";
     private readonly object _gate = new();
     private readonly Dictionary<string, Series> _routes = [];
 
@@ -23,7 +25,12 @@ public sealed class RequestTimings(int keep = 200)
     {
         lock (_gate)
         {
-            if (!_routes.TryGetValue(route, out var s)) _routes[route] = s = new Series(keep);
+            if (!_routes.TryGetValue(route, out var s))
+            {
+                // the table is capped: a new route past the cap is counted with the others
+                if (_routes.Count >= maxRoutes && route != OtherRoute) { Add(OtherRoute, ms); return; }
+                _routes[route] = s = new Series(keep);
+            }
             s.Count++;
             if (ms >= SlowMs) s.Slow++;
             if (ms > s.Max) s.Max = ms;
@@ -47,11 +54,10 @@ public sealed class RequestTimings(int keep = 200)
             }).OrderByDescending(r => r.Count).ToList();
     }
 
-    /// <summary>"POST /api/media/playpause", with an id at the end folded away ("/api/approvals/abc" → "/api/approvals").</summary>
-    public static string Route(string method, string path)
-    {
-        var parts = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        var keep = parts.Length >= 2 && parts[1] is "media" or "volume" or "state" ? Math.Min(parts.Length, 3) : Math.Min(parts.Length, 2);
-        return method + " /" + string.Join('/', parts.Take(keep));
-    }
+    /// <summary>
+    /// "POST /api/approvals/{id}": the method and the matched route pattern, so a path with an id is one route. Null when the
+    /// request matched no endpoint (an unknown path), which is not recorded: any client can send any number of those.
+    /// </summary>
+    public static string? RouteOf(Microsoft.AspNetCore.Http.Endpoint? endpoint, string method) =>
+        endpoint is Microsoft.AspNetCore.Routing.RouteEndpoint { RoutePattern.RawText: { } pattern } ? method + " " + pattern : null;
 }

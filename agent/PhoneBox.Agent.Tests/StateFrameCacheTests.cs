@@ -42,6 +42,23 @@ public sealed class StateFrameCacheTests
     }
 
     [Fact]
+    public void ADefaultFrameIsNotReusedPastAboutAHundredMilliseconds()
+    {
+        // a frame carries the age of the media position as of when it was built, so a reused one understates it by how
+        // long it has waited: that must stay well under the 0.3 s the phone ignores
+        long clock = 1000;
+        var n = 0;
+        var cache = new StateFrameCache(() => new { n = ++n }, Web, clock: () => clock);
+        cache.Get(1);
+        clock += 99;
+        cache.Get(1);
+        Assert.Equal(1, cache.Builds);
+        clock += 1;
+        cache.Get(1);
+        Assert.Equal(2, cache.Builds);
+    }
+
+    [Fact]
     public async Task ConcurrentStreamsBuildOnce()
     {
         var builds = 0;

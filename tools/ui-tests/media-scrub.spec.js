@@ -137,3 +137,28 @@ test('the bubble rules do not share a selector list with :focus-visible', async 
   });
   expect(shared).toEqual([]);
 });
+
+test('changing track while the bar is held cancels the scrub, and releasing then seeks nothing', async ({ page }) => {
+  await apply(page, track(30000));
+  const p = await at(page, 0.9); // 3:00 of a 3:20 track
+  await page.mouse.move(p.x, p.y);
+  await page.mouse.down();
+  await expect(bar(page)).toHaveClass(/scrubbing/);
+  await apply(page, track(5000, { title: 'Next', durMs: 60000 })); // a 1:00 track: 3:00 is past its end
+  await expect(bar(page)).not.toHaveClass(/scrubbing/);
+  await page.mouse.up();
+  expect(await seeks(page)).toEqual([]);
+});
+
+test('the bar tells assistive technology the range and the current time, also during normal playback', async ({ page }) => {
+  await apply(page, track(90000));
+  await expect(bar(page)).toHaveAttribute('aria-valuemax', '200');
+  const now = Number(await bar(page).getAttribute('aria-valuenow'));
+  expect(now).toBeGreaterThanOrEqual(90);
+  expect(now).toBeLessThanOrEqual(91);
+  await expect(bar(page)).toHaveAttribute('aria-valuetext', /1:3\d/);
+
+  await page.waitForTimeout(1300); // playback moves on; the panel's own refresh is paused in these tests, so ask for it
+  await page.evaluate(async () => (await import('/panel/main.js')).emit('fast'));
+  expect(Number(await bar(page).getAttribute('aria-valuenow'))).toBeGreaterThanOrEqual(now + 1);
+});

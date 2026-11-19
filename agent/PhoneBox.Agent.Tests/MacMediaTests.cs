@@ -109,6 +109,37 @@ public sealed class MacMediaTests
     }
 
     [Fact]
+    public void ATrackThatComesBackAfterAGapIsAskedAboutAgainAtOnce()
+    {
+        // the now-playing info can go empty for a moment; when the same track returns its position starts over from the raw
+        // ElapsedTime (0 for Spotify), and the player must be asked then, not at the next five-second check
+        long answer = 40_000;
+        var asked = 0;
+        var monitor = new MediaMonitor(NullLogger<MediaMonitor>.Instance) { AppPosition = _ => { asked++; return answer; } };
+        const string json = """{"kMRMediaRemoteNowPlayingInfoTitle":"Track","kMRMediaRemoteNowPlayingInfoClientBundleIdentifier":"com.spotify.client","kMRMediaRemoteNowPlayingInfoDuration":300,"kMRMediaRemoteNowPlayingInfoElapsedTime":0,"kMRMediaRemoteNowPlayingInfoPlaybackRate":1}""";
+        var t0 = DateTimeOffset.UtcNow;
+        Assert.Equal(40_000, monitor.ReadMacSystemMedia(json, t0).Item1!.PosMs);
+        Assert.Null(monitor.ReadMacSystemMedia("{}", t0.AddSeconds(1)).Item1); // nothing playing for a moment
+
+        answer = 44_000;
+        Assert.Equal(44_000, monitor.ReadMacSystemMedia(json, t0.AddSeconds(2)).Item1!.PosMs); // not 0
+        Assert.Equal(2, asked);
+    }
+
+    [Fact]
+    public void ThePositionIsDatedWhenItIsComputedNotAfterTheArtworkIsDecoded()
+    {
+        // the artwork of a TIFF is converted with sips (seconds, at worst) after the position is known; the sample's age
+        // is counted from the position, so the clock reading is taken there
+        var monitor = new MediaMonitor(NullLogger<MediaMonitor>.Instance) { AppPosition = _ => null };
+        const string json = """{"kMRMediaRemoteNowPlayingInfoTitle":"Track","kMRMediaRemoteNowPlayingInfoClientBundleIdentifier":"test.player","kMRMediaRemoteNowPlayingInfoDuration":120,"kMRMediaRemoteNowPlayingInfoElapsedTime":10,"kMRMediaRemoteNowPlayingInfoPlaybackRate":1}""";
+        var before = System.Diagnostics.Stopwatch.GetTimestamp();
+        monitor.ReadMacSystemMedia(json);
+        var after = System.Diagnostics.Stopwatch.GetTimestamp();
+        Assert.InRange(monitor.LastSampleTicks, before, after);
+    }
+
+    [Fact]
     public void WhenThePlayerCannotBeAskedThePositionStillAdvancesAndOtherPlayersAreNeverAsked()
     {
         var asked = 0;

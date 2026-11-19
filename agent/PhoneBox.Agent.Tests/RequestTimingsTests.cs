@@ -30,11 +30,29 @@ public sealed class RequestTimingsTests
         Assert.Equal(1800, row.P50Ms); // the median of the last five: 1600..2000
     }
 
-    [Theory]
-    [InlineData("POST", "/api/media/playpause", "POST /api/media/playpause")]
-    [InlineData("GET", "/api/state", "GET /api/state")]
-    [InlineData("POST", "/api/approvals/abc123", "POST /api/approvals")]
-    [InlineData("GET", "/api/widget/page1/w3", "GET /api/widget")]
-    public void RoutesAreGroupedWithoutIds(string method, string path, string expected) =>
-        Assert.Equal(expected, RequestTimings.Route(method, path));
+    [Fact]
+    public void DistinctRoutesAreCappedAndTheRestShareOneRow()
+    {
+        // a client that sends many different paths must not grow the table: only the first few routes get a row
+        var t = new RequestTimings(keep: 5, maxRoutes: 3);
+        foreach (var r in new[] { "GET /a", "GET /b", "GET /c" }) t.Add(r, 10);
+        for (var i = 0; i < 100; i++) t.Add("GET /junk" + i, 20);
+
+        var rows = t.Summary();
+        Assert.Equal(4, rows.Count); // three routes and the shared row
+        Assert.Equal(100, rows.Single(r => r.Route == RequestTimings.OtherRoute).Count);
+        t.Add("GET /a", 10); // a route that has its row is still counted under its own name
+        Assert.Equal(2, t.Summary().Single(r => r.Route == "GET /a").Count);
+    }
+
+    [Fact]
+    public void OnlyARequestThatMatchedAnEndpointHasARoute()
+    {
+        // the pattern, not the path: /api/approvals/abc and /api/approvals/def are one route
+        var matched = new Microsoft.AspNetCore.Routing.RouteEndpoint(_ => Task.CompletedTask,
+            Microsoft.AspNetCore.Routing.Patterns.RoutePatternFactory.Parse("/api/approvals/{id}"), 0,
+            Microsoft.AspNetCore.Http.EndpointMetadataCollection.Empty, "approvals");
+        Assert.Equal("POST /api/approvals/{id}", RequestTimings.RouteOf(matched, "POST"));
+        Assert.Null(RequestTimings.RouteOf(null, "GET")); // no endpoint: an unknown path, not recorded
+    }
 }
