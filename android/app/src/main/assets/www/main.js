@@ -587,8 +587,14 @@ const mediaSampleAt = (m) => performance.now() - Math.min(Math.max(Number(m?.age
 export function mediaFrom(prev, m) {
   if (!m) return null;
   const next = { ...m, at: mediaSampleAt(m) };
-  if (!prev || !prev.playing || !m.playing || prev.title !== m.title || prev.app !== m.app || prev.durMs !== m.durMs) return next;
   const now = performance.now();
+  // just after the user moved the position bar the agent's samples still hold the old position for a moment: keep the
+  // chosen one until a sample agrees with it (or the hold runs out)
+  if (prev?.hold > now && prev.title === m.title && prev.app === m.app) {
+    const target = prev.posMs + (prev.playing ? now - prev.at : 0);
+    if (Math.abs(next.posMs + (m.playing ? now - next.at : 0) - target) >= 1500) return { ...next, posMs: prev.posMs, at: prev.at, hold: prev.hold };
+  }
+  if (!prev || !prev.playing || !m.playing || prev.title !== m.title || prev.app !== m.app || prev.durMs !== m.durMs) return next;
   const shown = prev.posMs + (now - prev.at);
   const off = next.posMs + (now - next.at) - shown;
   if (Math.abs(off) < 300) return { ...next, posMs: prev.posMs, at: prev.at };
@@ -634,7 +640,7 @@ export const mediaHtml = () => `
     <div class="art-wrap"><img class="art" alt=""><div class="art-ph">♪</div></div>
     <div class="m-text"><div class="m-app"><span class="m-source-icon" aria-hidden="true"></span><span class="m-app-name">Media</span></div><div class="m-title">${t('w.nothingPlaying')}</div><div class="m-artist">${t('w.startOnPc')}</div></div>
   </div>
-  <div class="m-progress"><div class="bar"><div class="fill"></div></div><div class="times"><span class="m-pos">0:00</span><span class="m-dur">0:00</span></div></div>
+  <div class="m-progress"><div class="bar" role="slider" tabindex="0" aria-label="Position" aria-valuemin="0"><div class="fill"></div><div class="scrub-tip" aria-hidden="true">0:00</div></div><div class="times"><span class="m-pos">0:00</span><span class="m-dur">0:00</span></div></div>
   <div class="m-controls">
     <button class="ic" data-media="prev" aria-label="Previous"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9.5 12z"/></svg></button>
     <button class="ic play" data-media="playpause" aria-label="Play/Pause">
@@ -1636,7 +1642,7 @@ pager.addEventListener('touchstart', (e) => {
   swipeTracking = false;
   if (e.touches.length !== 1 || pages.length < 2) return;
   // Dragging a slider, the volume bar, a list or the station carousel must never flip (or wrap) the page.
-  if (volDragging || e.target.closest?.('button, input, textarea, select, a, [contenteditable], .s-list, .vb, .radio-carousel-track, .ac-dial')) return;
+  if (volDragging || e.target.closest?.('button, input, textarea, select, a, [contenteditable], .s-list, .vb, .bar, .radio-carousel-track, .ac-dial')) return;
   swipeStartX = e.touches[0].clientX;
   swipeStartY = e.touches[0].clientY;
   swipeStartPage = curPage;

@@ -128,13 +128,60 @@ W.media = {
         emit('tick');
       } catch (_) {}
     }));
-    q('.bar').addEventListener('click', async (e) => {
-      if (!media || !media.durMs || !media.canSeek) return;
-      const r = e.currentTarget.getBoundingClientRect();
-      const ms = Math.round(((e.clientX - r.left) / r.width) * media.durMs);
+    // The position bar is a slider. Holding it (touch, mouse) or moving it with the arrow keys shows a bubble with the time
+    // the song will continue from; it seeks on release, not while moving. Meanwhile the once-a-second state and the 250 ms
+    // refresh leave the bar alone (see update()).
+    const bar = q('.bar'), tip = q('.scrub-tip');
+    let scrub = null, seekTimer = 0; // { id, ms } while held
+    const canScrub = () => !!(media && media.durMs > 0 && media.canSeek);
+    const nowMs = () => Math.min(media.durMs, media.posMs + (media.playing ? performance.now() - media.at : 0));
+    const msFrom = (clientX) => {
+      const r = bar.getBoundingClientRect();
+      return Math.round(Math.min(1, Math.max(0, (clientX - r.left) / r.width)) * media.durMs);
+    };
+    const paintScrub = (ms) => {
+      const pct = (ms / media.durMs) * 100;
+      q('.fill').style.width = pct + '%';
+      q('.m-pos').textContent = tip.textContent = fmtTime(ms);
+      bar.style.setProperty('--tip', pct + '%');
+      bar.setAttribute('aria-valuenow', Math.round(ms / 1000));
+      bar.setAttribute('aria-valuetext', fmtTime(ms));
+    };
+    const endScrub = (commit) => {
+      clearTimeout(seekTimer);
+      if (!scrub) return;
+      const ms = scrub.ms;
+      scrub = null;
+      bar.classList.remove('scrubbing');
+      if (!commit || !canScrub()) return;
       haptic();
-      media.posMs = ms; media.at = performance.now();
-      try { await api('/media/seek?ms=' + ms, 'POST'); } catch (_) {}
+      // the bar stays where it was put until the agent has caught up: its next samples still hold the old position
+      media.posMs = ms; media.at = performance.now(); media.hold = performance.now() + 2500;
+      api('/media/seek?ms=' + ms, 'POST').catch(() => {});
+    };
+    const startScrub = (id, ms) => { scrub = { id, ms }; bar.classList.add('scrubbing'); paintScrub(ms); };
+    bar.addEventListener('pointerdown', (e) => {
+      if (!canScrub() || (e.pointerType === 'mouse' && e.button !== 0)) return;
+      clearTimeout(seekTimer);
+      startScrub(e.pointerId, msFrom(e.clientX));
+      try { bar.setPointerCapture(e.pointerId); } catch (_) {}
+    });
+    bar.addEventListener('pointermove', (e) => {
+      if (scrub && e.pointerId === scrub.id) { scrub.ms = msFrom(e.clientX); paintScrub(scrub.ms); }
+    });
+    bar.addEventListener('pointerup', (e) => { if (scrub && e.pointerId === scrub.id) endScrub(true); });
+    bar.addEventListener('pointercancel', () => endScrub(false));
+    bar.addEventListener('lostpointercapture', () => endScrub(false)); // a no-op after pointerup: the scrub has ended
+    bar.addEventListener('keydown', (e) => {
+      const step = { ArrowRight: 5000, ArrowUp: 5000, ArrowLeft: -5000, ArrowDown: -5000, PageUp: 30000, PageDown: -30000 }[e.key];
+      if (step === undefined && e.key !== 'Home' && e.key !== 'End') return;
+      if (!canScrub()) return;
+      e.preventDefault();
+      const base = scrub ? scrub.ms : nowMs();
+      const ms = e.key === 'Home' ? 0 : e.key === 'End' ? Math.max(0, media.durMs - 1000) : Math.min(media.durMs, Math.max(0, base + step));
+      startScrub(-1, ms);
+      clearTimeout(seekTimer);
+      seekTimer = setTimeout(() => endScrub(true), 350); // a run of key presses seeks once
     });
     const paintVol = (v) => { vol.style.setProperty('--p', v + '%'); q('.vol-val').textContent = v; };
     const cancelVolumeDrag = () => {
@@ -163,7 +210,7 @@ W.media = {
     return {
       update(kind) {
         if (kind === 'fast') {
-          if (!media) return;
+          if (!media || scrub) return; // while the bar is held it shows the chosen time, not the song's
           if (media.durMs > 0) {
             const pos = Math.min(media.durMs, media.posMs + (media.playing ? performance.now() - media.at : 0));
             q('.fill').style.width = (pos / media.durMs) * 100 + '%';
@@ -185,6 +232,7 @@ W.media = {
         } else q('.vol-val').textContent = 'n/a';
         box.classList.toggle('idle', !m);
         if (!m) {
+          endScrub(false);
           box.classList.remove('playing');
           q('.m-app-name').textContent = 'Media';
           sourceIcon.replaceChildren();
@@ -213,7 +261,7 @@ W.media = {
           else { img.classList.remove('on'); setArtColor(null); }
         }
       },
-      destroy: cancelVolumeDrag,
+      destroy() { endScrub(false); cancelVolumeDrag(); },
     };
   },
 };

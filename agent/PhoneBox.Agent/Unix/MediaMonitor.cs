@@ -499,9 +499,14 @@ public sealed class MediaMonitor(ILogger<MediaMonitor> log) : BackgroundService
             };
             ok = args is not null && Sh.Run("playerctl", args) is not null;
         }
+        // after a seek the position is no longer where the last check put it: the poll below asks the player again
+        if (action == "seek") ForgetPlayerPosition();
         try { await Poll(); } catch { }
         return ok;
     }
+
+    /// <summary>The next reading asks the player for its position instead of counting on from the last answer.</summary>
+    internal void ForgetPlayerPosition() => _macAnchorAt = DateTimeOffset.MinValue;
 
     public async Task<bool> PauseAsync()
     {
