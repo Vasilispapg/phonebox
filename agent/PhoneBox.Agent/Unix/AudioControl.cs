@@ -18,10 +18,13 @@ public sealed partial class AudioControl
     private long _seq, _written; // read tickets: a reading only lands if no later-started read has landed
     private int _refreshing;   // 1 while a background read runs
 
-    public AudioControl() : this(Read) { }
+    private const int SetTimeoutMs = 8000; // a busy computer can need seconds; giving up kills the helper and nothing is set
+    private readonly Func<int, bool>? _set;
 
-    /// <summary>For tests: a fake reader instead of osascript / wpctl / pactl.</summary>
-    internal AudioControl(Func<AudioSnapshot?> read) => _read = read;
+    public AudioControl() : this(Read, null) { }
+
+    /// <summary>For tests: a fake reader (and optionally setter) instead of osascript / wpctl / pactl.</summary>
+    internal AudioControl(Func<AudioSnapshot?> read, Func<int, bool>? set = null) { _read = read; _set = set; }
 
     internal bool Refreshing => Volatile.Read(ref _refreshing) == 1;
 
@@ -64,17 +67,37 @@ public sealed partial class AudioControl
 
     public bool SetVolume(int level)
     {
-        if (OperatingSystem.IsMacOS() && Current() is not { CanControl: true }) return false;
+        if (OperatingSystem.IsMacOS() && !CanControlNow()) return false;
         level = Math.Clamp(level, 0, 100);
-        var ok = OperatingSystem.IsMacOS()
-            ? Sh.Run("osascript", "-e", $"set volume output volume {level} without output muted") is not null
-            : Sh.Which("wpctl") is not null
-                ? Sh.Run("wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", (level / 100.0).ToString("0.00", CultureInfo.InvariantCulture)) is not null
-                  && (level == 0 || Sh.Run("wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "0") is not null)
-                : Sh.Run("pactl", "set-sink-volume", "@DEFAULT_SINK@", $"{level}%") is not null;
-        Invalidate();
+        var ok = _set?.Invoke(level) ?? SetOnThisSystem(level);
+        // On success the new volume is what the next state shows: the old reading would make the slider snap back until
+        // the background read (seconds, on a busy computer) catches up, which then looks like "nothing changed".
+        if (ok) Remember(new AudioSnapshot(level, false, true));
+        else Invalidate();
         return ok;
     }
+
+    private static bool SetOnThisSystem(int level) => OperatingSystem.IsMacOS()
+        ? MacAudioProbe.SetVolume(level) // in-process; osascript only for an output CoreAudio cannot control
+          || Sh.RunWithTimeout(SetTimeoutMs, "osascript", "-e", $"set volume output volume {level} without output muted") is not null
+        : Sh.Which("wpctl") is not null
+            ? Sh.RunWithTimeout(SetTimeoutMs, "wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", (level / 100.0).ToString("0.00", CultureInfo.InvariantCulture)) is not null
+              && (level == 0 || Sh.RunWithTimeout(SetTimeoutMs, "wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "0") is not null)
+            : Sh.RunWithTimeout(SetTimeoutMs, "pactl", "set-sink-volume", "@DEFAULT_SINK@", $"{level}%") is not null;
+
+    /// <summary>
+    /// Whether the output can be controlled, from the last reading however old: a fresh read first would put another
+    /// slow helper call in front of the set. Only a missing or negative reading is read again.
+    /// </summary>
+    private bool CanControlNow()
+    {
+        AudioSnapshot? known;
+        lock (_lock) known = _cached;
+        return known is { CanControl: true } || Current() is { CanControl: true };
+    }
+
+    /// <summary>Takes a known volume as the current reading and drops any read that started before it.</summary>
+    private void Remember(AudioSnapshot s) { lock (_lock) { _cached = s; _at = Environment.TickCount64; _gen++; } }
 
     public bool Step(int delta) => Current() is { } s && SetVolume(s.Volume + delta);
 
@@ -82,7 +105,8 @@ public sealed partial class AudioControl
     {
         if (OperatingSystem.IsMacOS() && Current() is not { CanControl: true }) return false;
         var ok = OperatingSystem.IsMacOS()
-            ? Sh.Run("osascript", "-e", "set volume output muted (not (output muted of (get volume settings)))") is not null
+            ? MacAudioProbe.ToggleMute()
+              || Sh.RunWithTimeout(SetTimeoutMs, "osascript", "-e", "set volume output muted (not (output muted of (get volume settings)))") is not null
             : Sh.Which("wpctl") is not null
                 ? Sh.Run("wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle") is not null
                 : Sh.Run("pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle") is not null;
@@ -97,6 +121,9 @@ public sealed partial class AudioControl
         if (OperatingSystem.IsMacOS())
         {
             var output = MacAudioProbe.SelectedOutput();
+            // a controllable output is read in-process (microseconds); osascript is for the rest (a display's own volume...)
+            if (output is { Volume: { } nativeVolume, Muted: { } nativeOutputMuted } native && MacAudioProbe.CanControl(native.Id))
+                return new AudioSnapshot(nativeVolume, nativeOutputMuted, true);
             var s = Sh.Run("osascript", "-e", "set v to get volume settings\nreturn ((output volume of v) as string) & \",\" & ((output muted of v) as string)")?.Trim();
             var p = s?.Split(',');
             if (p is { Length: 2 } && int.TryParse(p[0], out var vol) && bool.TryParse(p[1], out var nativeMuted))

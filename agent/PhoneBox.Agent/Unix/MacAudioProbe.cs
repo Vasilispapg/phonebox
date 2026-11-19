@@ -15,6 +15,7 @@ internal static class MacAudioProbe
     private const uint Name = 0x6c6e616d; // 'lnam'
     private const uint Volume = 0x766f6c6d; // 'volm'
     private const uint Mute = 0x6d757465; // 'mute'
+    private const uint VirtualMain = 0x766d7663; // 'vmvc': the volume System Settings and AppleScript's "output volume" show
 
     [StructLayout(LayoutKind.Sequential)]
     private struct Address(uint selector, uint scope, uint element)
@@ -30,6 +31,10 @@ internal static class MacAudioProbe
     private static extern int GetFloat(uint id, ref Address address, uint qualifierSize, nint qualifier, ref uint size, out float value);
     [DllImport(CoreAudio, EntryPoint = "AudioObjectGetPropertyData")]
     private static extern int GetPointer(uint id, ref Address address, uint qualifierSize, nint qualifier, ref uint size, out nint value);
+    [DllImport(CoreAudio, EntryPoint = "AudioObjectSetPropertyData")]
+    private static extern int SetFloat(uint id, ref Address address, uint qualifierSize, nint qualifier, uint size, ref float value);
+    [DllImport(CoreAudio, EntryPoint = "AudioObjectSetPropertyData")]
+    private static extern int SetUInt(uint id, ref Address address, uint qualifierSize, nint qualifier, uint size, ref uint value);
     [DllImport(CoreAudio, EntryPoint = "AudioObjectIsPropertySettable")]
     private static extern int IsSettable(uint id, ref Address address, out byte settable);
     [DllImport(CoreFoundation)] [return: MarshalAs(UnmanagedType.I1)] private static extern bool CFStringGetCString(nint value, byte[] buffer, nint bufferSize, uint encoding);
@@ -47,6 +52,53 @@ internal static class MacAudioProbe
         var address = new Address(selector, scope, element);
         uint size = sizeof(float);
         return GetFloat(id, ref address, 0, 0, ref size, out var value) == 0 && float.IsFinite(value) ? value : null;
+    }
+
+    private static bool WriteFloat(uint device, uint selector, uint element, float value)
+    {
+        var address = new Address(selector, Output, element);
+        return SetFloat(device, ref address, 0, 0, sizeof(float), ref value) == 0;
+    }
+
+    private static bool WriteUInt(uint device, uint selector, uint element, uint value)
+    {
+        var address = new Address(selector, Output, element);
+        return SetUInt(device, ref address, 0, 0, sizeof(uint), ref value) == 0;
+    }
+
+    /// <summary>
+    /// Sets the selected output's volume (0-100) and unmutes it, in-process. The same as AppleScript's
+    /// "set volume output volume N without output muted" but without starting osascript, which takes seconds on a busy
+    /// computer. False when the output has no controllable volume: the caller falls back to osascript.
+    /// </summary>
+    public static bool SetVolume(int level)
+    {
+        if (!OperatingSystem.IsMacOS()) return false;
+        try
+        {
+            var device = UInt(1, DefaultOutput, Global, 0);
+            if (device is null or 0) return false;
+            var value = Math.Clamp(level, 0, 100) / 100f;
+            // the virtual main volume first (what the system itself moves), then the main element, then the channels
+            var ok = WriteFloat(device.Value, VirtualMain, 0, value) || WriteFloat(device.Value, Volume, 0, value);
+            if (!ok) { var left = WriteFloat(device.Value, Volume, 1, value); var right = WriteFloat(device.Value, Volume, 2, value); ok = left || right; }
+            if (ok) WriteUInt(device.Value, Mute, 0, 0);
+            return ok;
+        }
+        catch { return false; }
+    }
+
+    /// <summary>Flips the selected output's mute in-process; false when it cannot be read or written.</summary>
+    public static bool ToggleMute()
+    {
+        if (!OperatingSystem.IsMacOS()) return false;
+        try
+        {
+            var device = UInt(1, DefaultOutput, Global, 0);
+            if (device is null or 0 || UInt(device.Value, Mute, Output, 0) is not { } muted) return false;
+            return WriteUInt(device.Value, Mute, 0, muted == 0 ? 1u : 0u);
+        }
+        catch { return false; }
     }
 
     public static bool CanControl(uint device)
@@ -81,7 +133,7 @@ internal static class MacAudioProbe
         {
             var device = UInt(1, DefaultOutput, Global, 0);
             if (device is null or 0) return null;
-            var scalar = Float(device.Value, Volume, Output, 0);
+            var scalar = Float(device.Value, VirtualMain, Output, 0) ?? Float(device.Value, Volume, Output, 0);
             if (scalar is null)
             {
                 var channels = new[] { Float(device.Value, Volume, Output, 1), Float(device.Value, Volume, Output, 2) }
