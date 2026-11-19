@@ -6,12 +6,13 @@ using System.Text.Json;
 namespace PhoneBox.Agent;
 
 /// <param name="Status">busy | waiting | shell | idle</param>
+/// <param name="Title">The chat's title (Claude Code only); set only while Settings › Claude Code › "Show session titles on the phone" is on.</param>
 public sealed record AgentSession(string Id, string Tool, string Name, string Project, string Status,
     string? WaitingFor, long Since, long StartedAt, int? Pid = null,
     string? Model = null, string? Effort = null, long? TotalTokens = null, long? InputTokens = null,
     long? OutputTokens = null, long? CachedInputTokens = null, long? ReasoningTokens = null,
     long? LastInputTokens = null, long? ContextWindow = null, long? TurnStartedAt = null,
-    string? Outcome = null, string? LastTool = null);
+    string? Outcome = null, string? LastTool = null, string? Title = null);
 
 /// <summary>
 /// Watches running AI coding sessions (local and read-only):
@@ -35,14 +36,28 @@ public sealed class SessionMonitor(ILogger<SessionMonitor> log, ConfigStore? con
     private Dictionary<string, string>? _cursorProjectNames;
     private long _nextCursorProjectMap;
 
-    public IReadOnlyList<AgentSession> Snapshot() => _sessions;
+    /// <summary>
+    /// The sessions, for everything that sends them anywhere (the live stream, /api/work, the rules). This is the one
+    /// place they leave this class, so the title setting is applied here: with it off no title comes out, however the
+    /// session was read.
+    /// </summary>
+    public IReadOnlyList<AgentSession> Snapshot()
+    {
+        var all = _sessions;
+        return ShareTitles || !all.Any(s => s.Title is not null) ? all : all.Select(s => s with { Title = null }).ToList();
+    }
+
+    private bool ShareTitles => config?.Get().Claude.ShareSessionTitles ?? false;
+
+    /// <summary>For tests: what the monitor has read, without running its loop.</summary>
+    internal IReadOnlyList<AgentSession> Sessions { set => _sessions = value; }
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
         {
             var list = new List<AgentSession>();
-            try { list.AddRange(ReadClaude()); } catch (Exception ex) { log.LogDebug("claude sessions: {Msg}", ex.Message); }
+            try { list.AddRange(ReadClaude(titles: ShareTitles)); } catch (Exception ex) { log.LogDebug("claude sessions: {Msg}", ex.Message); }
             try { list.AddRange(ReadCodex()); } catch (Exception ex) { log.LogDebug("codex sessions: {Msg}", ex.Message); }
             // Cursor sessions are off until Settings › General › Cursor sessions is enabled.
             if (config?.Get().Cursor.Sessions == true)
@@ -59,7 +74,7 @@ public sealed class SessionMonitor(ILogger<SessionMonitor> log, ConfigStore? con
     internal static bool IsCodexBarProbe(string cwd) =>
         cwd.Replace('\\', '/').TrimEnd('/').EndsWith("/CodexBar/ClaudeProbe", StringComparison.OrdinalIgnoreCase);
 
-    internal static IEnumerable<AgentSession> ReadClaude(string? homeDir = null, Func<int, bool>? isAlive = null)
+    internal static IEnumerable<AgentSession> ReadClaude(string? homeDir = null, Func<int, bool>? isAlive = null, bool titles = false)
     {
         var home = homeDir ?? Home;
         var aliveCheck = isAlive ?? Alive;
@@ -91,11 +106,78 @@ public sealed class SessionMonitor(ILogger<SessionMonitor> log, ConfigStore? con
                     WaitingFor: Str(r, "waitingFor"),
                     Since: Long(r, "statusUpdatedAt") ?? Long(r, "updatedAt") ?? 0,
                     StartedAt: Long(r, "startedAt") ?? 0,
-                    Pid: pid);
+                    Pid: pid,
+                    Title: titles ? ClaudeTitle(home, r, cwd, name, project) : null);
             }
             catch { /* file was being written: retry on the next pass */ }
             if (s is not null) yield return s;
         }
+    }
+
+    private sealed record TitleCacheEntry(long Length, DateTime Written, string? Custom, string? Ai);
+    private static readonly ConcurrentDictionary<string, TitleCacheEntry> TitleCache = new();
+    // the title is written again and again as the chat goes on, so the end of the file is enough
+    private const int TitleTailBytes = 512 * 1024;
+
+    /// <summary>
+    /// The title Claude Code shows for a chat (a name you gave it, else the one it wrote itself), from the
+    /// transcript at ~/.claude/projects/&lt;folder&gt;/&lt;sessionId&gt;.jsonl. Only the two title records are read: no
+    /// prompts, replies or tool arguments. Null while the chat has no title yet.
+    /// </summary>
+    internal static string? ReadClaudeTitle(string home, string cwd, string sessionId)
+    {
+        try
+        {
+            // Claude Code names the folder after the working directory with every other character turned into "-"
+            var folder = System.Text.RegularExpressions.Regex.Replace(cwd, "[^A-Za-z0-9]", "-");
+            var path = Path.Combine(home, ".claude", "projects", folder, sessionId + ".jsonl");
+            var info = new FileInfo(path);
+            if (!info.Exists) return null;
+            TitleCache.TryGetValue(path, out var cached);
+            if (cached is not null && cached.Length == info.Length && cached.Written == info.LastWriteTimeUtc)
+                return cached.Custom ?? cached.Ai;
+
+            string? custom = cached?.Custom, ai = cached?.Ai;
+            using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            var length = fs.Length;
+            var start = Math.Max(0, length - TitleTailBytes);
+            fs.Seek(start, SeekOrigin.Begin);
+            var buf = new byte[length - start];
+            var read = 0;
+            while (read < buf.Length) { var n = fs.Read(buf, read, buf.Length - read); if (n <= 0) break; read += n; }
+            var lines = Encoding.UTF8.GetString(buf, 0, read).Split('\n');
+            for (var i = start > 0 ? 1 : 0; i < lines.Length; i++) // after a seek the first line is cut off
+            {
+                var line = lines[i];
+                var isCustom = line.Contains("\"custom-title\"", StringComparison.Ordinal);
+                if (!isCustom && !line.Contains("\"ai-title\"", StringComparison.Ordinal)) continue;
+                try
+                {
+                    using var doc = JsonDocument.Parse(line);
+                    var rec = doc.RootElement;
+                    var type = Str(rec, "type");
+                    if (type == "custom-title") custom = Clean(Str(rec, "customTitle")) ?? custom;
+                    else if (type == "ai-title") ai = Clean(Str(rec, "aiTitle")) ?? ai;
+                }
+                catch (JsonException) { /* a line still being written */ }
+            }
+            TitleCache[path] = new TitleCacheEntry(length, info.LastWriteTimeUtc, custom, ai);
+            return custom ?? ai;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
+
+        static string? Clean(string? t) => string.IsNullOrWhiteSpace(t) ? null : t.Trim() is { Length: > 200 } s ? s[..200] : t.Trim();
+    }
+
+    /// <summary>
+    /// The chat's title: what the user named it, else the title Claude Code wrote (a derived name in the status file is
+    /// only a placeholder such as "develop-int-61"). Null when there is none yet, or it is just the folder name.
+    /// </summary>
+    private static string? ClaudeTitle(string home, JsonElement status, string cwd, string name, string project)
+    {
+        var fromName = Str(status, "nameSource") != "derived" && Str(status, "name") is not null;
+        var title = fromName ? name : Str(status, "sessionId") is { Length: > 0 } id ? ReadClaudeTitle(home, cwd, id) : null;
+        return string.IsNullOrWhiteSpace(title) || title == project ? null : title;
     }
 
     internal IEnumerable<AgentSession> ReadCodex(string? sessionsRoot = null)
@@ -482,4 +564,10 @@ public sealed class SessionMonitor(ILogger<SessionMonitor> log, ConfigStore? con
 
     private static string? Str(JsonElement e, string p) => e.ValueKind == JsonValueKind.Object && e.TryGetProperty(p, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
     private static long? Long(JsonElement e, string p) => e.ValueKind == JsonValueKind.Object && e.TryGetProperty(p, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetInt64(out var l) ? l : null;
+}
+
+/// <summary>The "work" data the phone gets, on the live stream and on the polling path alike: sessions and GitHub.</summary>
+public static class WorkFeed
+{
+    public static object Build(SessionMonitor sessions, GitHubMonitor gh) => new { sessions = sessions.Snapshot(), github = gh.Snapshot() };
 }

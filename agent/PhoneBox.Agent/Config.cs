@@ -215,6 +215,9 @@ public sealed class ClaudeConfig
     public int TimeoutSec { get; set; } = 90;
     /// <summary>Only use the phone when the PC has been idle for a minute (you are away from the keyboard).</summary>
     public bool OnlyWhenAway { get; set; }
+    /// <summary>Show each Claude Code chat's title on the phone. The title is the name you gave the chat or the one
+    /// Claude Code wrote, which it often draws from your first prompt, so it stays off until you turn it on.</summary>
+    public bool ShareSessionTitles { get; set; }
 }
 
 public sealed class CursorConfig

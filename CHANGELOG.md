@@ -22,6 +22,12 @@
 - The computer switch buttons (overview and Computers widget) and the session details close button draw stroke icons
   instead of an emoji and a text X, so they look the same on older phones (#252,
   [Seyamalam](https://github.com/Seyamalam)).
+- Sessions widget: with many Claude Code chats in one folder every row read the same. Settings › Claude Code › **Show
+  Claude Code chat titles on the phone** (off by default) shows each chat's title, the name you gave it or the one
+  Claude Code wrote, with the folder on the second line. The title is read from the end of the chat's own file on this
+  computer and, with the switch off, is not read or sent at all (#261, [Vasilispapg](https://github.com/Vasilispapg)).
+- Session details show Folder, Status, Started and Last activity in one compact row (two rows on a narrow screen)
+  instead of four lines.
 
 ## 0.9.21 — 2026-11-18
 

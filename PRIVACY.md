@@ -33,6 +33,11 @@ Last updated: 2026-11-15 (PhoneBox 0.9.6).
   the panel; chat text is never shown, stored or sent. Project labels use the folder basename from Cursor's
   `workspaceStorage/*/workspace.json` `folder` URI (cached about a minute), sent to the phone as the session's project
   name over the same local USB / paired Wi-Fi link as other panel data. Turning the setting off stops the scan.
+- **Claude Code chat titles** (off by default): with Settings › Claude Code › "Show Claude Code chat titles on the
+  phone" on, the sessions widget shows each chat's title, the name you gave it or the one Claude Code wrote, which it
+  often draws from your first prompt. The agent reads only the title records at the end of the chat's file in
+  `~/.claude/projects`, never the prompts, replies or tool arguments, and sends the title only to your phone, like the
+  rest of this list. With the switch off the file is not opened and no title is sent.
 - **Sound for the Spectrum bars widget** (Windows): while an enabled page with the widget is on the phone's screen,
   the agent captures what the default output device plays, analyzes it in memory and sends only 48 loudness levels
   per frame to the phone. Audio is never stored or sent; capture stops a few seconds after the widget leaves the
