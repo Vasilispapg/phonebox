@@ -70,6 +70,16 @@ public sealed class ClaudeTranscriptTests : IDisposable
     [InlineData("$(rm -rf /tmp/x)", null)]
     [InlineData("`whoami` --version", null)]
     [InlineData("\"git\" status", null)]
+    [InlineData("VALUE=$((123456789)) git status", null)]
+    [InlineData("VALUE=$(whoami) git status", null)]
+    [InlineData("A=${SECRET_PART} git status", null)]
+    [InlineData("time -fPRIVATE_TAG git status", null)]
+    [InlineData("sudo -u root git status", null)]
+    [InlineData("env --unset=PATH git status", null)]
+    [InlineData("time git status", "git")]
+    [InlineData("FOO=1 git status", "git")]
+    [InlineData("rtk grep -rn x .", "grep")]
+    [InlineData("rm $f", "rm")]
     [InlineData("ls\\ -la", null)] // an escaped space makes one word: not something to name
     public void ACommandIsShownAsTheProgramItRuns(string command, string? expected) =>
         Assert.Equal(expected, ClaudeTranscript.Program(command));
@@ -129,6 +139,34 @@ public sealed class ClaudeTranscriptTests : IDisposable
         Directory.CreateDirectory(dir);
         File.WriteAllText(Path.Combine(dir, id + ".jsonl"), User(text) + "\n");
         return id;
+    }
+
+    [Fact]
+    public void TheChatCacheIsBounded_AndDropsASessionThatHasEnded_OrTheSettingBeingOff()
+    {
+        var dir = Path.Combine(_root, ".claude", "projects", "-some-folder");
+        Directory.CreateDirectory(dir);
+        string Id(int i) => $"aaaaaaaa-{i:D4}";
+        // more chats than the cache holds, all read through Read
+        for (var i = 0; i < ClaudeTranscript.MaxCachedFiles + 5; i++)
+        {
+            File.WriteAllText(Path.Combine(dir, Id(i) + ".jsonl"), User("text " + i) + "\n");
+            ClaudeTranscript.Read(Path.Combine(dir, Id(i) + ".jsonl"));
+        }
+        var cached = Enumerable.Range(0, ClaudeTranscript.MaxCachedFiles + 5).Count(i => ClaudeTranscript.IsCached(Path.Combine(dir, Id(i) + ".jsonl")));
+        Assert.True(cached <= ClaudeTranscript.MaxCachedFiles, $"{cached} chats cached");
+
+        // one is read for the phone: the others, whose sessions are not running, are dropped
+        var keep = Path.Combine(dir, Id(0) + ".jsonl");
+        ClaudeTranscript.ForPhone(true, [Running("claude:" + Id(0))], "claude:" + Id(0), _root);
+        Assert.True(ClaudeTranscript.IsCached(keep));
+        Assert.Equal(1, Enumerable.Range(0, ClaudeTranscript.MaxCachedFiles + 5).Count(i => ClaudeTranscript.IsCached(Path.Combine(dir, Id(i) + ".jsonl"))));
+        // the session ends, or the setting goes off: nothing stays in memory
+        ClaudeTranscript.ForPhone(true, [], "claude:" + Id(0), _root);
+        Assert.False(ClaudeTranscript.IsCached(keep));
+        ClaudeTranscript.Read(keep);
+        ClaudeTranscript.ForPhone(false, [Running("claude:" + Id(0))], "claude:" + Id(0), _root);
+        Assert.False(ClaudeTranscript.IsCached(keep));
     }
 
     [Fact]

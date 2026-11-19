@@ -91,3 +91,26 @@ test('a slow earlier answer does not replace a newer one, and closing stops the 
   await page.waitForTimeout(3500);
   expect(await page.evaluate(() => window.__conversationCalls)).toBe(after);
 });
+
+test('the ages of the steps keep moving while the answers stay the same', async ({ page }) => {
+  await open(page, [session()]);
+  await page.evaluate(() => {
+    // exactly the same answer every time, and a clock that can be moved on
+    const real = window.fetch, now = Date.now, base = now();
+    window.__skew = 0;
+    Date.now = () => now() + window.__skew;
+    const body = JSON.stringify({ enabled: true, messages: [{ role: 'user', text: 'hello', at: base - 5000 }],
+      steps: [{ tool: 'Bash', detail: 'npm', at: base - 20_000, running: true }, { tool: 'Read', detail: 'a.js', at: base - 40_000, running: false }] });
+    window.fetch = async (...args) => String(args[0]).includes('/work/conversation')
+      ? new Response(body, { headers: { 'Content-Type': 'application/json' } }) : real(...args);
+  });
+  await page.locator('button.sess').click();
+  const dialog = page.getByRole('dialog');
+  const running = dialog.locator('.conv-step.on .cs-a');
+  await expect(running).toHaveText(/^running (now|\d+s)$/);
+  const before = await running.textContent();
+  await page.evaluate(() => { window.__skew = 300_000; }); // five minutes later, and the chat has not changed
+  await expect(running).toHaveText(/^running [56]m/, { timeout: 6000 });
+  expect(await running.textContent()).not.toBe(before);
+  await expect(dialog.locator('.conv-step:not(.on) .cs-a')).toContainText('m ago');
+});

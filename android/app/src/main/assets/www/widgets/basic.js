@@ -592,6 +592,9 @@ W.sessions = {
       const box = h('div', 'session-conv');
       panel.append(box);
       let data = null, expanded = false, gone = false, asked = 0, applied = 0;
+      let labels = []; // the time label of each step on screen, so they can move on without drawing everything again
+      const stepAge = (st) => (st.running ? (st.at ? 'running ' + shortDur(Date.now() - st.at) : 'running') : st.at ? ageText(st.at) : '');
+      const refreshLabels = () => { for (const [el, st] of labels) el.textContent = stepAge(st); };
       const toolName = (n) => n.startsWith('mcp__') ? n.slice(5).replace(/__/g, ' › ') : n;
       const clip = (text, n) => text.length > n ? text.slice(0, n) + '…' : text;
       const message = (m, full) => h('div', 'conv-msg ' + m.role,
@@ -600,6 +603,7 @@ W.sessions = {
       const render = () => {
         const prevList = box.querySelector('.conv-list');
         const top = prevList ? prevList.scrollTop : null;
+        labels = [];
         if (!data.enabled) {
           box.replaceChildren(h('p', 'session-note', 'The conversation is off. Turn it on in Settings › Claude Code › Show the conversation on the phone.'));
           return;
@@ -609,9 +613,9 @@ W.sessions = {
         if (steps.length) {
           kids.push(h('div', 'conv-h', 'Recent steps'));
           for (const st of [...steps].reverse().slice(0, 6)) {
-            kids.push(h('div', 'conv-step' + (st.running ? ' on' : ''),
-              h('span', 'cs-t', toolName(st.tool)), h('span', 'cs-d', st.detail || ''),
-              h('span', 'cs-a', st.running ? (st.at ? 'running ' + shortDur(Date.now() - st.at) : 'running') : st.at ? ageText(st.at) : '')));
+            const age = h('span', 'cs-a', stepAge(st));
+            labels.push([age, st]);
+            kids.push(h('div', 'conv-step' + (st.running ? ' on' : ''), h('span', 'cs-t', toolName(st.tool)), h('span', 'cs-d', st.detail || ''), age));
           }
         }
         if (!messages.length) kids.push(h('p', 'session-note', 'No messages yet.'));
@@ -640,7 +644,9 @@ W.sessions = {
           // example a "turned off" answer that has already been shown).
           if (gone || mine < applied) return;
           applied = mine;
-          if (JSON.stringify(d) !== JSON.stringify(data)) { data = d; render(); }
+          // the messages are drawn again only when they changed, to keep the scroll position and the focus; the ages
+          // of the steps move on with the clock either way
+          if (JSON.stringify(d) !== JSON.stringify(data)) { data = d; render(); } else refreshLabels();
         } catch (_) {
           if (!gone && !data) box.replaceChildren(h('p', 'session-note', 'Could not read the conversation.'));
         }

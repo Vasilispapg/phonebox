@@ -29,6 +29,9 @@ public static partial class ClaudeTranscript
     internal const int MaxTextChars = 4000;
 
     private static readonly ConcurrentDictionary<string, (long Length, DateTime Written, ConversationView View)> Cache = new();
+    // the cache holds chat text, so it is kept small, and ForPhone drops what belongs to a session that has ended
+    internal const int MaxCachedFiles = 8;
+    internal static bool IsCached(string path) => Cache.ContainsKey(path);
 
     [GeneratedRegex("^[A-Za-z0-9-]{8,64}$")]
     private static partial Regex SessionIdPattern();
@@ -55,6 +58,9 @@ public static partial class ClaudeTranscript
     /// </summary>
     public static object ForPhone(bool enabled, IReadOnlyList<AgentSession> running, string id, string? homeDir = null)
     {
+        // chat text is kept in memory only while it can be asked for: switched off, or the session gone, it is dropped
+        var runningIds = enabled ? running.Where(s => s.Tool == "claude").Select(s => s.Id["claude:".Length..]).ToHashSet() : [];
+        foreach (var key in Cache.Keys.Where(k => !runningIds.Contains(Path.GetFileNameWithoutExtension(k)))) Cache.TryRemove(key, out _);
         if (!enabled) return new { enabled = false };
         var live = running.FirstOrDefault(s => s.Id == id && s.Tool == "claude");
         var file = live is null ? null : FindFile(id["claude:".Length..], homeDir);
@@ -78,6 +84,7 @@ public static partial class ClaudeTranscript
             while (read < buf.Length) { var n = fs.Read(buf, read, buf.Length - read); if (n <= 0) break; read += n; }
             var view = Parse(Encoding.UTF8.GetString(buf, 0, read).Split('\n').Skip(start > 0 ? 1 : 0)); // a seek cuts the first line
             Cache[path] = (length, info.LastWriteTimeUtc, view);
+            foreach (var other in Cache.Keys.Where(k => k != path).Take(Math.Max(0, Cache.Count - MaxCachedFiles))) Cache.TryRemove(other, out _);
             return view;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return Empty; }
@@ -183,6 +190,12 @@ public static partial class ClaudeTranscript
         }
     }
 
+    private static bool IsAssignment(string word)
+    {
+        var eq = word.IndexOf('=');
+        return eq > 0 && !char.IsDigit(word[0]) && word[..eq].All(c => char.IsLetterOrDigit(c) || c == '_');
+    }
+
     // words that start a command line without saying what it runs
     private static readonly HashSet<string> Skipped = new(StringComparer.Ordinal)
         { "cd", "export", "set", "unset", "source", "for", "if", "while", "do", "then", "else", "time", "sudo", "env", "rtk" };
@@ -222,7 +235,9 @@ public static partial class ClaudeTranscript
             {
                 case '\'' or '"': quote = c; plain = false; inWord = true; break;
                 case '\\': plain = false; inWord = true; if (i + 1 < command.Length) text.Append(command[++i]); break;
-                case '$' or '`': plain = false; inWord = true; text.Append(c); break;
+                case '`': return null; // command substitution: what it holds cannot be told apart from a program
+                case '$' when i + 1 < command.Length && command[i + 1] is '(' or '{': return null; // $( ) and ${ }, also $(( ))
+                case '$': plain = false; inWord = true; text.Append(c); break;
                 case ' ' or '\t' or '(' or ')' or '{' or '}': EndWord(); break;
                 case ';' or '&' or '|' or '\n': EndWord(); if (segments[^1].Count > 0) segments.Add([]); break;
                 default: text.Append(c); inWord = true; break;
@@ -233,8 +248,9 @@ public static partial class ClaudeTranscript
         foreach (var segment in segments)
             foreach (var (word, isPlain) in segment)
             {
-                if (word.Contains('=')) continue; // VAR=value before the command
+                if (IsAssignment(word)) continue; // VAR=value before the command
                 if (Skipped.Contains(word)) { if (SkipSegment.Contains(word)) break; continue; }
+                if (word.StartsWith('-')) return null; // an option of a wrapper (time -f.., sudo -u ..): not something to name
                 if (!isPlain || word.Length is 0 or > 40 || !word.All(ch => char.IsLetterOrDigit(ch) || ch is '-' or '_' or '.' or '/')) return null;
                 return Path.GetFileName(word) is { Length: > 0 } f ? f : word;
             }
