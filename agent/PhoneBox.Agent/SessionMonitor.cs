@@ -137,7 +137,10 @@ public sealed class SessionMonitor(ILogger<SessionMonitor> log, ConfigStore? con
             if (cached is not null && cached.Length == info.Length && cached.Written == info.LastWriteTimeUtc)
                 return cached.Custom ?? cached.Ai;
 
-            string? custom = cached?.Custom, ai = cached?.Ai;
+            // A title that has scrolled out of the tail we read is carried over, but only while the file only grew; a
+            // shorter or replaced file starts again, and a file read whole has nothing to carry over.
+            var carry = cached is not null && info.Length >= cached.Length && info.Length > TitleTailBytes;
+            string? custom = carry ? cached!.Custom : null, ai = carry ? cached!.Ai : null;
             using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             var length = fs.Length;
             var start = Math.Max(0, length - TitleTailBytes);
@@ -156,8 +159,8 @@ public sealed class SessionMonitor(ILogger<SessionMonitor> log, ConfigStore? con
                     using var doc = JsonDocument.Parse(line);
                     var rec = doc.RootElement;
                     var type = Str(rec, "type");
-                    if (type == "custom-title") custom = Clean(Str(rec, "customTitle")) ?? custom;
-                    else if (type == "ai-title") ai = Clean(Str(rec, "aiTitle")) ?? ai;
+                    if (type == "custom-title") custom = CleanTitle(Str(rec, "customTitle")) ?? custom;
+                    else if (type == "ai-title") ai = CleanTitle(Str(rec, "aiTitle")) ?? ai;
                 }
                 catch (JsonException) { /* a line still being written */ }
             }
@@ -165,9 +168,13 @@ public sealed class SessionMonitor(ILogger<SessionMonitor> log, ConfigStore? con
             return custom ?? ai;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
-
-        static string? Clean(string? t) => string.IsNullOrWhiteSpace(t) ? null : t.Trim() is { Length: > 200 } s ? s[..200] : t.Trim();
     }
+
+    internal const int MaxTitleChars = 200;
+
+    /// <summary>A title as the phone gets it, whichever file it came from: trimmed and no longer than <see cref="MaxTitleChars"/>.</summary>
+    internal static string? CleanTitle(string? title) =>
+        string.IsNullOrWhiteSpace(title) ? null : title.Trim() is { Length: > MaxTitleChars } t ? t[..MaxTitleChars] : title.Trim();
 
     /// <summary>
     /// The chat's title: what the user named it, else the title Claude Code wrote (a derived name in the status file is
@@ -176,8 +183,8 @@ public sealed class SessionMonitor(ILogger<SessionMonitor> log, ConfigStore? con
     private static string? ClaudeTitle(string home, JsonElement status, string cwd, string name, string project)
     {
         var fromName = Str(status, "nameSource") != "derived" && Str(status, "name") is not null;
-        var title = fromName ? name : Str(status, "sessionId") is { Length: > 0 } id ? ReadClaudeTitle(home, cwd, id) : null;
-        return string.IsNullOrWhiteSpace(title) || title == project ? null : title;
+        var title = CleanTitle(fromName ? name : Str(status, "sessionId") is { Length: > 0 } id ? ReadClaudeTitle(home, cwd, id) : null);
+        return title is null || title == project ? null : title;
     }
 
     internal IEnumerable<AgentSession> ReadCodex(string? sessionsRoot = null)

@@ -75,6 +75,45 @@ public sealed class SessionTitleTests : IDisposable
         Assert.Equal(200, Assert.Single(SessionMonitor.ReadClaude(_root, pid => pid == 7, titles: true)).Title!.Length);
     }
 
+    [Fact]
+    public void ARewrittenOrShorterChatFileDoesNotKeepTheOldTitle()
+    {
+        Chat(transcript: "{\"type\":\"custom-title\",\"customTitle\":\"Old name I gave it\"}\n{\"type\":\"ai-title\",\"aiTitle\":\"Old generated\"}\n" + new string(' ', 200) + "\n");
+        Assert.Equal("Old name I gave it", Assert.Single(SessionMonitor.ReadClaude(_root, pid => pid == 7, titles: true)).Title);
+
+        // the same file written again, shorter, with only a new generated title
+        var file = Path.Combine(_root, ".claude", "projects", "-Users-test-develop-int", "sess-1.jsonl");
+        File.WriteAllText(file, "{\"type\":\"ai-title\",\"aiTitle\":\"Brand new\"}\n");
+        Assert.Equal("Brand new", Assert.Single(SessionMonitor.ReadClaude(_root, pid => pid == 7, titles: true)).Title);
+    }
+
+    [Fact]
+    public void AGrowingLargeFileKeepsATitleThatScrolledOutOfTheTail_ButNotAfterItShrinks()
+    {
+        var file = Path.Combine(_root, ".claude", "projects", "-Users-test-develop-int", "sess-1.jsonl");
+        var filler = string.Join("\n", Enumerable.Repeat("{\"type\":\"last-prompt\",\"lastPrompt\":\"" + new string('x', 900) + "\"}", 1000)) + "\n"; // about 1 MB
+        Chat(transcript: "{\"type\":\"ai-title\",\"aiTitle\":\"Early title\"}\n" + filler);
+        // the title is outside the last 512 KB, so the first read cannot see it
+        Assert.Null(Assert.Single(SessionMonitor.ReadClaude(_root, pid => pid == 7, titles: true)).Title);
+
+        File.WriteAllText(file, "{\"type\":\"ai-title\",\"aiTitle\":\"Seen at the start\"}\n" + new string(' ', 10) + "\n");
+        Assert.Equal("Seen at the start", Assert.Single(SessionMonitor.ReadClaude(_root, pid => pid == 7, titles: true)).Title);
+        File.AppendAllText(file, filler + filler); // grows past the tail: the title is out of sight but was seen
+        Assert.Equal("Seen at the start", Assert.Single(SessionMonitor.ReadClaude(_root, pid => pid == 7, titles: true)).Title);
+
+        File.WriteAllText(file, "{\"type\":\"last-prompt\",\"lastPrompt\":\"short\"}\n"); // replaced by a shorter file
+        Assert.Null(Assert.Single(SessionMonitor.ReadClaude(_root, pid => pid == 7, titles: true)).Title);
+    }
+
+    [Fact]
+    public void ALongNameInTheStatusFileIsCutLikeATranscriptTitle()
+    {
+        Chat(name: new string('n', 500), nameSource: "user");
+        Assert.Equal(SessionMonitor.MaxTitleChars, Assert.Single(SessionMonitor.ReadClaude(_root, pid => pid == 7, titles: true)).Title!.Length);
+        Chat(name: "   padded name   ", nameSource: "user");
+        Assert.Equal("padded name", Assert.Single(SessionMonitor.ReadClaude(_root, pid => pid == 7, titles: true)).Title);
+    }
+
     [Theory]
     [InlineData(null, false)]   // no setting saved: off
     [InlineData(false, false)]
