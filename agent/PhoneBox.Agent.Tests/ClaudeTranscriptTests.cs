@@ -80,6 +80,14 @@ public sealed class ClaudeTranscriptTests : IDisposable
     [InlineData("FOO=1 git status", "git")]
     [InlineData("rtk grep -rn x .", "grep")]
     [InlineData("rm $f", "rm")]
+    [InlineData("VALUES=(PRIVATE_VALUE); git status", null)]
+    [InlineData("VALUES+=(PRIVATE_VALUE a b) git status", null)]
+    [InlineData("\"HELPER=prod\" PRIVATE_TOKEN", null)]
+    [InlineData("'HELPER=prod' PRIVATE_TOKEN", null)]
+    [InlineData("\\HELPER=prod PRIVATE_TOKEN", null)]
+    [InlineData("HELPER=\"prod x\" git status", "git")]
+    [InlineData("A=1 B='x y' dotnet test", "dotnet")]
+    [InlineData("(git status)", "git")]
     [InlineData("ls\\ -la", null)] // an escaped space makes one word: not something to name
     public void ACommandIsShownAsTheProgramItRuns(string command, string? expected) =>
         Assert.Equal(expected, ClaudeTranscript.Program(command));
@@ -167,6 +175,31 @@ public sealed class ClaudeTranscriptTests : IDisposable
         ClaudeTranscript.Read(keep);
         ClaudeTranscript.ForPhone(false, [Running("claude:" + Id(0))], "claude:" + Id(0), _root);
         Assert.False(ClaudeTranscript.IsCached(keep));
+    }
+
+    [Fact]
+    public void TrimDropsCachedChatsWithoutAnyFurtherRequest()
+    {
+        var dir = Path.Combine(_root, ".claude", "projects", "-some-folder");
+        Directory.CreateDirectory(dir);
+        string Make(string id) { var p = Path.Combine(dir, id + ".jsonl"); File.WriteAllText(p, User("text for " + id) + "\n"); ClaudeTranscript.Read(p); return p; }
+        var running = Make("bbbbbbbb-0001");
+        var ended = Make("bbbbbbbb-0002");
+        var idle = Make("bbbbbbbb-0003");
+        Assert.True(ClaudeTranscript.IsCached(running) && ClaudeTranscript.IsCached(ended) && ClaudeTranscript.IsCached(idle));
+
+        // the dialog was closed and one session ended: the next monitor pass, with no request from the phone, drops that one
+        ClaudeTranscript.Trim(["bbbbbbbb-0001", "bbbbbbbb-0003"], true);
+        Assert.True(ClaudeTranscript.IsCached(running));
+        Assert.False(ClaudeTranscript.IsCached(ended));
+        // nobody asked for a minute: the rest goes even though its session is still running
+        ClaudeTranscript.Trim(["bbbbbbbb-0001", "bbbbbbbb-0003"], true, DateTime.UtcNow.AddSeconds(ClaudeTranscript.CacheIdleSeconds + 5));
+        Assert.False(ClaudeTranscript.IsCached(running));
+        Assert.False(ClaudeTranscript.IsCached(idle));
+        // the setting goes off: everything goes
+        var again = Make("bbbbbbbb-0001");
+        ClaudeTranscript.Trim(["bbbbbbbb-0001"], false);
+        Assert.False(ClaudeTranscript.IsCached(again));
     }
 
     [Fact]

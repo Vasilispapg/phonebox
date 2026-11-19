@@ -28,10 +28,28 @@ public static partial class ClaudeTranscript
     internal const int MaxSteps = 12;
     internal const int MaxTextChars = 4000;
 
-    private static readonly ConcurrentDictionary<string, (long Length, DateTime Written, ConversationView View)> Cache = new();
-    // the cache holds chat text, so it is kept small, and ForPhone drops what belongs to a session that has ended
+    private sealed record CacheEntry(long Length, DateTime Written, ConversationView View, DateTime Used);
+    private static readonly ConcurrentDictionary<string, CacheEntry> Cache = new();
+    // The cache holds chat text, so it is kept small and short-lived: at most this many files, none for longer than
+    // CacheIdleSeconds without being asked for, and (see Trim) none for a session that has ended or with the setting off.
     internal const int MaxCachedFiles = 8;
+    internal const int CacheIdleSeconds = 60;
     internal static bool IsCached(string path) => Cache.ContainsKey(path);
+
+    /// <summary>
+    /// Drops cached chat text that can no longer be asked for. SessionMonitor calls this on every pass, so the text does
+    /// not outlive the dialog that wanted it: not when the session ends, not when the setting goes off, not when nobody
+    /// has asked for it for a minute.
+    /// </summary>
+    public static void Trim(IEnumerable<string> runningSessionIds, bool enabled, DateTime? now = null)
+    {
+        if (Cache.IsEmpty) return;
+        var ids = enabled ? runningSessionIds.ToHashSet() : [];
+        var t = now ?? DateTime.UtcNow;
+        foreach (var (key, entry) in Cache)
+            if (!ids.Contains(Path.GetFileNameWithoutExtension(key)) || (t - entry.Used).TotalSeconds > CacheIdleSeconds)
+                Cache.TryRemove(key, out _);
+    }
 
     [GeneratedRegex("^[A-Za-z0-9-]{8,64}$")]
     private static partial Regex SessionIdPattern();
@@ -58,9 +76,7 @@ public static partial class ClaudeTranscript
     /// </summary>
     public static object ForPhone(bool enabled, IReadOnlyList<AgentSession> running, string id, string? homeDir = null)
     {
-        // chat text is kept in memory only while it can be asked for: switched off, or the session gone, it is dropped
-        var runningIds = enabled ? running.Where(s => s.Tool == "claude").Select(s => s.Id["claude:".Length..]).ToHashSet() : [];
-        foreach (var key in Cache.Keys.Where(k => !runningIds.Contains(Path.GetFileNameWithoutExtension(k)))) Cache.TryRemove(key, out _);
+        Trim(running.Where(s => s.Tool == "claude").Select(s => s.Id["claude:".Length..]), enabled);
         if (!enabled) return new { enabled = false };
         var live = running.FirstOrDefault(s => s.Id == id && s.Tool == "claude");
         var file = live is null ? null : FindFile(id["claude:".Length..], homeDir);
@@ -74,7 +90,11 @@ public static partial class ClaudeTranscript
         {
             var info = new FileInfo(path);
             if (!info.Exists) return Empty;
-            if (Cache.TryGetValue(path, out var hit) && hit.Length == info.Length && hit.Written == info.LastWriteTimeUtc) return hit.View;
+            if (Cache.TryGetValue(path, out var hit) && hit.Length == info.Length && hit.Written == info.LastWriteTimeUtc)
+            {
+                Cache[path] = hit with { Used = DateTime.UtcNow };
+                return hit.View;
+            }
             using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             var length = fs.Length;
             var start = Math.Max(0, length - TailBytes);
@@ -83,7 +103,7 @@ public static partial class ClaudeTranscript
             var read = 0;
             while (read < buf.Length) { var n = fs.Read(buf, read, buf.Length - read); if (n <= 0) break; read += n; }
             var view = Parse(Encoding.UTF8.GetString(buf, 0, read).Split('\n').Skip(start > 0 ? 1 : 0)); // a seek cuts the first line
-            Cache[path] = (length, info.LastWriteTimeUtc, view);
+            Cache[path] = new CacheEntry(length, info.LastWriteTimeUtc, view, DateTime.UtcNow);
             foreach (var other in Cache.Keys.Where(k => k != path).Take(Math.Max(0, Cache.Count - MaxCachedFiles))) Cache.TryRemove(other, out _);
             return view;
         }
@@ -190,10 +210,11 @@ public static partial class ClaudeTranscript
         }
     }
 
-    private static bool IsAssignment(string word)
+    // NAME=value, where the name and the '=' were written as they are (a quoted "NAME=value" is a command's name)
+    private static bool IsAssignment(string word, int plainPrefix)
     {
         var eq = word.IndexOf('=');
-        return eq > 0 && !char.IsDigit(word[0]) && word[..eq].All(c => char.IsLetterOrDigit(c) || c == '_');
+        return eq > 0 && eq < plainPrefix && !char.IsDigit(word[0]) && word[..eq].All(c => char.IsLetterOrDigit(c) || c == '_');
     }
 
     // words that start a command line without saying what it runs
@@ -211,15 +232,17 @@ public static partial class ClaudeTranscript
     internal static string? Program(string? command)
     {
         if (string.IsNullOrWhiteSpace(command)) return null;
-        var segments = new List<List<(string Text, bool Plain)>> { new() };
+        var segments = new List<List<(string Text, bool Plain, int Prefix)>> { new() };
         var text = new StringBuilder();
         var plain = true;
+        var prefix = 0; // how much of the word was written without any quote or escape
         var inWord = false;
         var quote = '\0';
+        void Taint() { if (plain) { prefix = text.Length; plain = false; } }
         void EndWord()
         {
-            if (inWord) segments[^1].Add((text.ToString(), plain));
-            text.Clear(); plain = true; inWord = false;
+            if (inWord) segments[^1].Add((text.ToString(), plain, plain ? text.Length : prefix));
+            text.Clear(); plain = true; prefix = 0; inWord = false;
         }
         for (var i = 0; i < command.Length; i++)
         {
@@ -233,11 +256,12 @@ public static partial class ClaudeTranscript
             }
             switch (c)
             {
-                case '\'' or '"': quote = c; plain = false; inWord = true; break;
-                case '\\': plain = false; inWord = true; if (i + 1 < command.Length) text.Append(command[++i]); break;
+                case '\'' or '"': Taint(); quote = c; inWord = true; break;
+                case '\\': Taint(); inWord = true; if (i + 1 < command.Length) text.Append(command[++i]); break;
                 case '`': return null; // command substitution: what it holds cannot be told apart from a program
                 case '$' when i + 1 < command.Length && command[i + 1] is '(' or '{': return null; // $( ) and ${ }, also $(( ))
-                case '$': plain = false; inWord = true; text.Append(c); break;
+                case '$': Taint(); inWord = true; text.Append(c); break;
+                case '(' when inWord && text.Length > 0 && text[^1] == '=': return null; // an array assignment, NAME=(a b): its values are not programs
                 case ' ' or '\t' or '(' or ')' or '{' or '}': EndWord(); break;
                 case ';' or '&' or '|' or '\n': EndWord(); if (segments[^1].Count > 0) segments.Add([]); break;
                 default: text.Append(c); inWord = true; break;
@@ -246,9 +270,9 @@ public static partial class ClaudeTranscript
         if (quote != '\0') return null; // an unclosed quote: there is no telling what is a command
         EndWord();
         foreach (var segment in segments)
-            foreach (var (word, isPlain) in segment)
+            foreach (var (word, isPlain, plainPrefix) in segment)
             {
-                if (IsAssignment(word)) continue; // VAR=value before the command
+                if (IsAssignment(word, plainPrefix)) continue; // VAR=value before the command
                 if (Skipped.Contains(word)) { if (SkipSegment.Contains(word)) break; continue; }
                 if (word.StartsWith('-')) return null; // an option of a wrapper (time -f.., sudo -u ..): not something to name
                 if (!isPlain || word.Length is 0 or > 40 || !word.All(ch => char.IsLetterOrDigit(ch) || ch is '-' or '_' or '.' or '/')) return null;

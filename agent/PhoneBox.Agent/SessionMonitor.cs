@@ -65,6 +65,7 @@ public sealed class SessionMonitor(ILogger<SessionMonitor> log, ConfigStore? con
                 try { list.AddRange(ReadCursor()); } catch (Exception ex) { log.LogDebug("cursor sessions: {Msg}", ex.Message); }
             }
             _sessions = list;
+            ClaudeTranscript.Trim(list.Where(s => s.Tool == "claude").Select(s => s.Id["claude:".Length..]), config?.Get().Claude.ShareConversation ?? false);
             await Task.Delay(2000, ct);
         }
     }
