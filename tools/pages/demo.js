@@ -115,7 +115,7 @@
       // iconRev / iconUpload: the agent sets them when a shortcut has a picture (and when the user uploaded it). The demo
       // has no uploads and serves no /agent/api/shortcuts/icon, so a config that sets them also needs that image mocked
       // (see button-cover.spec.js); without one the key keeps its emoji.
-      shortcuts: (c.shortcuts || []).map(({ id, label, icon, color, toggle, cmd, longPress, iconRev, iconUpload }) => ({ id, label, icon, color, toggle: !!toggle || cmd === 'builtin:mute', hold: !!longPress, iconRev: iconRev ?? null, iconUpload: iconUpload === true })),
+      shortcuts: (c.shortcuts || []).map(({ id, label, icon, color, toggle, cmd, longPress, iconRev, iconUpload }) => ({ id, label, icon, color, toggle: !!toggle || cmd === 'builtin:mute', hold: !!longPress && longPress !== id && (c.shortcuts || []).some((x) => x.id === longPress), iconRev: iconRev ?? null, iconUpload: iconUpload === true })),
       rules: (c.rules || []).map(({ id, name, enabled, when }) => ({ id, name, enabled: enabled !== false, when })),
       charge: { enabled: !!c.charge?.enabled, min: c.charge?.min ?? 50, max: c.charge?.max ?? 80 },
     };
@@ -547,7 +547,7 @@
       const id = decodeURIComponent(path.slice(9)), shortcuts = (await config()).shortcuts;
       let sc = shortcuts.find((s) => s.id === id);
       // ?hold=true runs the key's long-press shortcut instead (the agent resolves it; the phone sends only the held key's id)
-      if (sc && q.get('hold') === 'true') sc = sc.longPress && shortcuts.find((s) => s.id === sc.longPress);
+      if (sc && q.get('hold') === 'true') sc = sc.longPress && sc.longPress !== sc.id ? shortcuts.find((s) => s.id === sc.longPress) : null;
       if (!sc) return json({ title: 'An error occurred while processing your request.', status: 500, detail: 'unknown shortcut' }, 500);
       if (sc.cmd === 'builtin:mute') audio.muted = !audio.muted;
       else if (sc.toggle) toggles[sc.id] = !toggles[sc.id];

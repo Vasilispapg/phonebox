@@ -76,6 +76,34 @@ test('moving the finger before the hold is over cancels the hold', async ({ page
   expect(await runs(page)).not.toContain('tap?hold=true');
 });
 
+test('holding the right mouse button does not count as a hold', async ({ page }) => {
+  const key = await open(page);
+  const box = await key(0).boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down({ button: 'right' });
+  await page.waitForTimeout(700);
+  await page.mouse.up({ button: 'right' });
+  await page.waitForTimeout(200);
+  expect(await runs(page)).toEqual([]);
+});
+
+test('a second touch on the key neither starts a second hold nor lets the first one also tap', async ({ page }) => {
+  const key = await open(page);
+  // two touches on the key: the second one lands after the first has started its hold
+  const box = await key(0).boundingBox(), x = box.x + box.width / 2, y = box.y + box.height / 2;
+  await key(0).evaluate((el, [x, y]) => {
+    const fire = (type, id) => el.dispatchEvent(new PointerEvent(type, { pointerId: id, pointerType: 'touch', clientX: x, clientY: y, bubbles: true, isPrimary: id === 7 }));
+    fire('pointerdown', 7);
+    window.__second = () => { fire('pointerdown', 8); fire('pointerup', 8); };
+    window.__first = () => { fire('pointerup', 7); el.click(); };
+  }, [x, y]);
+  await page.waitForTimeout(700);                       // the first touch has held long enough
+  await page.evaluate(() => window.__second());          // a second finger taps and lifts
+  await page.evaluate(() => window.__first());           // then the first lifts, and the browser sends its click
+  await page.waitForTimeout(200);
+  expect(await runs(page)).toEqual(['tap?hold=true']);   // one hold, and no tap
+});
+
 test('the key editor offers the other keys as the long press, and not the key itself', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 860 });
   await page.goto('/settings/#shortcuts');

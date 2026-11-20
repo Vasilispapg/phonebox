@@ -711,16 +711,19 @@ export function keyButton(s, { cover = false, label = true } = {}) {
 
 const HOLD_MS = 500, HOLD_SLOP = 12;
 /** A key with a long press: a tap runs the key, holding it for half a second runs its long-press shortcut instead (and
- *  the tap that ends the hold does nothing). Moving the finger more than a few pixels turns it into a scroll, not a hold. */
+ *  the tap that ends the hold does nothing). Moving the finger more than a few pixels turns it into a scroll, not a hold.
+ *  Only the pointer that started the press counts (a second finger, or a mouse's right button, never starts or ends one). */
 function holdToRun(b, id) {
-  let timer = 0, held = false, x0 = 0, y0 = 0;
+  let timer = 0, held = false, owner = null, x0 = 0, y0 = 0;
   const cancel = () => { clearTimeout(timer); timer = 0; };
   b.addEventListener('pointerdown', (e) => {
-    held = false; x0 = e.clientX; y0 = e.clientY; cancel();
+    if (owner !== null || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    owner = e.pointerId; held = false; x0 = e.clientX; y0 = e.clientY; cancel();
     timer = setTimeout(() => { timer = 0; held = true; runShortcut(b, id, true); }, HOLD_MS);
   });
-  b.addEventListener('pointermove', (e) => { if (timer && Math.hypot(e.clientX - x0, e.clientY - y0) > HOLD_SLOP) cancel(); });
-  for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, cancel);
+  b.addEventListener('pointermove', (e) => { if (timer && e.pointerId === owner && Math.hypot(e.clientX - x0, e.clientY - y0) > HOLD_SLOP) cancel(); });
+  // the press is over when its own pointer lifts or is taken over (a scroll); `held` stays set until the click that follows
+  for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, (e) => { if (e.pointerId === owner) { cancel(); owner = null; } });
   b.addEventListener('contextmenu', (e) => e.preventDefault()); // Android's WebView opens a menu on a long press
   b.addEventListener('click', () => { if (held) held = false; else runShortcut(b, id); });
 }
