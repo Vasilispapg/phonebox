@@ -80,7 +80,7 @@ public sealed class AgentConfig
         shortcuts = Shortcuts.Select(s =>
         {
             var pic = shortcutIcon?.Invoke(s);
-            return new { s.Id, s.Label, s.Icon, s.Color, toggle = s.Toggle || s.Cmd == "builtin:mute", hold = s.LongPress is not null, iconRev = pic?.Rev, iconUpload = pic?.Upload == true };
+            return new { s.Id, s.Label, s.Icon, s.Color, toggle = s.Toggle || s.Cmd == "builtin:mute", hold = s.LongPress is not null, cycle = s.Cmd == "builtin:cycle" ? s.Cycle : null, iconRev = pic?.Rev, iconUpload = pic?.Upload == true };
         }),
         // names only (for the Rules widget); what a rule matches on stays here
         rules = Rules.Select(r => new { r.Id, r.Name, r.Enabled, r.When }),
@@ -417,6 +417,9 @@ public sealed class Shortcut
     public string? OffArgs { get; set; }
     /// <summary>Id of another shortcut that a long press on this key runs instead (the phone only says "held"; the id is looked up here).</summary>
     public string? LongPress { get; set; }
+    /// <summary>builtin:cycle: ids of the shortcuts to run one after another, a tap each; the key shows the one that ran last.</summary>
+    public List<string>? Cycle { get; set; }
+    public const int MaxCycle = 20;
 }
 
 /// <summary>Reads/writes config.json; external edits are picked up on the next request.</summary>
@@ -645,6 +648,13 @@ public sealed partial class ConfigStore(string path)
         {
             s.LongPress = s.LongPress?.Trim();
             if (string.IsNullOrEmpty(s.LongPress) || s.LongPress == s.Id || !c.Shortcuts.Any(o => o.Id == s.LongPress)) s.LongPress = null;
+        }
+        // a cycle key: the keys it runs must exist (a deleted or renamed one drops out), and none of them is the cycle itself
+        foreach (var s in c.Shortcuts)
+        {
+            s.Cycle = s.Cmd == "builtin:cycle"
+                ? (s.Cycle ?? []).Select(x => x?.Trim() ?? "").Where(x => x != s.Id && c.Shortcuts.Any(o => o.Id == x)).Take(Shortcut.MaxCycle).ToList()
+                : null;
         }
         c.Phones = (c.Phones ?? []).Where(p => p is not null && !string.IsNullOrWhiteSpace(p.Id)).GroupBy(p => p.Id).Select(g => g.First()).Take(20).ToList();
         foreach (var ph in c.Phones)

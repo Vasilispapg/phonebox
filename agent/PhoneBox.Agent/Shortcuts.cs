@@ -63,6 +63,35 @@ public static class Shortcuts
         return Remembered.TryGetValue(sc.Id, out var r) && r;
     }
 
+    // builtin:cycle: the position (in the key's list) of the key that ran last; lost when the agent restarts, like a toggle's state
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> CycleAt = new();
+    private static readonly object CycleLock = new();
+
+    /// <summary>Where each cycle key stands, for the phone: the position of the key that ran last. Keys never tapped are left out.</summary>
+    public static Dictionary<string, int>? CycleStates(AgentConfig cfg)
+    {
+        Dictionary<string, int>? map = null;
+        foreach (var sc in cfg.Shortcuts.Where(s => s.Cmd == "builtin:cycle"))
+            if (CycleAt.TryGetValue(sc.Id, out var at) && at >= 0 && at < (sc.Cycle?.Count ?? 0)) (map ??= [])[sc.Id] = at;
+        return map;
+    }
+
+    /// <summary>A tap on a cycle key: run the next key of its list (the first one after the last), and remember which ran.</summary>
+    private static string? RunCycle(AgentConfig? cfg, Shortcut sc, ILogger log, PushStore? push, AudioControl? audio, int depth)
+    {
+        if (depth > 3) return "keys call each other too deeply";
+        var ids = sc.Cycle ?? [];
+        if (cfg is null || ids.Count == 0) return "this key has no keys to cycle through";
+        int next;
+        lock (CycleLock) next = (CycleAt.GetValueOrDefault(sc.Id, -1) + 1) % ids.Count;
+        var target = cfg.Shortcuts.FirstOrDefault(s => s.Id == ids[next]);
+        if (target is null) return $"no such shortcut: {ids[next]}";
+        var err = RunCore(cfg, target, log, push, audio, depth + 1);
+        // only a key that ran counts: after a failure the next tap tries the same one again
+        if (err is null) CycleAt[sc.Id] = next;
+        return err;
+    }
+
     /// <returns>An error message, or null on success.</returns>
     public static string? Execute(Shortcut sc, ILogger log, AgentConfig? cfg = null, int depth = 0, PushStore? push = null, AudioControl? audio = null)
     {
@@ -70,6 +99,8 @@ public static class Shortcuts
         {
             switch (sc.Cmd)
             {
+                case "builtin:cycle":
+                    return RunCycle(cfg, sc, log, push, audio, depth);
                 case "builtin:keys":
                     KeySender.SendKeys(sc.Args ?? "");
                     break;

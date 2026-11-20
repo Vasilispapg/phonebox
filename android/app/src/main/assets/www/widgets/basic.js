@@ -895,6 +895,24 @@ W.processes = {
 export function applyToggles(root) {
   const t = D.state?.toggles || {};
   root.querySelectorAll('.key.toggle').forEach((b) => b.classList.toggle('on', t[b.dataset.id] === true));
+  applyCycles(root);
+}
+
+// A key that cycles through other keys shows the one that ran last (D.state.cycles: { id: position in its list });
+// before the first tap, and after the agent restarted, it shows its own icon and name.
+function applyCycles(root) {
+  const at = D.state?.cycles || {}, all = cfg.shortcuts || [];
+  root.querySelectorAll('.key.cycle').forEach((b) => {
+    const own = all.find((x) => x.id === b.dataset.id);
+    const shown = at[b.dataset.id] != null ? all.find((x) => x.id === own?.cycle?.[at[b.dataset.id]]) : null;
+    const face = shown || (b.dataset.face ? own : null);
+    if (!face || (b.dataset.face || '') === (shown ? shown.id : '')) return;
+    b.dataset.face = shown ? shown.id : '';
+    const icon = b.querySelector('.k-icon');
+    if (icon) { icon.classList.remove('k-icon-img'); icon.replaceChildren(rich(face.icon || '•')); }
+    const text = b.querySelector('.k-label');
+    if (text) text.textContent = face.label;
+  });
 }
 
 W.shortcuts = {
