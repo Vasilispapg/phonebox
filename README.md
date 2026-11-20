@@ -173,7 +173,8 @@ The [UMIDIGI BISON extras](extras/umidigi-bison) contain the reversible, no-root
 
 ## Security & privacy
 
-The desktop settings server listens on `127.0.0.1:8765`; USB reaches it through `adb reverse`.
+The desktop settings server listens on `127.0.0.1:8765`. USB reaches the agent through `adb reverse` on a loopback
+port of its own, over TLS pinned like Wi-Fi, with a key the phone app makes and the agent reads over adb.
 Optional Wi-Fi uses HTTPS on port 8766 with a pinned certificate and a paired key. Settings and pairing endpoints
 stay local. The phone requests configured actions by ID; commands and integration credentials stay on the computer.
 

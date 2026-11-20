@@ -24,7 +24,9 @@ import javax.net.ssl.X509TrustManager
 /**
  * Connection to the PhoneBox agent on the PC.
  *
- * 1. USB: http://127.0.0.1:8765, tunnelled by "adb reverse" while the cable is plugged in.
+ * 1. USB: https://127.0.0.1:8765, tunnelled by "adb reverse" while the cable is plugged in. Every app on the phone can
+ *    reach that address, so the TLS certificate is pinned (the agent writes the pin over adb) and each request carries
+ *    this app's own key ([UsbKey]), which the agent reads over adb.
  * 2. Wi-Fi / Tailscale: https://<pc-address>:<port>. The address list, a token and the SHA-256 fingerprint of the
  *    agent's self-signed certificate are fetched over USB ("pairing") and stored. Only that exact certificate is
  *    trusted (pinning), and every request carries the token.
@@ -123,6 +125,7 @@ class AgentLink(private val context: Context) {
     @Volatile private var lastPair = 0L
     @Volatile private var preferredHost = 0
     @Volatile private var factory: Pair<String, SSLSocketFactory>? = null
+    @Volatile private var usbFactory: Pair<String, SSLSocketFactory>? = null // its own: the USB agent's pin may differ from the Wi-Fi PC's
 
     /** Opens a long-lived GET (the live stream) over the best route; null when the PC is unreachable. */
     fun stream(path: String): Pair<Route, Reply>? {
@@ -214,11 +217,27 @@ class AgentLink(private val context: Context) {
         usb(method, pathAndQuery, readTimeout, null, null)
 
     private fun usb(method: String, pathAndQuery: String, readTimeout: Int, body: ByteArray?, contentType: String?): Reply? = try {
-        val c = URL("$USB_BASE$pathAndQuery").openConnection() as HttpURLConnection
+        val c = usbConnection(pathAndQuery)
         c.connectTimeout = 400 // refused instantly when no adb reverse tunnel exists
-        send(c, method, readTimeout, body, contentType)
+        val r = send(c, method, readTimeout, body, contentType)
+        if (r.code == 401) {
+            // the agent doesn't know this app's key yet (it reads it over adb within seconds): nothing ran, try Wi-Fi
+            try { r.body.close() } catch (_: Exception) {}
+            null
+        } else r
     } catch (e: Exception) {
         null
+    }
+
+    /** A USB request: TLS pinned to the agent's certificate, then the key. Without a pin yet, USB is not used at all. */
+    private fun usbConnection(pathAndQuery: String): HttpURLConnection {
+        val pin = UsbKey.pin(context) ?: throw java.io.IOException("no USB pin yet")
+        val f = usbFactory?.takeIf { it.first == pin }?.second ?: pinnedFactory(pin).also { usbFactory = pin to it }
+        return (URL("$USB_BASE$pathAndQuery").openConnection() as HttpsURLConnection).apply {
+            sslSocketFactory = f
+            hostnameVerifier = javax.net.ssl.HostnameVerifier { _, _ -> true } // identity is the pinned certificate
+            setRequestProperty("Authorization", "Bearer ${UsbKey.get(context)}")
+        }
     }
 
     private fun wifi(method: String, pathAndQuery: String, readTimeout: Int = 4000): Reply? =
@@ -301,7 +320,7 @@ class AgentLink(private val context: Context) {
         try {
             background.execute {
                 try {
-                    refreshPairing(URL("$USB_BASE/api/pair").openConnection() as HttpURLConnection)
+                    refreshPairing(usbConnection("/api/pair"))
                 } catch (_: Exception) {
                 }
             }
@@ -492,7 +511,7 @@ class AgentLink(private val context: Context) {
     }
 
     companion object {
-        private const val USB_BASE = "http://127.0.0.1:8765"
+        private const val USB_BASE = "https://127.0.0.1:8765"
         /** The agent sends "state" every second, so a silent connection for this long is dead. */
         private const val STREAM_READ_TIMEOUT = 8000
     }
