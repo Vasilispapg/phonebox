@@ -2646,7 +2646,8 @@ function actionFields(s, upd, text, cmdIn, preset) {
       h('button', { class: 'btn sm', type: 'button', 'aria-label': t('s.k.remove'), onclick: () => { s.cycle.splice(i, 1); changed(); renderEditor(); } }, '×')));
     fields.push(h('div', { class: 'field' }, h('label', {}, t('s.k.cycleKeys')), ...rows,
       h('button', { class: 'btn sm', type: 'button', disabled: !choices.length || s.cycle.length >= 20, onclick: () => { s.cycle.push(choices[0].id); changed(); renderEditor(); } }, t('s.k.cycleAdd')),
-      h('span', { class: 'hint' }, t('s.k.cycleHint'))));
+      h('span', { class: 'hint' }, t('s.k.cycleHint')),
+      ...(s.cycle.length < 2 ? [h('span', { class: 'hint' }, t('s.k.cycleFew'))] : [])));
   } else {
     fields.push(h('div', { class: 'field' }, h('label', {}, t('s.k.steps')),
       area((s.steps || []).join('\n'), 'keys:ctrl+c\nwait:200\ntext:Hello\nshortcut:terminal', 6, (e) => upd('steps', e.target.value.split('\n').map((x) => x.trim()).filter(Boolean), false)),

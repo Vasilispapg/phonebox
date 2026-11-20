@@ -66,7 +66,7 @@ public static class Shortcuts
     // builtin:cycle: the position (in the key's list) of the key that ran last; lost when the agent restarts, like a toggle's state.
     // The list is stored with the position: after the list is edited the old position would point at another key.
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (int At, string List)> CycleAt = new();
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, object> CycleGates = new();
+    private static readonly object CycleLock = new();
     private static string ListOf(Shortcut sc) => string.Join('\n', sc.Cycle ?? []);
 
     /// <summary>
@@ -81,27 +81,41 @@ public static class Shortcuts
         return map;
     }
 
-    /// <summary>A tap on a cycle key: run the next key of its list (the first one after the last), and remember which ran.</summary>
+    /// <summary>
+    /// A tap on a cycle key: run the next key of its list (the first one after the last). The slot is claimed before the
+    /// key runs, so two taps at the same moment (the phone and a rule, say) run two different keys; the lock covers only
+    /// the claim, never the run, so cycles that call each other on two threads cannot deadlock. A key that fails gives its
+    /// slot back, so the next tap tries it again. A list with one key runs that key, and an empty one does nothing.
+    /// </summary>
     private static string? RunCycle(AgentConfig? cfg, Shortcut sc, ILogger log, PushStore? push, AudioControl? audio, int depth)
     {
         if (depth > 3) return "keys call each other too deeply";
         var ids = sc.Cycle ?? [];
-        if (cfg is null || ids.Count == 0) return "this key has no keys to cycle through";
-        // One tap at a time per key: it reads the position, runs the key and stores the position before the next tap
-        // reads it, so two quick taps run two keys. The wait is bounded, so a key that hangs cannot lock the taps out.
-        var gate = CycleGates.GetOrAdd(sc.Id, _ => new object());
-        if (!Monitor.TryEnter(gate, TimeSpan.FromSeconds(5))) return "this key is still busy with the last tap";
-        try
+        if (cfg is null || ids.Count == 0) return null;
+        var list = ListOf(sc);
+        (int At, string List)? before;
+        (int At, string List) claimed;
+        lock (CycleLock)
         {
-            var next = (CycleAt.TryGetValue(sc.Id, out var last) && last.List == ListOf(sc) ? last.At + 1 : 0) % ids.Count;
-            var target = cfg.Shortcuts.FirstOrDefault(s => s.Id == ids[next]);
-            if (target is null) return $"no such shortcut: {ids[next]}";
-            var err = RunCore(cfg, target, log, push, audio, depth + 1);
-            // only a key that ran counts: after a failure the next tap tries the same one again
-            if (err is null) CycleAt[sc.Id] = (next, ListOf(sc));
-            return err;
+            before = CycleAt.TryGetValue(sc.Id, out var last) && last.List == list ? last : null;
+            claimed = (((before?.At ?? -1) + 1) % ids.Count, list);
+            CycleAt[sc.Id] = claimed;
         }
-        finally { Monitor.Exit(gate); }
+        var target = cfg.Shortcuts.FirstOrDefault(s => s.Id == ids[claimed.At]);
+        var err = target is null ? $"no such shortcut: {ids[claimed.At]}" : RunCore(cfg, target, log, push, audio, depth + 1);
+        if (err is not null)
+        {
+            // put the slot back, unless a later tap has taken a slot since
+            lock (CycleLock)
+            {
+                if (CycleAt.TryGetValue(sc.Id, out var now) && now == claimed)
+                {
+                    if (before is { } b) CycleAt[sc.Id] = b;
+                    else CycleAt.TryRemove(sc.Id, out _);
+                }
+            }
+        }
+        return err;
     }
 
     /// <returns>An error message, or null on success.</returns>

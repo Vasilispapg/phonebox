@@ -1,4 +1,4 @@
-import { $, API, D, LEVEL_COLOR, LOCALE, mediaHtml, METRICS, PANEL_HEADERS, PREVIEW, Q_STYLE, S_ORDER, ago, api, averageColor, buildLayout, buzz, cfg, chime, cfgVersion, chart, color, cssVar, currentProcessesSort, emit, fillIcon, fmtClock, fmtDur, fmtHM, fmtMem, fmtReset, fmtTime, fmtValue, gotoProcesses, gpuMem, gpusOf, h, en, haptic, hasProcessesPage, hist, hour12, icon, keyButton, labelled, levelOf, media, metricText, online, openSheet, paceInfo, pad, prRow, pushView, quotaProviders, r1, registerProcessesSorter, renderStatus, ringSvg, setArtColor, configMark, configReadSince, localWriteStored, setMediaState, setVolDragging, shortDur, shortGpu, store, t, tick, toast, volDragging, wxBlock, wxDeg, wxIcon, emo, rich } from '../main.js';
+import { $, API, D, LEVEL_COLOR, LOCALE, mediaHtml, METRICS, PANEL_HEADERS, PREVIEW, Q_STYLE, S_ORDER, ago, api, averageColor, buildLayout, buzz, cfg, chime, cfgVersion, chart, color, cssVar, currentProcessesSort, emit, fillIcon, fmtClock, fmtDur, fmtHM, fmtMem, fmtReset, fmtTime, fmtValue, gotoProcesses, gpuMem, gpusOf, h, en, haptic, hasProcessesPage, hist, hour12, icon, keyButton, setKeyFace, labelled, levelOf, media, metricText, online, openSheet, paceInfo, pad, prRow, pushView, quotaProviders, r1, registerProcessesSorter, renderStatus, ringSvg, setArtColor, configMark, configReadSince, localWriteStored, setMediaState, setVolDragging, shortDur, shortGpu, store, t, tick, toast, volDragging, wxBlock, wxDeg, wxIcon, emo, rich } from '../main.js';
 import { W } from '../registry.js';
 import { invalidateDeckState } from './controls.js';
 
@@ -904,19 +904,12 @@ export function applyToggles(root) {
 function applyCycles(root) {
   const at = D.state?.cycles || {}, all = cfg.shortcuts || [];
   root.querySelectorAll('.key.cycle').forEach((b) => {
-    const own = all.find((x) => x.id === b.dataset.id);
-    const shown = at[b.dataset.id] != null ? all.find((x) => x.id === at[b.dataset.id]) : null;
-    // a key the phone has not loaded yet leaves the face as it is (not the key's own, which did not run)
-    if (at[b.dataset.id] != null && !shown) return;
-    const face = shown || (b.dataset.face ? own : null);
-    if (!face || (b.dataset.face || '') === (shown ? shown.id : '')) return;
-    b.dataset.face = shown ? shown.id : '';
-    const icon = b.querySelector('.k-icon');
-    if (icon) { icon.classList.remove('k-icon-img'); icon.replaceChildren(rich(face.icon || '•')); }
-    const text = b.querySelector('.k-label');
-    if (text) text.textContent = face.label;
-    // a key that had no visible name was named by its id (aria-label); that name follows the face too
-    if (b.hasAttribute('aria-label')) b.setAttribute('aria-label', String(face.label || '').trim() || face.id);
+    const id = b.dataset.id, own = all.find((x) => x.id === id);
+    if (!own) return;
+    const want = at[id] != null ? all.find((x) => x.id === at[id]) : (b.dataset.face ? own : null);
+    // a key the phone has not loaded yet leaves the face as it is: not the key's own, which did not run
+    if (!want || (b.dataset.face || '') === (want.id === id ? '' : want.id)) return;
+    setKeyFace(b, want, b._cover === true);
   });
 }
 

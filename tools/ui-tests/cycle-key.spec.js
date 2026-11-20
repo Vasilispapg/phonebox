@@ -40,3 +40,33 @@ test('the key editor can turn a key into one that cycles, and lists the other ke
   const own = (await keys.first().locator('.kl').textContent()).trim();
   expect(await rows.locator('option').allTextContents()).not.toContain(own);
 });
+
+test("a cycle key shows the icon of the key that ran, and its own picture goes away", async ({ page }) => {
+  const svg = (c) => `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 10 10"><rect width="10" height="10" fill="${c}"/></svg>`;
+  // the cycle key has an uploaded picture that fills it; 'low' has a program icon (served for its own id only)
+  await page.route((url) => url.pathname.endsWith('/agent/api/shortcuts/icon'), (route) => {
+    const q = new URL(route.request().url()).searchParams, id = q.get('id');
+    if (id === 'low' && q.get('upload') !== 'true') return route.fulfill({ contentType: 'image/svg+xml', body: svg('#16a34a') });
+    if (id === 'vol' && q.get('upload') === 'true') return route.fulfill({ contentType: 'image/svg+xml', body: svg('#e11d48') });
+    return route.fulfill({ status: 404, body: '' });
+  });
+  await page.addInitScript((config) => localStorage.setItem('pb-demo-config', config), JSON.stringify({
+    night: { enabled: false }, rules: [],
+    shortcuts: [
+      { id: 'low', label: 'Low', icon: '🔈', color: '#6b7280', cmd: 'builtin:keys', iconRev: 1 },
+      { id: 'high', label: 'High', icon: '🔊', color: '#6b7280', cmd: 'builtin:keys' },
+      { id: 'vol', label: 'Volume', icon: '🎚️', color: '#6b7280', cmd: 'builtin:cycle', cycle: ['low', 'high'], iconRev: 1, iconUpload: true },
+    ],
+    pages: [{ id: 'cycle-test', title: 'Keys', widgets: [{ id: 'b0', type: 'button', x: 0, y: 0, w: 4, h: 6, options: { id: 'vol', cover: true } }] }],
+  }));
+  await page.goto('/panel/');
+  const key = page.locator('[data-id="cycle-test"] .w-button .key');
+  await expect(key.locator('img.k-bg')).toBeVisible();      // before the first tap: its own picture
+  await key.click();
+  await expect(key.locator('.k-label')).toHaveText('Low');
+  await expect(key.locator('img.k-bg')).toHaveCount(0);      // the key's own picture is gone
+  await expect(key.locator('.k-icon.k-icon-img img')).toBeVisible(); // the program icon of the key that ran
+  await key.click();
+  await expect(key.locator('.k-label')).toHaveText('High');
+  await expect(key.locator('.k-icon.k-icon-img')).toHaveCount(0);    // 'High' has only its emoji
+});

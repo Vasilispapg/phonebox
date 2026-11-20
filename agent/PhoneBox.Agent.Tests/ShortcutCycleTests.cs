@@ -132,21 +132,48 @@ public sealed class ShortcutCycleTests : IDisposable
     }
 
     [Fact]
-    public void ACycleKeyNeedsAtLeastTwoKeys()
+    public void ACycleLeftWithTooFewKeysStillSavesAndActsAsThatKey()
     {
         var store = new ConfigStore(Path.Combine(_dir, "config2.json"));
-        var error = store.Save("""{ "shortcuts": [ { "id": "a", "label": "A", "cmd": "builtin:lock" }, { "id": "c", "label": "Cycle", "cmd": "builtin:cycle", "cycle": ["a", "missing"] } ] }""");
-        Assert.NotNull(error);
-        Assert.Contains("Cycle", error);
+        // "missing" does not exist, so the cycle is left with one key: saving must not fail (a rename elsewhere would block every save)
+        Assert.Null(store.Save("""{ "shortcuts": [ { "id": "a", "label": "A", "cmd": "builtin:lock" }, { "id": "c", "label": "Cycle", "cmd": "builtin:cycle", "cycle": ["a", "missing"] } ] }"""));
+        Assert.Equal(["a"], store.Get().Shortcuts.Single(s => s.Id == "c").Cycle);
+
+        var id = Id();
+        Shortcut one = Lamp(id + "one"), key = Cycle(id, one.Id), none = Cycle(id + "none");
+        var cfg = new AgentConfig { Shortcuts = [one, key, none] };
+        Assert.Null(Shortcuts.Run(cfg, id, NullLogger.Instance));
+        Assert.Null(Shortcuts.Run(cfg, id, NullLogger.Instance));
+        Assert.False(On(one));                                   // two taps, the one key ran twice (on, then off)
+        Assert.Null(Shortcuts.Run(cfg, none.Id, NullLogger.Instance)); // an empty list does nothing
     }
 
     [Fact]
-    public void ThePhoneGetsTheListOfAKeyThatCyclesAndNothingForOtherKeys()
+    public void ACycleKeyHasNoOnOffSettingsOfItsOwn()
+    {
+        var store = new ConfigStore(Path.Combine(_dir, "config3.json"));
+        const string json = """
+            { "shortcuts": [
+              { "id": "a", "label": "A", "cmd": "builtin:lock" },
+              { "id": "b", "label": "B", "cmd": "builtin:lock" },
+              { "id": "c", "label": "Cycle", "cmd": "builtin:cycle", "cycle": ["a", "b"], "toggle": true, "stateKey": "k", "offCmd": "builtin:lock" } ] }
+            """;
+        Assert.Null(store.Save(json));
+        var c = store.Get().Shortcuts.Single(s => s.Id == "c");
+        Assert.False(c.Toggle);
+        Assert.Null(c.StateKey);
+        Assert.Null(c.OffCmd);
+    }
+
+    [Fact]
+    public void ThePhoneLearnsOnlyThatAKeyCyclesNotWhatItCyclesThrough()
     {
         var cfg = new AgentConfig { Shortcuts = [Lamp("x"), Lamp("y"), Cycle("z", "x", "y")] };
-        using var doc = JsonDocument.Parse(JsonSerializer.Serialize(cfg.ToPublic()));
+        var text = JsonSerializer.Serialize(cfg.ToPublic());
+        using var doc = JsonDocument.Parse(text);
         var keys = doc.RootElement.GetProperty("shortcuts").EnumerateArray().ToDictionary(k => k.GetProperty("Id").GetString()!);
-        Assert.Equal(["x", "y"], keys["z"].GetProperty("cycle").EnumerateArray().Select(e => e.GetString()));
-        Assert.Equal(JsonValueKind.Null, keys["x"].GetProperty("cycle").ValueKind);
+        Assert.True(keys["z"].GetProperty("cycle").GetBoolean());
+        Assert.False(keys["x"].GetProperty("cycle").GetBoolean());
+        Assert.DoesNotContain("\"cycle\":[", text);
     }
 }
