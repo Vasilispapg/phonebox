@@ -32,6 +32,24 @@ public sealed class WakeShortcutTests
         Assert.Null(Save("""{ "label": "NAS", "cmd": "builtin:wake", "args": "aa-bb-cc-dd-ee-01 192.168.1.255" }"""));
     }
 
+    // A toggle's off action runs through the same path when the toggle is on, so a bad MAC there must not save either.
+    [Fact]
+    public void A_toggles_off_action_that_wakes_with_a_bad_mac_is_refused_and_says_it_is_the_off_action()
+    {
+        var error = Save("""{ "label": "NAS power", "cmd": "builtin:mute", "toggle": true, "offCmd": "builtin:wake", "offArgs": "not-a-mac" }""");
+        Assert.NotNull(error);
+        Assert.Contains("NAS power", error);
+        Assert.Contains("off action", error);
+        Assert.Contains("MAC", error);
+    }
+
+    [Fact]
+    public void A_toggles_off_action_with_a_valid_mac_or_another_command_is_saved()
+    {
+        Assert.Null(Save("""{ "label": "NAS power", "cmd": "builtin:mute", "toggle": true, "offCmd": "builtin:wake", "offArgs": "AA:BB:CC:DD:EE:01" }"""));
+        Assert.Null(Save("""{ "label": "Lock", "cmd": "builtin:mute", "toggle": true, "offCmd": "builtin:lock" }"""));
+    }
+
     [Fact]
     public void Running_a_wake_key_with_a_bad_mac_returns_the_error_instead_of_throwing()
     {
