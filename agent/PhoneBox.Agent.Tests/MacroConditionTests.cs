@@ -91,10 +91,12 @@ public sealed class MacroConditionTests : IDisposable
             new[] { "if:muted", "else", "else", "endif", "keys:a" },   // two elses
             new[] { "keys:a", "if:sunny", "endif" },                    // unknown condition
             new[] { "keys:a", "if:running:", "endif" },                 // missing value
+            new[] { "keys:a", "if:muted:please", "endif" },             // muted takes no value
+            new[] { "keys:a", "if:muted", "if:on:nope", "endif", "endif" }, // a missing key, even in a block that would be skipped
         })
         {
             _events.Clear();
-            Assert.NotNull(Macro(bad));
+            Assert.NotNull(Macro(new AgentConfig { Shortcuts = [new Shortcut { Id = "known", Label = "k", Cmd = "builtin:lock" }] }, bad));
             Assert.Empty(_events);
         }
     }
@@ -127,9 +129,12 @@ public sealed class MacroConditionTests : IDisposable
     }
 
     [Fact]
-    public void AnUnknownShortcutInAnOnConditionIsAnError()
+    public void AnUnknownShortcutInAnOnConditionStopsTheMacroBeforeItsFirstStep()
     {
-        Assert.NotNull(Macro("if:on:nope", "keys:a", "endif"));
+        var cfg = new AgentConfig { Shortcuts = [new Shortcut { Id = "known", Label = "k", Cmd = "builtin:lock", Toggle = true }] };
+        Assert.NotNull(Macro(cfg, "keys:a", "if:on:nope", "keys:b", "endif"));
         Assert.Empty(_events);
+        Assert.Null(Macro(cfg, "keys:a", "if:on:known", "keys:b", "endif")); // an existing key is fine, whatever its state
+        Assert.Equal(["a"], _events);
     }
 }

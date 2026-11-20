@@ -34,7 +34,7 @@ internal static class MacroFlow
     }
 
     /// <summary>Checks the whole macro's structure before any step runs, so a typo cannot leave it half done.</summary>
-    internal static void Check(IEnumerable<string> steps)
+    internal static void Check(IEnumerable<string> steps, AgentConfig? cfg = null)
     {
         var open = new Stack<bool>(); // one entry per open if: has its else been seen
         var n = 0;
@@ -44,7 +44,7 @@ internal static class MacroFlow
             switch (Classify(step, out var condition))
             {
                 case Word.If:
-                    CheckCondition(condition, n);
+                    CheckCondition(condition, n, cfg);
                     open.Push(false);
                     break;
                 case Word.Else:
@@ -70,12 +70,15 @@ internal static class MacroFlow
         return i < 0 ? (negate, text.ToLowerInvariant(), "") : (negate, text[..i].Trim().ToLowerInvariant(), text[(i + 1)..].Trim());
     }
 
-    private static void CheckCondition(string condition, int step)
+    private static void CheckCondition(string condition, int step, AgentConfig? cfg)
     {
         var (_, name, arg) = Split(condition);
         var known = name is "muted" or "running" or "on" or "push";
         if (!known) throw new InvalidOperationException($"step {step}: unknown condition \"{condition}\" (use running:, muted, on: or push:, with ! in front to turn it around)");
+        if (name == "muted" && arg.Length > 0) throw new InvalidOperationException($"step {step}: \"muted\" takes no value");
         if (name != "muted" && arg.Length == 0) throw new InvalidOperationException($"step {step}: \"{name}:\" needs a value");
+        // only that the key exists, not its state; a condition in a block that will be skipped is checked too
+        if (name == "on" && cfg is not null && !cfg.Shortcuts.Any(s => s.Id == arg)) throw new InvalidOperationException($"step {step}: no such shortcut: {arg}");
     }
 
     internal static bool Evaluate(string condition, AgentConfig? cfg, PushStore? push, AudioControl? audio)

@@ -87,7 +87,7 @@ public static class Shortcuts
                     break;
                 case "builtin:macro":
                     if (depth > 3) throw new InvalidOperationException("macros call each other too deeply");
-                    MacroFlow.Check(sc.Steps ?? []);
+                    MacroFlow.Check(sc.Steps ?? [], cfg);
                     // one entry per open if:, with the state outside it; "active" is whether the steps here run
                     var open = new Stack<(bool Outer, bool Holds)>();
                     var active = true;
