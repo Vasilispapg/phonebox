@@ -77,6 +77,8 @@ internal static class MacroFlow
         if (!known) throw new InvalidOperationException($"step {step}: unknown condition \"{condition}\" (use running:, muted, on: or push:, with ! in front to turn it around)");
         if (name == "muted" && arg.Length > 0) throw new InvalidOperationException($"step {step}: \"muted\" takes no value");
         if (name != "muted" && arg.Length == 0) throw new InvalidOperationException($"step {step}: \"{name}:\" needs a value");
+        // ".exe" alone is no program name: an empty name matches every process on Linux
+        if (name == "running" && ProgramName(arg).Length == 0) throw new InvalidOperationException($"step {step}: \"running:\" needs a program name");
         // only that the key exists, not its state; a condition in a block that will be skipped is checked too
         if (name == "on" && cfg is not null && !cfg.Shortcuts.Any(s => s.Id == arg)) throw new InvalidOperationException($"step {step}: no such shortcut: {arg}");
     }
@@ -97,11 +99,12 @@ internal static class MacroFlow
         return holds != negate;
     }
 
+    private static string ProgramName(string program) => program.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? program[..^4].Trim() : program;
+
     private static bool Running(string program)
     {
         if (TestRunning is { } t) return t(program);
-        var name = program.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? program[..^4] : program;
-        var found = Process.GetProcessesByName(name);
+        var found = Process.GetProcessesByName(ProgramName(program));
         try { return found.Length > 0; }
         finally { foreach (var p in found) p.Dispose(); }
     }

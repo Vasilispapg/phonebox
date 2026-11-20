@@ -92,6 +92,7 @@ public sealed class MacroConditionTests : IDisposable
             new[] { "keys:a", "if:sunny", "endif" },                    // unknown condition
             new[] { "keys:a", "if:running:", "endif" },                 // missing value
             new[] { "keys:a", "if:muted:please", "endif" },             // muted takes no value
+            new[] { "keys:a", "if:running:.exe", "endif" },             // no program name once .exe is taken off
             new[] { "keys:a", "if:muted", "if:on:nope", "endif", "endif" }, // a missing key, even in a block that would be skipped
         })
         {
