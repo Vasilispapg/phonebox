@@ -48,10 +48,6 @@ selection fit side by side, device batteries refresh faster, and a phone that is
   [RawreeUX](https://github.com/RawreeUX)).
 - Device batteries refresh every 20 seconds while the widget is shown, instead of once a minute; macOS stays at once a
   minute, because reading headphones there takes seconds (#297, [RawreeUX](https://github.com/RawreeUX)).
-- Shortcut macros: **if:** … **else** … **endif** runs the steps in between only when a condition holds, and blocks nest.
-  Conditions: `running:program`, `muted`, `on:shortcut-id` (an on / off key) and `push:key`; a `!` in front turns one
-  around (`if:!running:obs64`). The whole macro is checked before its first step, so a missing `endif` or a mistyped
-  condition stops it instead of leaving it half done.
 
 **Agent**
 - A new **Settings › Display › Open PhoneBox when the phone is plugged in** option (on by default, so nothing
