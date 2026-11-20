@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+**Widgets**
+- Shortcut keys: a **Long press runs** option on each key. Tapping the key on the phone runs it as before; holding it for
+  half a second runs another key you choose (hold *Mute* to open the mixer). The phone only says the key was held, so
+  the long press cannot point at anything but a key from your own settings.
+
 ## 0.9.24 — 2026-11-20
 
 A security fix for phones connected over USB: the USB connection now answers only the PhoneBox app, so **update the
@@ -35,9 +42,6 @@ selection fit side by side, device batteries refresh faster, and a phone that is
   [RawreeUX](https://github.com/RawreeUX)).
 - Device batteries refresh every 20 seconds while the widget is shown, instead of once a minute; macOS stays at once a
   minute, because reading headphones there takes seconds (#297, [RawreeUX](https://github.com/RawreeUX)).
-- Shortcut keys: a **Long press runs** option on each key. Tapping the key on the phone runs it as before; holding it for
-  half a second runs another key you choose (hold *Mute* to open the mixer). The phone only says the key was held, so
-  the long press cannot point at anything but a key from your own settings.
 
 **Agent**
 - A new **Settings › Display › Open PhoneBox when the phone is plugged in** option (on by default, so nothing
