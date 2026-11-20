@@ -2258,9 +2258,7 @@ const pageId = (...ids) => ids.find((id) => cfg.pages.some((p) => p.id === id)) 
 const RULE_PRESETS = [
   ['✳️ Claude needs me → AI page', () => ({ name: 'Claude needs me', when: 'session-waiting', then: 'goto', page: pageId('ai', 'work'), whileActive: true })],
   ['🎵 Music plays → music page', () => ({ name: 'Music', when: 'media-playing', match: 'Spotify', then: 'goto', page: pageId('music', 'home'), whileActive: true })],
-  ['🔴 On air while the mic is on', () => (osName === 'macos'
-    ? { name: 'On air', when: 'process-running', match: 'zoom.us|Microsoft Teams|FaceTime', then: 'push', key: 'onair', pushValue: 'On air', whileActive: true }
-    : { name: 'On air', when: 'mic-in-use', then: 'notify', text: '{detail} is using the microphone', level: 'warn', whileActive: false })],
+  ['🔴 On air while the mic is on', () => ({ name: 'On air', when: 'mic-in-use', then: 'notify', text: '{detail} is using the microphone', level: 'warn', whileActive: false })],
   ['📆 In a meeting → on air', () => ({ name: 'In a meeting', when: 'calendar-event', then: 'push', key: 'onair', pushValue: '{detail}', whileActive: true })],
   ['🔥 CPU busy → notification', () => ({ name: 'CPU busy', when: 'cpu-above', value: 90, then: 'notify', text: '{detail} for a while', level: 'warn', whileActive: false })],
   ['🌙 Away → ambient page', () => ({ name: 'Away', when: 'idle', value: 10, then: 'goto', page: pageId('ambient', 'clock', 'calm'), whileActive: true })],

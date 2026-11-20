@@ -237,7 +237,7 @@ for senders that cannot set headers). That key opens only the webhook endpoints,
 | music or video plays (optionally in some apps: `Spotify\|Music`) | show a notification (`{detail}` = what happened) |
 | an app is running (`zoom\|Teams\|obs64`) | push a value (e.g. `onair`, shown by a Pushed value widget) |
 | an app is in front (`Code\|obs64\|Safari` — needs Accessibility on macOS, `xdotool` on Linux; not on Wayland) | |
-| the microphone / the camera is in use (Windows, Linux) | |
+| the microphone / the camera is in use (Windows, Linux, macOS. On macOS 14.2 and later the microphone is named by its app; before that a rule sees only "microphone", for an input device with no output side (a USB or built-in microphone), so an app filter cannot match. The camera is named by the camera itself, as macOS does not say which app runs it, and **the camera has not been tried on real hardware yet**: macOS may report it as running only while the agent has a run loop, so on a Mac with a built-in camera check once, with Photo Booth or FaceTime on and then off, and tell us if it stays "in use". On a browser call the name is the process macOS lists, so a filter has to match what the list shows: `Google Chrome Helper`, `com.apple.WebKit.GPU` and the like, not just the app's name) | |
 | a calendar event is on (optionally by title) | |
 | OBS is recording or streaming | |
 | the CPU stays above a percentage for 15 s | |
