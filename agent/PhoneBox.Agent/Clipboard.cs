@@ -49,6 +49,9 @@ public static class Clipboard
 
     private static void Write(string text, bool sensitive) => OnStaThread<object?>(() =>
     {
+        // empty text empties the clipboard: DataObject.SetText refuses an empty string. This is how a paste: step whose
+        // clipboard held a picture or files (no text to put back) removes its own text afterwards.
+        if (text.Length == 0) { System.Windows.Forms.Clipboard.Clear(); return null; }
         var data = new DataObject();
         data.SetText(text, TextDataFormat.UnicodeText);
         if (sensitive)

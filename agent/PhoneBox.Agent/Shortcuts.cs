@@ -51,6 +51,68 @@ public static class Shortcuts
         return Remembered.TryGetValue(sc.Id, out var r) && r;
     }
 
+    // builtin:cycle: where each cycle key stands; lost when the agent restarts, like a toggle's state. A state belongs to the
+    // list it was made for: after the list is edited it is dropped, since its positions would point at other keys.
+    private sealed class CycleState(string list)
+    {
+        public readonly string List = list;
+        public int Cursor = -1;     // the slot the last tap claimed
+        public int? Retry;          // a slot whose key failed: the next tap tries it again
+        public int? Shown;          // the slot of the key that last ran successfully
+    }
+    private static readonly Dictionary<string, CycleState> Cycles = [];
+    private static readonly object CycleLock = new();
+    private static string ListOf(Shortcut sc) => string.Join('\n', sc.Cycle ?? []);
+
+    /// <summary>
+    /// Where each cycle key stands, for the phone: the id of the key that last ran successfully (not one still running or
+    /// failing). An id, not a position, so the phone shows the right face even when it has not yet loaded a list that was
+    /// edited. Keys never tapped, or never successful, are left out.
+    /// </summary>
+    public static Dictionary<string, string>? CycleStates(AgentConfig cfg)
+    {
+        Dictionary<string, string>? map = null;
+        lock (CycleLock)
+            foreach (var sc in cfg.Shortcuts.Where(s => s.Cmd == "builtin:cycle"))
+                if (Cycles.TryGetValue(sc.Id, out var st) && st.List == ListOf(sc) && st.Shown is { } at && at < (sc.Cycle?.Count ?? 0)) (map ??= [])[sc.Id] = sc.Cycle![at];
+        return map;
+    }
+
+    /// <summary>
+    /// A tap on a cycle key: run the next key of its list (the first one after the last). The slot is claimed before the
+    /// key runs, so two taps at the same moment (the phone and a rule, say) run two different keys; the lock covers only
+    /// the claim and the outcome, never the run, so cycles that call each other on two threads cannot deadlock. A key that
+    /// fails is tried again by the next tap. A list with one key runs that key, and an empty one does nothing.
+    /// </summary>
+    private static string? RunCycle(AgentConfig? cfg, Shortcut sc, ILogger log, PushStore? push, AudioControl? audio, int depth)
+    {
+        if (depth > 3) return "keys call each other too deeply";
+        var ids = sc.Cycle ?? [];
+        if (cfg is null || ids.Count == 0) return null;
+        var list = ListOf(sc);
+        CycleState state;
+        int slot;
+        lock (CycleLock)
+        {
+            if (!Cycles.TryGetValue(sc.Id, out state!) || state.List != list) Cycles[sc.Id] = state = new CycleState(list);
+            slot = (state.Retry ?? (state.Cursor + 1)) % ids.Count;
+            state.Retry = null;
+            state.Cursor = slot;
+        }
+        var target = cfg.Shortcuts.FirstOrDefault(s => s.Id == ids[slot]);
+        var err = target is null ? $"no such shortcut: {ids[slot]}" : RunCore(cfg, target, log, push, audio, depth + 1);
+        lock (CycleLock)
+        {
+            // the outcome counts only for the state it was claimed from (not one made after the list was edited)
+            if (Cycles.TryGetValue(sc.Id, out var now) && ReferenceEquals(now, state))
+            {
+                if (err is null) state.Shown = slot;
+                else state.Retry ??= slot;
+            }
+        }
+        return err;
+    }
+
     /// <summary>Whether the value pushed to /api/push/{key} is on: true, a number other than 0, or text other than 0 / false / off / no.</summary>
     internal static bool PushIsOn(PushStore? push, string key)
     {
@@ -109,6 +171,8 @@ public static class Shortcuts
         PressKeys(OperatingSystem.IsMacOS() ? "win+v" : "ctrl+v");
         if (before is null) return;
         Thread.Sleep(PasteSettleMs);
+        // the text that was copied comes back; a picture or files read as "" and cannot be put back, so the clipboard is
+        // emptied instead of keeping the pasted text (a token, say). Something copied in the meantime is left alone.
         try { if (Clipboard.GetText() == text) Clipboard.SetText(before, sensitive: true); }
         catch (Exception ex) when (ex is InvalidOperationException or TimeoutException) { }
     }
@@ -120,6 +184,8 @@ public static class Shortcuts
         {
             switch (sc.Cmd)
             {
+                case "builtin:cycle":
+                    return RunCycle(cfg, sc, log, push, audio, depth);
                 case "builtin:keys":
                     PressKeys(sc.Args ?? "");
                     break;
@@ -217,6 +283,7 @@ public static class Shortcuts
         var psi = new ProcessStartInfo(Home(sc.Cmd), Home(sc.Args ?? "")) { UseShellExecute = true };
         if (!string.IsNullOrEmpty(sc.Cwd)) psi.WorkingDirectory = Home(sc.Cwd);
 #if WINDOWS
+        LetTheNewWindowComeForward();
         try
         {
             Process.Start(psi);
@@ -273,6 +340,17 @@ public static class Shortcuts
         s == "~" || s.StartsWith("~/") ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + s[1..] : s.Replace(" ~/", " " + Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "/");
 
 #if WINDOWS
+    /// <summary>
+    /// Windows keeps a program started by a background process (the agent answering the phone) behind the window in use,
+    /// flashing in the taskbar (#322). A zero-pixel mouse move makes the agent the process that received the last input,
+    /// which lets it pass the right to come forward to any process; the app, or the launcher it starts through, then
+    /// takes it when its window opens. The right ends with the user's next input.
+    /// </summary>
+    private static void LetTheNewWindowComeForward()
+    {
+        try { if (KeySender.NudgeInput()) AllowSetForegroundWindow(-1 /* ASFW_ANY */); } catch { }
+    }
+    [DllImport("user32.dll")] private static extern bool AllowSetForegroundWindow(int processId);
     [DllImport("user32.dll")] private static extern bool LockWorkStation();
     [DllImport("user32.dll")] private static extern bool PostMessage(nint hWnd, uint msg, nint wParam, nint lParam);
 #else

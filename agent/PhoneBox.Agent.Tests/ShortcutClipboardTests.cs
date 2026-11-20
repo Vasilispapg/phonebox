@@ -56,6 +56,22 @@ public sealed class ShortcutClipboardTests : IDisposable
     }
 
     [Fact]
+    public void AfterPastingOverAPictureTheClipboardIsLeftEmptyNotHoldingThePastedText()
+    {
+        _clip.Text = ""; // a picture or files read as no text
+        Assert.Null(Macro("paste:secret-token"));
+        Assert.Equal("", _clip.Text); // the token does not stay behind
+    }
+
+    [Fact]
+    public void AClipboardStepWithNothingToPutEmptiesTheClipboard()
+    {
+        _clip.Text = "";
+        Assert.Null(Macro("clipboard:{clipboard}"));
+        Assert.Equal("", _clip.Text);
+    }
+
+    [Fact]
     public void ThePastedTextIsMarkedSensitiveAndAClipboardStepIsNot()
     {
         Assert.Null(Macro("paste:token-123"));
