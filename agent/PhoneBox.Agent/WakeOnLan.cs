@@ -63,10 +63,22 @@ public static class WakeOnLan
         return null;
     }
 
-    /// <summary>True for a wired or Wi-Fi adapter with a private LAN address, a mask that leaves host bits and no skip rule against it.</summary>
+    // VPN and container adapters can own a default gateway just like a Hyper-V external switch (which must stay
+    // eligible), so what separates them is their name: Windows adapter descriptions and Linux / macOS interface names.
+    private static readonly string[] VpnNameParts =
+        ["vpn", "wireguard", "wintun", "tailscale", "zerotier", "hamachi", "nordlynx", "anyconnect", "globalprotect", "pangp", "fortinet", "check point", "juniper"];
+    private static readonly System.Text.RegularExpressions.Regex VpnOrContainerName =
+        new(@"\b(tun|tap|utun|wg)\d*\b|\b(docker|virbr|veth)\w*|\bbr-[0-9a-f]{12}\b",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    internal static bool IsVpnOrContainerAdapter(string description) =>
+        VpnNameParts.Any(p => description.Contains(p, StringComparison.OrdinalIgnoreCase)) || VpnOrContainerName.IsMatch(description);
+
+    /// <summary>True for a wired or Wi-Fi adapter with a private LAN address, a mask that leaves host bits, that is no VPN or container adapter and has no skip rule against it.</summary>
     public static bool IsEligible(NetworkInterfaceType type, string description, bool hasGateway, IPAddress address, IPAddress mask)
     {
         if (type is NetworkInterfaceType.Loopback or NetworkInterfaceType.Tunnel or NetworkInterfaceType.Ppp) return false;
+        if (IsVpnOrContainerAdapter(description)) return false;
         if (address.AddressFamily != AddressFamily.InterNetwork || mask.AddressFamily != AddressFamily.InterNetwork) return false;
         var a = address.GetAddressBytes();
         var privateLan = a[0] == 10 || (a[0] == 172 && a[1] is >= 16 and <= 31) || (a[0] == 192 && a[1] == 168);

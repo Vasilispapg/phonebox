@@ -80,6 +80,33 @@ public sealed class WakeOnLanTests
     public void A_virtual_switch_that_owns_the_gateway_stays_eligible()
         => Assert.True(WakeOnLan.IsEligible(NetworkInterfaceType.Ethernet, "Hyper-V Virtual Ethernet Adapter", true, Ip("192.168.1.20"), Ip("255.255.255.0")));
 
+    // A VPN or container adapter can own a default gateway just as a Hyper-V external switch does, so it is told apart
+    // by what it is called, not by whether it has a gateway.
+    [Theory]
+    [InlineData("TAP-Windows Adapter V9 Local Area Connection 3", "10.8.0.2", "255.255.255.0")]
+    [InlineData("WireGuard Tunnel wg0", "10.64.0.2", "255.255.255.0")]
+    [InlineData("Cisco AnyConnect Secure Mobility Client Virtual Miniport Adapter for Windows x64 Ethernet 4", "192.168.50.2", "255.255.255.0")]
+    [InlineData("Fortinet SSL VPN Virtual Ethernet Adapter Ethernet 5", "10.212.134.200", "255.255.255.0")]
+    [InlineData("NordLynx Tunnel NordLynx", "10.5.0.2", "255.255.0.0")]
+    [InlineData("ZeroTier One Virtual Port ZeroTier One [8056c2e21c000001]", "192.168.191.5", "255.255.255.0")]
+    [InlineData("tun0 tun0", "10.8.0.1", "255.255.255.0")]
+    [InlineData("utun3 utun3", "10.9.0.2", "255.255.255.0")]
+    [InlineData("docker0 docker0", "172.17.0.1", "255.255.0.0")]
+    [InlineData("virbr0 virbr0", "192.168.122.1", "255.255.255.0")]
+    [InlineData("veth12ab34 veth12ab34", "172.18.0.1", "255.255.0.0")]
+    [InlineData("br-0a1b2c3d4e5f br-0a1b2c3d4e5f", "172.19.0.1", "255.255.0.0")]
+    public void VPN_and_container_adapters_stay_out_even_with_a_gateway(string name, string address, string mask)
+        => Assert.False(WakeOnLan.IsEligible(NetworkInterfaceType.Ethernet, name, true, Ip(address), Ip(mask)));
+
+    [Theory]
+    [InlineData(NetworkInterfaceType.Ethernet, "Intel(R) Ethernet Connection (7) I219-V Ethernet")]
+    [InlineData(NetworkInterfaceType.Ethernet, "Realtek PCIe GbE Family Controller Ethernet 2")]
+    [InlineData(NetworkInterfaceType.Ethernet, "Intel(R) Ethernet Controller I225-V enp5s0")]
+    [InlineData(NetworkInterfaceType.Ethernet, "en0 en0")]
+    [InlineData(NetworkInterfaceType.Wireless80211, "Intel(R) Wi-Fi 6E AX211 160MHz Wi-Fi")]
+    public void Ordinary_wired_and_wifi_adapters_stay_eligible(NetworkInterfaceType type, string name)
+        => Assert.True(WakeOnLan.IsEligible(type, name, true, Ip("192.168.1.20"), Ip("255.255.255.0")));
+
     private static WakeOnLan.LanNic Nic(string addr, string bcast, bool wired = true)
         => new("eth", Ip(addr), Ip(bcast), Mac, wired);
 
