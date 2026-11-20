@@ -94,6 +94,7 @@
   async function config() {
     const c = await loadConfig();
     muteKeys = (c.shortcuts || []).filter((x) => x.cmd === 'builtin:mute').map((x) => x.id);
+    cycleLists = Object.fromEntries((c.shortcuts || []).filter((x) => x.cmd === 'builtin:cycle').map((x) => [x.id, JSON.stringify(x.cycle || [])]));
     return c;
   }
   const cfgVersion = () => store.get('pb-demo-version', 1);
@@ -209,12 +210,14 @@
       privacy: (() => { const on = (now() / 1000) % 60 < 20; return { mic: on, camera: false, micApps: on ? ['Zoom'] : [], cameraApps: [] }; })(),
       obs: { streaming: !!obs.streamingSince, recording: !!obs.recordingSince, recordPaused: obs.paused },
       toggles: { ...toggles, ...Object.fromEntries(muteKeys.map((id) => [id, audio.muted])) },
-      cycles: { ...cycles },
+      // a face counts only for the list it was made for (an edited list starts over)
+      cycles: Object.fromEntries(Object.entries(cycles).filter(([id, v]) => cycleLists[id] === v.list).map(([id, v]) => [id, v.target])),
     };
   }
 
   const toggles = {};
-  const cycles = {}, cyclePos = {}; // cycle keys: the id of the key that ran last, and its position in the list
+  let cycleLists = {}; // cycle key id -> its list now, as JSON
+  const cycles = {}, cyclePos = {}; // cycle keys: { target id, list } of the key that ran last, and its position in the list
   let muteKeys = ['mute']; // ids of the shortcuts whose command is builtin:mute; their state is the computer's
 
   // made-up OBS: streaming for a while, buttons and scenes work
@@ -551,7 +554,11 @@
       // ?hold=true runs the key's long-press shortcut instead (the agent resolves it; the phone sends only the held key's id)
       if (sc && q.get('hold') === 'true') sc = sc.longPress && sc.longPress !== sc.id ? shortcuts.find((s) => s.id === sc.longPress) : null;
       if (!sc) return json({ title: 'An error occurred while processing your request.', status: 500, detail: 'unknown shortcut' }, 500);
-      if (sc.cmd === 'builtin:cycle') { const n = (sc.cycle || []).length, at = n ? (cyclePos[sc.id] = ((cyclePos[sc.id] ?? -1) + 1) % n) : 0; cycles[sc.id] = (sc.cycle || [])[at]; }
+      if (sc.cmd === 'builtin:cycle') {
+        const list = JSON.stringify(sc.cycle || []), n = (sc.cycle || []).length;
+        if (cyclePos[sc.id]?.list !== list) cyclePos[sc.id] = { list, at: -1 }; // an edited list starts over
+        if (n) { const at = cyclePos[sc.id].at = (cyclePos[sc.id].at + 1) % n; cycles[sc.id] = { target: sc.cycle[at], list }; }
+      }
       else if (sc.cmd === 'builtin:mute') audio.muted = !audio.muted;
       else if (sc.toggle) toggles[sc.id] = !toggles[sc.id];
       return json({});

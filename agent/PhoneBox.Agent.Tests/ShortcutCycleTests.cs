@@ -73,7 +73,57 @@ public sealed class ShortcutCycleTests : IDisposable
         Assert.Null(second.Result);
         Assert.True(On(slow));
         Assert.True(On(fast));   // the second tap ran the second key, not the slow one again
-        Assert.Equal(fast.Id, Shortcuts.CycleStates(cfg)![id]);
+        Assert.Equal(slow.Id, Shortcuts.CycleStates(cfg)![id]); // the one that finished last is the one shown
+    }
+
+    [Fact]
+    public void AKeyThatIsStillRunningOrFailedIsNotReportedAsTheOneThatRan()
+    {
+        var id = Id();
+        var slow = new Shortcut { Id = id + "slow", Label = "slow", Cmd = "builtin:macro", Steps = ["wait:300", "keys:not_a_key"] };
+        var key = Cycle(id, slow.Id, id + "other");
+        var cfg = new AgentConfig { Shortcuts = [slow, Lamp(id + "other"), key] };
+        var tap = Task.Run(() => Shortcuts.Run(cfg, id, NullLogger.Instance));
+        Thread.Sleep(100);
+        Assert.Null(Shortcuts.CycleStates(cfg)); // claimed, but not run yet: the face does not change
+        Assert.NotNull(tap.Result);              // and it failed
+        Assert.Null(Shortcuts.CycleStates(cfg)); // so it never counts
+    }
+
+    [Fact]
+    public void WhenTwoOverlappingTapsBothFailTheNextTapRetriesTheEarlierKey()
+    {
+        var id = Id();
+        Shortcut a = new() { Id = id + "a", Label = "a", Toggle = true, Cmd = "builtin:macro", Steps = ["wait:200", "keys:not_a_key"] };
+        Shortcut b = new() { Id = id + "b", Label = "b", Toggle = true, Cmd = "builtin:macro", Steps = ["wait:200", "keys:not_a_key"] };
+        var key = Cycle(id, a.Id, b.Id);
+        var cfg = new AgentConfig { Shortcuts = [a, b, key] };
+        var first = Task.Run(() => Shortcuts.Run(cfg, id, NullLogger.Instance));
+        Thread.Sleep(50);
+        var second = Task.Run(() => Shortcuts.Run(cfg, id, NullLogger.Instance));
+        Assert.NotNull(first.Result);
+        Assert.NotNull(second.Result);
+        a.Steps = ["wait:1"]; b.Steps = ["wait:1"];           // both work now
+        Assert.Null(Shortcuts.Run(cfg, id, NullLogger.Instance));
+        Assert.True(On(a));                                    // it was a that failed first: it is tried again
+        Assert.False(On(b));
+    }
+
+    [Fact]
+    public void AnOldFailureDoesNotUndoANewerClaimAfterAFullWrap()
+    {
+        var id = Id();
+        Shortcut slowBad = new() { Id = id + "a", Label = "a", Cmd = "builtin:macro", Steps = ["wait:300", "keys:not_a_key"] };
+        Shortcut b = Lamp(id + "b"), c = Lamp(id + "c");
+        var key = Cycle(id, slowBad.Id, b.Id, c.Id);
+        var cfg = new AgentConfig { Shortcuts = [slowBad, b, c, key] };
+        var first = Task.Run(() => Shortcuts.Run(cfg, id, NullLogger.Instance)); // claims a, fails after 300 ms
+        Thread.Sleep(50);
+        Assert.Null(Shortcuts.Run(cfg, id, NullLogger.Instance));                 // b
+        Assert.Null(Shortcuts.Run(cfg, id, NullLogger.Instance));                 // c
+        Assert.NotNull(first.Result);                                             // a failed: it is next, once
+        Assert.NotNull(Shortcuts.Run(cfg, id, NullLogger.Instance));              // a again (it fails the same way, but it is the one tried)
+        Assert.Equal(c.Id, Shortcuts.CycleStates(cfg)![id]);
     }
 
     [Fact]

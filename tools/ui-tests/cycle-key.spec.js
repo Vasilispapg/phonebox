@@ -70,3 +70,20 @@ test("a cycle key shows the icon of the key that ran, and its own picture goes a
   await expect(key.locator('.k-label')).toHaveText('High');
   await expect(key.locator('.k-icon.k-icon-img')).toHaveCount(0);    // 'High' has only its emoji
 });
+
+test('deleting a key takes it out of the cycles that list it', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 860 });
+  await page.goto('/settings/#shortcuts');
+  const keys = page.locator('#deck .key:not(.add)'), selects = page.locator('section.on select');
+  await expect(keys.first()).toBeVisible();
+  await keys.nth(0).click();
+  await selects.first().selectOption({ label: 'Cycle through other keys' });
+  const base = await selects.count();
+  await page.getByRole('button', { name: 'Add a key' }).click();
+  await expect(selects).toHaveCount(base + 1);                  // one row: the first other key
+  await keys.nth(1).click();                                     // that key
+  page.once('dialog', (d) => d.accept());
+  await page.getByRole('button', { name: 'Delete' }).click();
+  await keys.nth(0).click();                                     // back to the cycle key
+  await expect(selects).toHaveCount(base);                       // its list no longer holds the deleted key
+});

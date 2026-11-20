@@ -2694,6 +2694,8 @@ function delKey() {
   const s = cfg.shortcuts[selKey];
   if (!confirm(`Delete "${s.label}"?`)) return;
   cfg.shortcuts.splice(selKey, 1);
+  // a key that cycles through the deleted one no longer lists it (the select would otherwise show another key for it)
+  for (const o of cfg.shortcuts) if (Array.isArray(o.cycle)) o.cycle = o.cycle.filter((id) => id !== s.id);
   selKey = Math.max(0, selKey - 1);
   renderDeck(); changed();
 }
