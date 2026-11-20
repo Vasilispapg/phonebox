@@ -10,11 +10,31 @@
 - News feeds on Windows: an article whose link has square brackets after the host, such as Franceinfo's
   `#xtor=RSS-3-[lestitres]`, opens in the browser instead of File Explorer's Documents folder (#312,
   [Emsaco64](https://github.com/Emsaco64)).
+- **Steam friends** and **Steam friend activity** widgets: friends' avatars, online state, last seen time and current
+  game, and a short feed of friends coming online, starting a game or going offline. They need a Steam Web API key,
+  which stays on the computer: the agent asks Steam, about once a minute and only while one of the widgets is on an
+  enabled page, and the phone never contacts Steam. The activity feed lives in memory only. See
+  [docs/STEAM.md](docs/STEAM.md) (#244, [Sawaid-hub](https://github.com/Sawaid-hub)).
+- Pomodoro: an optional sound when a step ends, off by default and silent on the night screen, at a share of the
+  phone's media volume (#305, [abdulah-x](https://github.com/abdulah-x)).
+- Trackpad on macOS: the widget now moves the pointer, clicks and scrolls on a Mac, and three- and four-finger swipes,
+  spread and pinch do what the Mac's own Trackpad settings say (Mission Control, App Exposé, moving between
+  full-screen apps, Show Desktop, Apps). It needs Accessibility for PhoneBox. New **Haptics** options set how strongly the phone vibrates;
+  a tick while scrolling is off by default, and gestures vibrate only where the computer acts on them (#300,
+  [Vasilispapg](https://github.com/Vasilispapg)).
+- On air and the `mic-in-use` / `camera-in-use` rules work on macOS: the agent reads which apps use the microphone
+  (macOS 14.2 and later; before that, only whether one does) and whether a camera is running. The camera part is
+  untested on a Mac with a built-in camera; see the guide (#301, [Vasilispapg](https://github.com/Vasilispapg)).
 
 **Agent**
+- Discord: the login no longer fails with `invalid_request: Missing "redirect_uri"`. The authorization request now
+  names the same `http://127.0.0.1` redirect as the token exchange (#316, [Sune2you](https://github.com/Sune2you)).
 - Wake-on-LAN: a **Wake a computer** shortcut (Settings › Shortcuts) turns on another machine on your network from its
   MAC address, also while the phone is away on Tailscale. It sends a magic packet on the local network only; see the
   guide for the BIOS and adapter settings the machine needs (#302, [Vasilispapg](https://github.com/Vasilispapg)).
+- Now Playing on macOS and Linux is read every second only while a panel or a `media-playing` rule asks for it, and
+  every 10 seconds otherwise, so an idle computer no longer starts `nowplaying-cli` or `playerctl` every second (#299,
+  [EgglezosHub](https://github.com/EgglezosHub)).
 
 ## 0.9.24 — 2026-11-20
 
