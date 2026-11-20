@@ -35,7 +35,7 @@ export const $ = (id) => document.getElementById(id);
 // The native bridge (window.Android) is in every frame, sandboxed widgets included, so each call carries a key that only
 // the panel's own frames receive (MainActivity.bridgeKey). This wrapper adds it.
 const BRIDGE = ['battery', 'buzz', 'haptic', 'is24Hour', 'pcs', 'selectPc', 'forgetPc', 'setBrightness', 'setHomeScreen', 'setOrientation',
-  'setPinned', 'setVolumeKeys', 'transport', 'sensors', 'version', 'canListen', 'listen', 'stopListening', 'cancelListening', 'trackpad'];
+  'setPinned', 'setVolumeKeys', 'transport', 'sensors', 'version', 'canListen', 'listen', 'stopListening', 'cancelListening', 'trackpad', 'canWake', 'wakePc'];
 export const bridge = typeof Android === 'undefined' ? null : Object.fromEntries(BRIDGE.filter((m) => typeof Android[m] === 'function')
   .map((m) => [m, (...args) => Android[m](window.__phoneboxKey || '', ...args)]));
 // Live preview inside the agent's layout editor: the layout comes from the editor (unsaved), not from the agent.
@@ -2177,8 +2177,50 @@ export async function loadPush() {
   } catch (_) {}
 }
 
+// ---------------------------------------------------------------- Wake-on-LAN
+// While the PC is unreachable the app (which holds the PC's MAC addresses) can wake it. The page only ever passes the
+// computer's id to the bridge. One tap sends one burst; the button waits 10 s before it can send again and reports
+// "didn't wake" after 3 minutes. The agent answering again (setOnline(true)) resets everything.
+const WAKE_COOLDOWN_MS = 10_000, WAKE_WINDOW_MS = 180_000;
+let wakeAt = 0, wakeTicker = 0, canWakeAt = 0, canWakeNow = false;
+// canWake() looks at the phone's network interfaces: asked at most every 5 s, since a PC that sleeps all night keeps
+// this panel offline (and calling it on every failed poll) for hours
+function wakeAvailable() {
+  if (Date.now() - canWakeAt > 5000) { canWakeAt = Date.now(); canWakeNow = !!bridge?.canWake?.(); }
+  return canWakeNow;
+}
+function wakeRender() {
+  const box = $('wake');
+  if (!box) return;
+  const waited = wakeAt ? Date.now() - wakeAt : Infinity;
+  const waking = waited < WAKE_WINDOW_MS;
+  // the 1 s timer only runs while a wake is in progress (the cooldown and the 3 minutes), not for the whole outage;
+  // stopped before the hidden check below, because the phone may have left the network and hidden the button meanwhile
+  if (!waking && wakeTicker) { clearInterval(wakeTicker); wakeTicker = 0; }
+  const offline = document.body.classList.contains('offline');
+  box.hidden = !(offline && wakeAvailable());
+  if (box.hidden) return;
+  const btn = box.querySelector('button');
+  btn.textContent = t(waking ? 'panel.waking' : 'panel.wake');
+  btn.disabled = waited < WAKE_COOLDOWN_MS;
+  box.querySelector('.note').textContent = wakeAt && !waking ? t('panel.wakeFailed') : '';
+}
+$('wake')?.querySelector('button').addEventListener('click', () => {
+  if (Date.now() - wakeAt < WAKE_COOLDOWN_MS) return;
+  const pc = pairedPcs().find((p) => p.active);
+  if (!pc || !bridge?.wakePc) return;
+  haptic();
+  if (bridge.wakePc(pc.id)) {
+    wakeAt = Date.now();
+    if (!wakeTicker) wakeTicker = setInterval(wakeRender, 1000);
+  } else toast(t('panel.wakeFailed'), 'err');
+  wakeRender();
+});
+
 export function setOnline(on) {
   document.body.classList.toggle('offline', !on);
+  if (on) { wakeAt = 0; clearInterval(wakeTicker); wakeTicker = 0; }
+  wakeRender();
   if (on && online !== true) { loadConfig(); loadQuotas(); loadWork(); loadPush(); loadApprovals(); loadCalendar(); }
   const changed = online !== on;
   online = on;
