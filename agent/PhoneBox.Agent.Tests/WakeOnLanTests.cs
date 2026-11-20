@@ -134,14 +134,51 @@ public sealed class WakeOnLanTests
     }
 
     [Fact]
-    public void A_broadcast_override_replaces_the_default_targets()
+    public void A_broadcast_override_that_is_the_networks_broadcast_replaces_the_default_targets()
     {
         var sends = new List<IPEndPoint>();
-        var err = WakeOnLan.Wake("AA:BB:CC:DD:EE:01 192.168.1.255", [Nic("192.168.1.20", "192.168.9.255")], (_, t, _) => sends.Add(t));
+        var err = WakeOnLan.Wake("AA:BB:CC:DD:EE:01 192.168.1.255", [Nic("192.168.1.20", "192.168.1.255")], (_, t, _) => sends.Add(t));
         Assert.Null(err);
         Assert.Equal(3, sends.Count);
         Assert.All(sends, t => Assert.Equal(Ip("192.168.1.255"), t.Address));
     }
+
+    [Fact]
+    public void The_limited_broadcast_is_an_allowed_override()
+    {
+        var sends = new List<IPEndPoint>();
+        Assert.Null(WakeOnLan.Wake("AA:BB:CC:DD:EE:01 255.255.255.255", [Nic("192.168.1.20", "192.168.1.255")], (_, t, _) => sends.Add(t)));
+        Assert.All(sends, t => Assert.Equal(IPAddress.Broadcast, t.Address));
+    }
+
+    // The packet holds the target's MAC: it must never be aimed at an address outside this computer's own networks.
+    [Fact]
+    public void A_broadcast_override_that_is_not_a_broadcast_of_this_computers_networks_sends_nothing()
+    {
+        var sent = 0;
+        var err = WakeOnLan.Wake("AA:BB:CC:DD:EE:01 192.168.9.255", [Nic("192.168.1.20", "192.168.1.255")], (_, _, _) => sent++);
+        Assert.Contains("broadcast", err);
+        Assert.Equal(0, sent);
+    }
+
+    [Theory]
+    [InlineData("8.8.8.8")]
+    [InlineData("1.1.1.1")]
+    [InlineData("100.101.1.2")]
+    [InlineData("169.254.1.1")]
+    [InlineData("192.168.1")]
+    [InlineData("1")]
+    [InlineData("224.0.0.1")]
+    public void A_public_or_odd_broadcast_address_is_refused_when_the_arguments_are_checked(string address)
+        => Assert.Contains("broadcast", WakeOnLan.ParseArgs("AA:BB:CC:DD:EE:01 " + address, out _, out _));
+
+    [Theory]
+    [InlineData("255.255.255.255")]
+    [InlineData("192.168.1.255")]
+    [InlineData("10.0.0.255")]
+    [InlineData("172.16.5.255")]
+    public void A_local_broadcast_address_is_accepted_when_the_arguments_are_checked(string address)
+        => Assert.Null(WakeOnLan.ParseArgs("AA:BB:CC:DD:EE:01 " + address, out _, out _));
 
     private static WakeOnLan.LanNic NicWithMac(byte last, bool wired)
         => new("n" + last, Ip("192.168.1.20"), Ip("192.168.1.255"), [0xAA, 0xBB, 0xCC, 0xDD, 0xEE, last], wired);

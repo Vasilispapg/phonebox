@@ -56,11 +56,21 @@ public static class WakeOnLan
         if (parts.Length > 2) return "too many values: use the MAC address and, optionally, a broadcast address";
         if (parts.Length == 2)
         {
-            if (!IPAddress.TryParse(parts[1], out var ip) || ip.AddressFamily != AddressFamily.InterNetwork)
-                return "not a valid broadcast address (use an IPv4 address such as 192.168.1.255)";
+            // The packet holds the target's MAC, so the override must stay on the local network: a private address
+            // (the network's broadcast, such as 192.168.1.255) or 255.255.255.255. Four dotted parts, because
+            // IPAddress.TryParse reads "1" as 0.0.0.1 and "192.168.1" as 192.168.0.1.
+            if (parts[1].Count(c => c == '.') != 3 || !IPAddress.TryParse(parts[1], out var ip) || ip.AddressFamily != AddressFamily.InterNetwork || !IsLocalBroadcast(ip))
+                return "not a local broadcast address (use this network's, such as 192.168.1.255, or 255.255.255.255)";
             broadcast = ip;
         }
         return null;
+    }
+
+    private static bool IsLocalBroadcast(IPAddress ip)
+    {
+        if (ip.Equals(IPAddress.Broadcast)) return true;
+        var a = ip.GetAddressBytes();
+        return a[0] == 10 || (a[0] == 172 && a[1] is >= 16 and <= 31) || (a[0] == 192 && a[1] == 168);
     }
 
     // VPN and container adapters can own a default gateway just like a Hyper-V external switch (which must stay
@@ -123,6 +133,9 @@ public static class WakeOnLan
     {
         if (ParseArgs(args, out var mac, out var broadcast) is { } bad) return bad;
         if (nics.Count == 0) return "no network interface to send from (a private LAN address is needed; Tailscale and VPN adapters do not count)";
+        // a private address that belongs to none of this computer's networks (a router could carry it elsewhere) is refused too
+        if (broadcast is not null && !broadcast.Equals(IPAddress.Broadcast) && !nics.Any(n => n.Broadcast.Equals(broadcast)))
+            return $"{broadcast} is not the broadcast address of any of this computer's networks (" + string.Join(", ", nics.Select(n => n.Broadcast).Distinct()) + ") or 255.255.255.255";
         var packet = BuildPacket(mac);
         var delivered = false;
         string? firstError = null;
