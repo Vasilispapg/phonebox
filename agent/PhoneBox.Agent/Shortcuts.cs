@@ -47,21 +47,30 @@ public static class Shortcuts
     public static bool? State(Shortcut sc, PushStore? push, AudioControl? audio)
     {
         if (sc.Cmd == "builtin:mute" && sc.StateKey is null) return audio?.Snapshot()?.Muted;
-        if (sc.StateKey is not null)
-        {
-            if (push?.Snapshot().TryGetValue(sc.StateKey, out var item) != true) return false;
-            var d = item!.Data;
-            if (d.ValueKind == System.Text.Json.JsonValueKind.Object && d.TryGetProperty("value", out var v)) d = v;
-            return d.ValueKind switch
-            {
-                System.Text.Json.JsonValueKind.True => true,
-                System.Text.Json.JsonValueKind.Number => d.GetDouble() != 0,
-                System.Text.Json.JsonValueKind.String => d.GetString() is { Length: > 0 } t && t.ToLowerInvariant() is not ("0" or "false" or "off" or "no"),
-                _ => false,
-            };
-        }
+        if (sc.StateKey is not null) return PushIsOn(push, sc.StateKey);
         return Remembered.TryGetValue(sc.Id, out var r) && r;
     }
+
+    /// <summary>Whether the value pushed to /api/push/{key} is on: true, a number other than 0, or text other than 0 / false / off / no.</summary>
+    internal static bool PushIsOn(PushStore? push, string key)
+    {
+        if (push?.Snapshot().TryGetValue(key, out var item) != true) return false;
+        var d = item!.Data;
+        if (d.ValueKind == System.Text.Json.JsonValueKind.Object && d.TryGetProperty("value", out var v)) d = v;
+        return d.ValueKind switch
+        {
+            System.Text.Json.JsonValueKind.True => true,
+            System.Text.Json.JsonValueKind.Number => d.GetDouble() != 0,
+            System.Text.Json.JsonValueKind.String => d.GetString() is { Length: > 0 } t && t.ToLowerInvariant() is not ("0" or "false" or "off" or "no"),
+            _ => false,
+        };
+    }
+
+    /// <summary>Tests record what a shortcut would press or type instead of sending it to the computer.</summary>
+    internal static Action<string>? TestKeys, TestType;
+
+    private static void Keys(string spec) { if (TestKeys is { } t) t(spec); else KeySender.SendKeys(spec); }
+    private static void Type(string text) { if (TestType is { } t) t(text); else KeySender.TypeText(text); }
 
     /// <returns>An error message, or null on success.</returns>
     public static string? Execute(Shortcut sc, ILogger log, AgentConfig? cfg = null, int depth = 0, PushStore? push = null, AudioControl? audio = null)
@@ -71,27 +80,48 @@ public static class Shortcuts
             switch (sc.Cmd)
             {
                 case "builtin:keys":
-                    KeySender.SendKeys(sc.Args ?? "");
+                    Keys(sc.Args ?? "");
                     break;
                 case "builtin:text":
-                    KeySender.TypeText(sc.Args ?? "");
+                    Type(sc.Args ?? "");
                     break;
                 case "builtin:macro":
                     if (depth > 3) throw new InvalidOperationException("macros call each other too deeply");
+                    MacroFlow.Check(sc.Steps ?? []);
+                    // one entry per open if:, with the state outside it; "active" is whether the steps here run
+                    var open = new Stack<(bool Outer, bool Holds)>();
+                    var active = true;
                     foreach (var step in sc.Steps ?? [])
                     {
+                        switch (MacroFlow.Classify(step, out var condition))
+                        {
+                            case MacroFlow.Word.If:
+                                // a condition inside a block that is skipped is not even looked at
+                                var holds = active && MacroFlow.Evaluate(condition, cfg, push, audio);
+                                open.Push((active, holds));
+                                active = holds;
+                                continue;
+                            case MacroFlow.Word.Else:
+                                var (outerOfElse, heldIf) = open.Peek();
+                                active = outerOfElse && !heldIf;
+                                continue;
+                            case MacroFlow.Word.EndIf:
+                                active = open.Pop().Outer;
+                                continue;
+                        }
+                        if (!active) continue;
                         var i = step.IndexOf(':');
                         var (kind, value) = i > 0 ? (step[..i].Trim().ToLowerInvariant(), step[(i + 1)..].Trim()) : ("keys", step.Trim());
                         switch (kind)
                         {
-                            case "keys": KeySender.SendKeys(value); break;
-                            case "text": KeySender.TypeText(value); break;
+                            case "keys": Keys(value); break;
+                            case "text": Type(value); break;
                             case "wait": Thread.Sleep(Math.Clamp(int.TryParse(value, out var ms) ? ms : 0, 0, 10_000)); break;
                             case "shortcut":
                                 var other = cfg?.Shortcuts.FirstOrDefault(s => s.Id == value) ?? throw new InvalidOperationException($"no such shortcut: {value}");
                                 if (RunCore(cfg, other, log, push, audio, depth + 1) is { } err) throw new InvalidOperationException(err);
                                 break;
-                            default: throw new InvalidOperationException($"unknown macro step \"{step}\" (use keys:, text:, wait: or shortcut:)");
+                            default: throw new InvalidOperationException($"unknown macro step \"{step}\" (use keys:, text:, wait:, shortcut: or if: … else … endif)");
                         }
                         Thread.Sleep(40);
                     }
