@@ -912,6 +912,8 @@ function applyCycles(root) {
     if (icon) { icon.classList.remove('k-icon-img'); icon.replaceChildren(rich(face.icon || '•')); }
     const text = b.querySelector('.k-label');
     if (text) text.textContent = face.label;
+    // a key that had no visible name was named by its id (aria-label); that name follows the face too
+    if (b.hasAttribute('aria-label')) b.setAttribute('aria-label', String(face.label || '').trim() || face.id);
   });
 }
 

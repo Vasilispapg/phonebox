@@ -59,6 +59,23 @@ public sealed class ShortcutCycleTests : IDisposable
     }
 
     [Fact]
+    public void EditingTheListStartsTheCycleOver()
+    {
+        var id = Id();
+        Shortcut a = Lamp(id + "a"), b = Lamp(id + "b"), key = Cycle(id, a.Id, b.Id);
+        var cfg = new AgentConfig { Shortcuts = [a, b, key] };
+        Shortcuts.Run(cfg, id, NullLogger.Instance);
+        Shortcuts.Run(cfg, id, NullLogger.Instance);
+        Assert.Equal(1, Shortcuts.CycleStates(cfg)![id]); // b ran last
+        key.Cycle = [b.Id, a.Id];                           // the same keys, in the other order
+        Assert.Null(Shortcuts.CycleStates(cfg));            // position 1 would now mean a: not sent
+        var bBefore = On(b);
+        Shortcuts.Run(cfg, id, NullLogger.Instance);        // starts from the first key of the new list
+        Assert.Equal(0, Shortcuts.CycleStates(cfg)![id]);
+        Assert.Equal(!bBefore, On(b));
+    }
+
+    [Fact]
     public void KeysThatCycleIntoEachOtherStopInsteadOfRunningForever()
     {
         var id = Id();

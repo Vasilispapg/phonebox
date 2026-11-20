@@ -64,7 +64,9 @@ public static class Shortcuts
     }
 
     // builtin:cycle: the position (in the key's list) of the key that ran last; lost when the agent restarts, like a toggle's state
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> CycleAt = new();
+    // the list is stored with the position: after the list is edited the old position would point at another key
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (int At, string List)> CycleAt = new();
+    private static string ListOf(Shortcut sc) => string.Join('\n', sc.Cycle ?? []);
     private static readonly object CycleLock = new();
 
     /// <summary>Where each cycle key stands, for the phone: the position of the key that ran last. Keys never tapped are left out.</summary>
@@ -72,7 +74,7 @@ public static class Shortcuts
     {
         Dictionary<string, int>? map = null;
         foreach (var sc in cfg.Shortcuts.Where(s => s.Cmd == "builtin:cycle"))
-            if (CycleAt.TryGetValue(sc.Id, out var at) && at >= 0 && at < (sc.Cycle?.Count ?? 0)) (map ??= [])[sc.Id] = at;
+            if (CycleAt.TryGetValue(sc.Id, out var last) && last.List == ListOf(sc) && last.At < (sc.Cycle?.Count ?? 0)) (map ??= [])[sc.Id] = last.At;
         return map;
     }
 
@@ -83,12 +85,12 @@ public static class Shortcuts
         var ids = sc.Cycle ?? [];
         if (cfg is null || ids.Count == 0) return "this key has no keys to cycle through";
         int next;
-        lock (CycleLock) next = (CycleAt.GetValueOrDefault(sc.Id, -1) + 1) % ids.Count;
+        lock (CycleLock) next = (CycleAt.TryGetValue(sc.Id, out var last) && last.List == ListOf(sc) ? last.At + 1 : 0) % ids.Count;
         var target = cfg.Shortcuts.FirstOrDefault(s => s.Id == ids[next]);
         if (target is null) return $"no such shortcut: {ids[next]}";
         var err = RunCore(cfg, target, log, push, audio, depth + 1);
         // only a key that ran counts: after a failure the next tap tries the same one again
-        if (err is null) CycleAt[sc.Id] = next;
+        if (err is null) CycleAt[sc.Id] = (next, ListOf(sc));
         return err;
     }
 
