@@ -56,6 +56,8 @@ h2 { font-size: 20px; margin: 0 0 4px; }
 .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; min-width: 0; }
 .field label { font-size: 12.5px; color: var(--muted); font-weight: 600; }
+/* a widget's options in groups: an option with a "section" starts a new one under a small heading */
+.opt-section { margin: 18px 0 10px; padding-top: 12px; border-top: 1px solid var(--line, #e5e7eb); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
 .field .hint { font-size: 12px; color: var(--muted); }
 input[type=text], input[type=number], input[type=time], select, textarea {
   background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; outline: none; min-width: 0;
@@ -1151,6 +1153,13 @@ function deckCols() {
 }
 
 function optVal(w, o) { return w.options && o.key in w.options ? w.options[o.key] : o.default; }
+/** An option with showWhen {key, not} is drawn only while the widget's option <key> is not set to <not> (an option that does nothing while another is off is not offered). */
+function optionShown(w, d, o) {
+  if (!o.showWhen) return true;
+  const driver = d.options.find((x) => x.key === o.showWhen.key);
+  const v = driver ? optVal(w, driver) : undefined;
+  return v !== o.showWhen.not;
+}
 /** The catalog's defaults for a widget type, written out so the panel and the agent see what the inspector shows. */
 function defaultOptions(type) {
   const options = {};
@@ -1524,7 +1533,7 @@ function renderInspector() {
         } }, t('s.js.dup')),
         h('button', { class: 'btn sm danger', onclick: () => { p.widgets.splice(selWidget, 1); selWidget = -1; renderCanvas(); renderInspector(); changed(); } }, t('s.js.remove')))),
     h('p', { class: 'hint', style: { margin: '0 0 12px' } }, d.desc),
-    ...d.options.map((o) => optionField(w, o)),
+    ...d.options.filter((o) => optionShown(w, d, o)).flatMap((o) => [...(o.section ? [h('h4', { class: 'opt-section' }, o.section)] : []), optionField(w, o)]),
     appearanceEditor(w, () => [cfg.display?.appearance, p.appearance], t('s.js.widgetAppearance'), true),
     h('div', { class: 'row', style: { gap: '8px' } }, num('x', t('s.js.col'), 0, catalog.cols - 1), num('y', t('s.js.row'), 0, catalog.rows - 1),
       num('w', t('s.js.width'), d.minW, catalog.cols), num('h', t('s.js.height'), d.minH, catalog.rows)));
@@ -1649,11 +1658,14 @@ function renderStackWidgetsOption(w, o) {
           h('button', { type: 'button', class: 'stack-btn-sm', title: t('panel.close'), onclick: (e) => { e.stopPropagation(); activeStackSubIdx = -1; renderInspector(); } }, icon('x'))
         ),
         ...(subOptions.length > 0
-          ? subOptions.map((subO) => optionField(subW, subO, (key, val) => {
-              item.options = item.options || {};
-              item.options[key] = val;
-              save(false);
-            }))
+          ? subOptions.filter((subO) => optionShown(subW, d, subO)).flatMap((subO) => [
+              ...(subO.section ? [h('h4', { class: 'opt-section' }, subO.section)] : []),
+              optionField(subW, subO, (key, val) => {
+                item.options = item.options || {};
+                item.options[key] = val;
+                save(false);
+              }),
+            ])
           : [h('p', { class: 'hint', style: { margin: '2px 0 0', fontSize: '12px' } }, 'This widget has no additional settings.')])
       );
       rowsAndConfigs.push(configBox);
@@ -1737,7 +1749,9 @@ function optionField(w, o, onValChange) {
           onchange: (e) => { set(o.key, e.target.checked); if (haFlag) renderInspector(); } }), o.label);
       }
     case 'select': {
-      const select = h('select', { onchange: (e) => set(o.key, e.target.value) });
+      // the options that depend on this one are drawn again when it changes
+      const drives = widgetDef(w.type)?.options?.some((x) => x.showWhen?.key === o.key);
+      const select = h('select', { onchange: (e) => { set(o.key, e.target.value); if (drives) renderInspector(); } });
       const fill = (choices) => {
         const selected = optVal(w, o);
         const seen = new Set(choices.map((c) => c[0]));
@@ -3048,6 +3062,7 @@ function localizeCatalog() {
     w.category = tc(w.category);
     for (const o of w.options || []) {
       if (o.label) o.label = tc(o.label);
+      if (o.section) o.section = tc(o.section);
       for (const c of o.choices || []) if (c[1]) c[1] = tc(c[1]);
     }
   }
