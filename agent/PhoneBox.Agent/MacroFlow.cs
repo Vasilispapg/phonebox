@@ -33,7 +33,11 @@ internal static class MacroFlow
         return Word.None;
     }
 
-    /// <summary>Checks the whole macro's structure before any step runs, so a typo cannot leave it half done.</summary>
+    /// <summary>
+    /// Checks this macro's if / else / endif structure and conditions before any of its own steps run, so a typo cannot
+    /// leave it half done. A macro that a <c>shortcut:</c> step runs is checked when that step runs, so a typo in it
+    /// shows only after the steps of the macro that called it.
+    /// </summary>
     internal static void Check(IEnumerable<string> steps, AgentConfig? cfg = null)
     {
         var open = new Stack<bool>(); // one entry per open if: has its else been seen
