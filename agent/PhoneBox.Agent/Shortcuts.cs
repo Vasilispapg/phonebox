@@ -72,6 +72,47 @@ public static class Shortcuts
     private static void PressKeys(string spec) { if (TestKeys is { } t) t(spec); else KeySender.SendKeys(spec); }
     private static void TypeOut(string text) { if (TestType is { } t) t(text); else KeySender.TypeText(text); }
 
+    private const string ClipboardTag = "{clipboard}";
+    private const int MaxClipboardChars = 10_000;
+
+    /// <summary>How long a paste: step leaves its text on the clipboard after the paste keys, so the program has read it.</summary>
+    internal static int PasteSettleMs = 400;
+
+    /// <summary>
+    /// Replaces {clipboard} with the text on the clipboard (at most 10,000 characters, so a copied page is not typed out
+    /// for minutes). The clipboard is read only when the text asks for it, and its content never leaves the agent.
+    /// </summary>
+    internal static string WithClipboard(string text)
+    {
+        if (!text.Contains(ClipboardTag, StringComparison.Ordinal)) return text;
+        var clip = Clipboard.GetText();
+        if (clip.Length > MaxClipboardChars)
+        {
+            // not between the two halves of a character outside the BMP (an emoji): a lone half cannot be typed
+            var cut = char.IsHighSurrogate(clip[MaxClipboardChars - 1]) ? MaxClipboardChars - 1 : MaxClipboardChars;
+            clip = clip[..cut];
+        }
+        return text.Replace(ClipboardTag, clip, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Pastes the text through the clipboard (instant for long text, and right for any character) and puts back what was
+    /// on the clipboard, unless something else has been copied in the meantime. The text is kept out of Windows'
+    /// clipboard history and cloud clipboard. When the clipboard cannot be read, the pasted text stays on it.
+    /// </summary>
+    private static void PasteThroughClipboard(string text)
+    {
+        string? before;
+        try { before = Clipboard.GetText(); } catch (Exception ex) when (ex is InvalidOperationException or TimeoutException) { before = null; }
+        Clipboard.SetText(text, sensitive: true);
+        Thread.Sleep(40);
+        PressKeys(OperatingSystem.IsMacOS() ? "win+v" : "ctrl+v");
+        if (before is null) return;
+        Thread.Sleep(PasteSettleMs);
+        try { if (Clipboard.GetText() == text) Clipboard.SetText(before, sensitive: true); }
+        catch (Exception ex) when (ex is InvalidOperationException or TimeoutException) { }
+    }
+
     /// <returns>An error message, or null on success.</returns>
     public static string? Execute(Shortcut sc, ILogger log, AgentConfig? cfg = null, int depth = 0, PushStore? push = null, AudioControl? audio = null)
     {
@@ -83,7 +124,7 @@ public static class Shortcuts
                     PressKeys(sc.Args ?? "");
                     break;
                 case "builtin:text":
-                    TypeOut(sc.Args ?? "");
+                    TypeOut(WithClipboard(sc.Args ?? ""));
                     break;
                 case "builtin:macro":
                     if (depth > 3) throw new InvalidOperationException("macros call each other too deeply");
@@ -115,13 +156,15 @@ public static class Shortcuts
                         switch (kind)
                         {
                             case "keys": PressKeys(value); break;
-                            case "text": TypeOut(value); break;
+                            case "text": TypeOut(WithClipboard(value)); break;
+                            case "clipboard": Clipboard.SetText(WithClipboard(value)); break;
+                            case "paste": PasteThroughClipboard(WithClipboard(value)); break;
                             case "wait": Thread.Sleep(Math.Clamp(int.TryParse(value, out var ms) ? ms : 0, 0, 10_000)); break;
                             case "shortcut":
                                 var other = cfg?.Shortcuts.FirstOrDefault(s => s.Id == value) ?? throw new InvalidOperationException($"no such shortcut: {value}");
                                 if (RunCore(cfg, other, log, push, audio, depth + 1) is { } err) throw new InvalidOperationException(err);
                                 break;
-                            default: throw new InvalidOperationException($"unknown macro step \"{step}\" (use keys:, text:, wait:, shortcut: or if: … else … endif)");
+                            default: throw new InvalidOperationException($"unknown macro step \"{step}\" (use keys:, text:, clipboard:, paste:, wait:, shortcut: or if: … else … endif)");
                         }
                         Thread.Sleep(40);
                     }
