@@ -78,7 +78,8 @@ public static class WakeOnLan
     private static readonly string[] VpnNameParts =
         ["vpn", "wireguard", "wintun", "tailscale", "zerotier", "hamachi", "nordlynx", "anyconnect", "globalprotect", "pangp", "fortinet", "check point", "juniper"];
     private static readonly System.Text.RegularExpressions.Regex VpnOrContainerName =
-        new(@"\b(tun|tap|utun|wg)\d*\b|\b(docker|virbr|veth)\w*|\bbr-[0-9a-f]{12}\b",
+        // veth is "veth" plus hex (veth12ab34) and nothing else: a looser "veth\w*" also matches the Hyper-V adapter "vEthernet"
+        new(@"\b(tun|tap|utun|wg)\d*\b|\b(docker|virbr)\w*|\bveth[0-9a-f]*\b|\bbr-[0-9a-f]{12}\b",
             System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     internal static bool IsVpnOrContainerAdapter(string description) =>

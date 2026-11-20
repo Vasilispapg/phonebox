@@ -104,6 +104,10 @@ public sealed class WakeOnLanTests
     [InlineData(NetworkInterfaceType.Ethernet, "Intel(R) Ethernet Controller I225-V enp5s0")]
     [InlineData(NetworkInterfaceType.Ethernet, "en0 en0")]
     [InlineData(NetworkInterfaceType.Wireless80211, "Intel(R) Wi-Fi 6E AX211 160MHz Wi-Fi")]
+    // what EligibleNics passes for a Hyper-V external switch that took over the physical adapter: description + name.
+    // Its name starts with "vEth", which must not be mistaken for a Linux "veth" container interface.
+    [InlineData(NetworkInterfaceType.Ethernet, "Hyper-V Virtual Ethernet Adapter vEthernet (External)")]
+    [InlineData(NetworkInterfaceType.Ethernet, "Hyper-V Virtual Ethernet Adapter #2 vEthernet (External Switch)")]
     public void Ordinary_wired_and_wifi_adapters_stay_eligible(NetworkInterfaceType type, string name)
         => Assert.True(WakeOnLan.IsEligible(type, name, true, Ip("192.168.1.20"), Ip("255.255.255.0")));
 
