@@ -116,6 +116,28 @@ public sealed class WakeOnLanTests
         Assert.All(sends, t => Assert.Equal(Ip("192.168.1.255"), t.Address));
     }
 
+    private static WakeOnLan.LanNic NicWithMac(byte last, bool wired)
+        => new("n" + last, Ip("192.168.1.20"), Ip("192.168.1.255"), [0xAA, 0xBB, 0xCC, 0xDD, 0xEE, last], wired);
+
+    [Fact]
+    public void Reported_macs_put_wired_adapters_first_without_duplicates_and_stop_at_four()
+    {
+        var nics = new[]
+        {
+            NicWithMac(1, wired: false), NicWithMac(2, wired: true), NicWithMac(2, wired: true), NicWithMac(3, wired: false),
+            NicWithMac(4, wired: true), NicWithMac(5, wired: false), NicWithMac(6, wired: true),
+        };
+        Assert.Equal(["AA:BB:CC:DD:EE:02", "AA:BB:CC:DD:EE:04", "AA:BB:CC:DD:EE:06", "AA:BB:CC:DD:EE:01"], WakeOnLan.LocalMacs(nics));
+    }
+
+    [Fact]
+    public void The_phone_may_ask_for_the_macs_over_wifi_but_not_for_anything_else_under_wake()
+    {
+        Assert.True(Lan.AllowedOverLan("/api/wake/macs"));
+        Assert.False(Lan.AllowedOverLan("/api/wake"));
+        Assert.False(Lan.AllowedOverLan("/api/wake/send"));
+    }
+
     [Fact]
     public void A_failing_sender_is_reported()
     {
