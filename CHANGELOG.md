@@ -147,6 +147,9 @@ macOS Accessibility permission that survives updates.
   `numpadmultiply`, `numpaddivide` and `numpaddecimal` (also written `num3`, `kp3` or `KP_3`), sent as the keypad's own
   keys, so a shortcut bound to Ctrl+Alt+Numpad3 in Discord or a game is matched (#270,
   [adrianhermida](https://github.com/adrianhermida)).
+- Wake-on-LAN: a **Wake a computer** shortcut (Settings › Shortcuts) turns on another machine on your network from its
+  MAC address, also while the phone is away on Tailscale. It sends a magic packet on the local network only; see the
+  guide for the BIOS and adapter settings the machine needs.
 
 ## 0.9.21 — 2026-11-18
 
