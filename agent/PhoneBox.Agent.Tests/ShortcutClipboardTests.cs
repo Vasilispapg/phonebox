@@ -56,6 +56,14 @@ public sealed class ShortcutClipboardTests : IDisposable
     }
 
     [Fact]
+    public void WhenThePasteKeysFailTheOldTextStillComesBack()
+    {
+        Shortcuts.TestKeys = _ => throw new InvalidOperationException("no keyboard");
+        Assert.NotNull(Macro("paste:secret-token"));
+        Assert.Equal("from the clipboard", _clip.Text);
+    }
+
+    [Fact]
     public void AfterPastingOverAPictureTheClipboardIsLeftEmptyNotHoldingThePastedText()
     {
         _clip.Text = ""; // a picture or files read as no text

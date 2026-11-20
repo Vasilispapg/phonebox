@@ -162,19 +162,37 @@ public static class Shortcuts
     /// on the clipboard, unless something else has been copied in the meantime. The text is kept out of Windows'
     /// clipboard history and cloud clipboard. When the clipboard cannot be read, the pasted text stays on it.
     /// </summary>
+    // one paste at a time: two overlapping runs (the phone, a rule, the Control Deck) would each save the other's
+    // pasted text as "what was copied" and put the wrong text back
+    private static readonly object PasteGate = new();
+
     private static void PasteThroughClipboard(string text)
     {
-        string? before;
-        try { before = Clipboard.GetText(); } catch (Exception ex) when (ex is InvalidOperationException or TimeoutException) { before = null; }
-        Clipboard.SetText(text, sensitive: true);
-        Thread.Sleep(40);
-        PressKeys(OperatingSystem.IsMacOS() ? "win+v" : "ctrl+v");
-        if (before is null) return;
-        Thread.Sleep(PasteSettleMs);
-        // the text that was copied comes back; a picture or files read as "" and cannot be put back, so the clipboard is
-        // emptied instead of keeping the pasted text (a token, say). Something copied in the meantime is left alone.
-        try { if (Clipboard.GetText() == text) Clipboard.SetText(before, sensitive: true); }
-        catch (Exception ex) when (ex is InvalidOperationException or TimeoutException) { }
+        lock (PasteGate)
+        {
+            string? before;
+            try { before = Clipboard.GetText(); } catch (Exception ex) when (ex is InvalidOperationException or TimeoutException) { before = null; }
+            Clipboard.SetText(text, sensitive: true);
+            var pasted = false;
+            try
+            {
+                Thread.Sleep(40);
+                PressKeys(OperatingSystem.IsMacOS() ? "win+v" : "ctrl+v");
+                pasted = true;
+            }
+            finally
+            {
+                // also when the paste keys failed: the pasted text (a token, say) must not stay on the clipboard
+                if (before is not null)
+                {
+                    if (pasted) Thread.Sleep(PasteSettleMs);
+                    // the text that was copied comes back; a picture or files read as "" and cannot be put back, so the
+                    // clipboard is emptied instead of keeping the pasted text. Something copied in the meantime is left alone.
+                    try { if (Clipboard.GetText() == text) Clipboard.SetText(before, sensitive: true); }
+                    catch (Exception ex) when (ex is InvalidOperationException or TimeoutException) { }
+                }
+            }
+        }
     }
 
     /// <returns>An error message, or null on success.</returns>
