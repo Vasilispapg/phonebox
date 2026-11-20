@@ -821,7 +821,20 @@ app.MapGet("/api/work/conversation", (string id, ConfigStore cfg, SessionMonitor
     return Results.Json(ClaudeTranscript.ForPhone(cfg.Get().Claude.ShareConversation, sessions.Snapshot(), id));
 });
 
-// Permission prompts waiting for the phone (posted by the Claude Code hook, see ClaudeHook.cs).
+// Codex uses the same PermissionRequest decision contract, through ~/.codex/hooks.json.
+app.MapPost(CodexHook.Endpoint, async (HttpRequest req, ConfigStore cfg, ApprovalStore approvals, SessionMonitor sessions) =>
+{
+    JsonElement input;
+    try { input = (await JsonDocument.ParseAsync(req.Body)).RootElement.Clone(); }
+    catch (JsonException) { return Results.Text(""); }
+    var output = await CodexHook.HandleAsync(input, cfg, approvals, sessions, req.HttpContext.RequestAborted);
+    return output is null ? Results.Text("") : Results.Json(output);
+});
+app.MapGet("/api/codex/hook", () => Results.Json(new { installed = CodexHook.Installed(), path = CodexHook.HooksPath }));
+app.MapPost("/api/codex/hook", (ConfigStore cfg) => CodexHook.Configure(true, Port, cfg.Get().Claude.TimeoutSec) is { } err ? Results.BadRequest(new { error = err }) : Results.Ok());
+app.MapDelete("/api/codex/hook", (ConfigStore cfg) => CodexHook.Configure(false, Port, cfg.Get().Claude.TimeoutSec) is { } err ? Results.BadRequest(new { error = err }) : Results.Ok());
+
+// Permission prompts waiting for the phone (posted by an AI coding agent hook).
 app.MapGet("/api/approvals", (ApprovalStore a) => Results.Json(new { items = a.Snapshot() }));
 app.MapPost("/api/approvals/{id}", (string id, string decision, ApprovalStore a) => a.Decide(id, decision) ? Results.Ok() : Results.NotFound());
 

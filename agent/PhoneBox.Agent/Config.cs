@@ -223,9 +223,9 @@ public sealed class UpdateConfig
 
 public sealed class ClaudeConfig
 {
-    /// <summary>Show Claude Code permission prompts on the phone (needs the hook, see Settings › General).</summary>
+    /// <summary>Show AI coding-agent permission prompts on the phone (needs an agent hook, see Settings › General).</summary>
     public bool PhoneApprovals { get; set; } = true;
-    /// <summary>How long the phone may take before Claude Code asks in the terminal instead.</summary>
+    /// <summary>How long the phone may take before the coding agent asks in its normal UI instead.</summary>
     public int TimeoutSec { get; set; } = 90;
     /// <summary>Let the phone open a Claude Code session's recent messages and steps, read from its chat file on this
     /// computer. They are your prompts and Claude's replies, so this stays off until you turn it on.</summary>
