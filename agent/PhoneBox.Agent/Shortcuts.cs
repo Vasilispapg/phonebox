@@ -69,8 +69,8 @@ public static class Shortcuts
     /// <summary>Tests record what a shortcut would press or type instead of sending it to the computer.</summary>
     internal static Action<string>? TestKeys, TestType;
 
-    private static void Keys(string spec) { if (TestKeys is { } t) t(spec); else KeySender.SendKeys(spec); }
-    private static void Type(string text) { if (TestType is { } t) t(text); else KeySender.TypeText(text); }
+    private static void PressKeys(string spec) { if (TestKeys is { } t) t(spec); else KeySender.SendKeys(spec); }
+    private static void TypeOut(string text) { if (TestType is { } t) t(text); else KeySender.TypeText(text); }
 
     /// <returns>An error message, or null on success.</returns>
     public static string? Execute(Shortcut sc, ILogger log, AgentConfig? cfg = null, int depth = 0, PushStore? push = null, AudioControl? audio = null)
@@ -80,10 +80,10 @@ public static class Shortcuts
             switch (sc.Cmd)
             {
                 case "builtin:keys":
-                    Keys(sc.Args ?? "");
+                    PressKeys(sc.Args ?? "");
                     break;
                 case "builtin:text":
-                    Type(sc.Args ?? "");
+                    TypeOut(sc.Args ?? "");
                     break;
                 case "builtin:macro":
                     if (depth > 3) throw new InvalidOperationException("macros call each other too deeply");
@@ -114,8 +114,8 @@ public static class Shortcuts
                         var (kind, value) = i > 0 ? (step[..i].Trim().ToLowerInvariant(), step[(i + 1)..].Trim()) : ("keys", step.Trim());
                         switch (kind)
                         {
-                            case "keys": Keys(value); break;
-                            case "text": Type(value); break;
+                            case "keys": PressKeys(value); break;
+                            case "text": TypeOut(value); break;
                             case "wait": Thread.Sleep(Math.Clamp(int.TryParse(value, out var ms) ? ms : 0, 0, 10_000)); break;
                             case "shortcut":
                                 var other = cfg?.Shortcuts.FirstOrDefault(s => s.Id == value) ?? throw new InvalidOperationException($"no such shortcut: {value}");
