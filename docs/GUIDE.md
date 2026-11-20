@@ -170,6 +170,20 @@ default does not reach the machine; it has to be the broadcast address of one of
 adapter of the computer it runs on, so the key also works when the phone is away, for example over Tailscale. It
 reports "packets sent", not "the machine is up": the machine has to be set up to listen.
 
+**Waking the computer the phone is paired with.** While that computer is asleep or off, its agent is not running, so
+the phone cannot ask it for anything. The Android app therefore keeps the computer's MAC addresses and shows a **Wake
+the PC** button under the "PC not connected" badge. Tap it and the phone sends the magic packet itself, from its Wi-Fi,
+to the computer's wired adapter; the button then reads *Waking…* until the agent answers (up to 3 minutes), and says it
+did not wake after that.
+
+The button appears only when the phone knows the computer's MAC addresses **and** is on one of the computer's own
+networks: the phone's network has to hold one of the addresses the computer was paired with, so a packet is never sent
+on a café's or a hotel's Wi-Fi. The computer gives its MAC addresses to the phone when Wi-Fi pairing is turned on
+(Settings › General › Wi-Fi & Tailscale), over the USB cable as well as when you pair over Wi-Fi; with Wi-Fi pairing off
+there are no MAC addresses and no button. If the computer later reports none (for example while its network adapter
+is down), the phone keeps the ones it has. On Android 5.0 and 5.1 the button is not offered, because a packet cannot be
+tied to the Wi-Fi network there.
+
 What it does not do: it cannot reach across the Internet, Tailscale or mobile data (a magic packet is a broadcast on
 the local network), it cannot wake a machine over Wi-Fi in most cases (use a cable), and, like every Wake-on-LAN
 packet, it carries no password, so anyone on the same network who knows a MAC address can wake that machine.
