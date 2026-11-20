@@ -201,7 +201,7 @@ networks: the phone's network has to hold one of the addresses the computer was 
 on a café's or a hotel's Wi-Fi. The computer gives its MAC addresses to the phone when Wi-Fi pairing is turned on
 (Settings › General › Wi-Fi & Tailscale), over the USB cable as well as when you pair over Wi-Fi; with Wi-Fi pairing off
 there are no MAC addresses and no button. If the computer later reports none (for example while its network adapter
-is down), the phone keeps the ones it has. On Android 5.0 and 5.1 the button is not offered, because a packet cannot be
+is down), the phone keeps the ones it has. On Android 5.0 the button is not offered, because a packet cannot be
 tied to the Wi-Fi network there.
 
 What it does not do: it cannot reach across the Internet, Tailscale or mobile data (a magic packet is a broadcast on
