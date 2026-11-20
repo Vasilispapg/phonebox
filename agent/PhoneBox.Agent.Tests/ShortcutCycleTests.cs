@@ -51,11 +51,29 @@ public sealed class ShortcutCycleTests : IDisposable
         var cfg = new AgentConfig { Shortcuts = [a, b, key] };
         Assert.Null(Shortcuts.CycleStates(cfg)); // never tapped
         Shortcuts.Run(cfg, id, NullLogger.Instance);
-        Assert.Equal(0, Shortcuts.CycleStates(cfg)![id]);
+        Assert.Equal(a.Id, Shortcuts.CycleStates(cfg)![id]);
         Shortcuts.Run(cfg, id, NullLogger.Instance);
-        Assert.Equal(1, Shortcuts.CycleStates(cfg)![id]);
+        Assert.Equal(b.Id, Shortcuts.CycleStates(cfg)![id]);
         key.Cycle = [a.Id]; // the list shrank since: a stale position is not sent
         Assert.Null(Shortcuts.CycleStates(cfg));
+    }
+
+    [Fact]
+    public void TwoTapsAtOnceRunTwoDifferentKeys()
+    {
+        var id = Id();
+        // the first key is slow, so the second tap arrives while it still runs
+        var slow = new Shortcut { Id = id + "slow", Label = "slow", Toggle = true, Cmd = "builtin:macro", Steps = ["wait:400"] };
+        Shortcut fast = Lamp(id + "fast"), key = Cycle(id, slow.Id, fast.Id);
+        var cfg = new AgentConfig { Shortcuts = [slow, fast, key] };
+        var first = Task.Run(() => Shortcuts.Run(cfg, id, NullLogger.Instance));
+        Thread.Sleep(100);
+        var second = Task.Run(() => Shortcuts.Run(cfg, id, NullLogger.Instance));
+        Assert.Null(first.Result);
+        Assert.Null(second.Result);
+        Assert.True(On(slow));
+        Assert.True(On(fast));   // the second tap ran the second key, not the slow one again
+        Assert.Equal(fast.Id, Shortcuts.CycleStates(cfg)![id]);
     }
 
     [Fact]
@@ -66,12 +84,12 @@ public sealed class ShortcutCycleTests : IDisposable
         var cfg = new AgentConfig { Shortcuts = [a, b, key] };
         Shortcuts.Run(cfg, id, NullLogger.Instance);
         Shortcuts.Run(cfg, id, NullLogger.Instance);
-        Assert.Equal(1, Shortcuts.CycleStates(cfg)![id]); // b ran last
+        Assert.Equal(b.Id, Shortcuts.CycleStates(cfg)![id]); // b ran last
         key.Cycle = [b.Id, a.Id];                           // the same keys, in the other order
         Assert.Null(Shortcuts.CycleStates(cfg));            // position 1 would now mean a: not sent
         var bBefore = On(b);
         Shortcuts.Run(cfg, id, NullLogger.Instance);        // starts from the first key of the new list
-        Assert.Equal(0, Shortcuts.CycleStates(cfg)![id]);
+        Assert.Equal(b.Id, Shortcuts.CycleStates(cfg)![id]);
         Assert.Equal(!bBefore, On(b));
     }
 

@@ -63,18 +63,21 @@ public static class Shortcuts
         return Remembered.TryGetValue(sc.Id, out var r) && r;
     }
 
-    // builtin:cycle: the position (in the key's list) of the key that ran last; lost when the agent restarts, like a toggle's state
-    // the list is stored with the position: after the list is edited the old position would point at another key
+    // builtin:cycle: the position (in the key's list) of the key that ran last; lost when the agent restarts, like a toggle's state.
+    // The list is stored with the position: after the list is edited the old position would point at another key.
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (int At, string List)> CycleAt = new();
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, object> CycleGates = new();
     private static string ListOf(Shortcut sc) => string.Join('\n', sc.Cycle ?? []);
-    private static readonly object CycleLock = new();
 
-    /// <summary>Where each cycle key stands, for the phone: the position of the key that ran last. Keys never tapped are left out.</summary>
-    public static Dictionary<string, int>? CycleStates(AgentConfig cfg)
+    /// <summary>
+    /// Where each cycle key stands, for the phone: the id of the key that ran last. An id, not a position, so the phone
+    /// shows the right face even when it has not yet loaded a list that was edited. Keys never tapped are left out.
+    /// </summary>
+    public static Dictionary<string, string>? CycleStates(AgentConfig cfg)
     {
-        Dictionary<string, int>? map = null;
+        Dictionary<string, string>? map = null;
         foreach (var sc in cfg.Shortcuts.Where(s => s.Cmd == "builtin:cycle"))
-            if (CycleAt.TryGetValue(sc.Id, out var last) && last.List == ListOf(sc) && last.At < (sc.Cycle?.Count ?? 0)) (map ??= [])[sc.Id] = last.At;
+            if (CycleAt.TryGetValue(sc.Id, out var last) && last.List == ListOf(sc) && last.At < (sc.Cycle?.Count ?? 0)) (map ??= [])[sc.Id] = sc.Cycle![last.At];
         return map;
     }
 
@@ -84,14 +87,21 @@ public static class Shortcuts
         if (depth > 3) return "keys call each other too deeply";
         var ids = sc.Cycle ?? [];
         if (cfg is null || ids.Count == 0) return "this key has no keys to cycle through";
-        int next;
-        lock (CycleLock) next = (CycleAt.TryGetValue(sc.Id, out var last) && last.List == ListOf(sc) ? last.At + 1 : 0) % ids.Count;
-        var target = cfg.Shortcuts.FirstOrDefault(s => s.Id == ids[next]);
-        if (target is null) return $"no such shortcut: {ids[next]}";
-        var err = RunCore(cfg, target, log, push, audio, depth + 1);
-        // only a key that ran counts: after a failure the next tap tries the same one again
-        if (err is null) CycleAt[sc.Id] = (next, ListOf(sc));
-        return err;
+        // One tap at a time per key: it reads the position, runs the key and stores the position before the next tap
+        // reads it, so two quick taps run two keys. The wait is bounded, so a key that hangs cannot lock the taps out.
+        var gate = CycleGates.GetOrAdd(sc.Id, _ => new object());
+        if (!Monitor.TryEnter(gate, TimeSpan.FromSeconds(5))) return "this key is still busy with the last tap";
+        try
+        {
+            var next = (CycleAt.TryGetValue(sc.Id, out var last) && last.List == ListOf(sc) ? last.At + 1 : 0) % ids.Count;
+            var target = cfg.Shortcuts.FirstOrDefault(s => s.Id == ids[next]);
+            if (target is null) return $"no such shortcut: {ids[next]}";
+            var err = RunCore(cfg, target, log, push, audio, depth + 1);
+            // only a key that ran counts: after a failure the next tap tries the same one again
+            if (err is null) CycleAt[sc.Id] = (next, ListOf(sc));
+            return err;
+        }
+        finally { Monitor.Exit(gate); }
     }
 
     /// <returns>An error message, or null on success.</returns>

@@ -775,7 +775,8 @@ function applyShortcutIcon(b, icon, id, cover) {
     img.src = url + '&upload=true'; // "true", not "1": the agent binds it as a bool and answers 400 to "1"
     return;
   }
-  img.onload = () => { icon.replaceChildren(img); icon.classList.add('k-icon-img'); };
+  // a cycle key may show another key's face by the time its own picture arrives: that one is not overwritten
+  img.onload = () => { if (b.dataset.face) return; icon.replaceChildren(img); icon.classList.add('k-icon-img'); };
   img.src = url;
 }
 

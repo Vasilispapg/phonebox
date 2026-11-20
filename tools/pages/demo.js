@@ -214,7 +214,7 @@
   }
 
   const toggles = {};
-  const cycles = {}; // cycle keys: the position of the key that ran last
+  const cycles = {}, cyclePos = {}; // cycle keys: the id of the key that ran last, and its position in the list
   let muteKeys = ['mute']; // ids of the shortcuts whose command is builtin:mute; their state is the computer's
 
   // made-up OBS: streaming for a while, buttons and scenes work
@@ -551,7 +551,7 @@
       // ?hold=true runs the key's long-press shortcut instead (the agent resolves it; the phone sends only the held key's id)
       if (sc && q.get('hold') === 'true') sc = sc.longPress && sc.longPress !== sc.id ? shortcuts.find((s) => s.id === sc.longPress) : null;
       if (!sc) return json({ title: 'An error occurred while processing your request.', status: 500, detail: 'unknown shortcut' }, 500);
-      if (sc.cmd === 'builtin:cycle') cycles[sc.id] = ((cycles[sc.id] ?? -1) + 1) % (sc.cycle || [1]).length;
+      if (sc.cmd === 'builtin:cycle') { const n = (sc.cycle || []).length, at = n ? (cyclePos[sc.id] = ((cyclePos[sc.id] ?? -1) + 1) % n) : 0; cycles[sc.id] = (sc.cycle || [])[at]; }
       else if (sc.cmd === 'builtin:mute') audio.muted = !audio.muted;
       else if (sc.toggle) toggles[sc.id] = !toggles[sc.id];
       return json({});
