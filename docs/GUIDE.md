@@ -165,7 +165,8 @@ the four affected default icons are repaired, with the original file kept in `co
 A **Wake a computer** shortcut (Settings › Shortcuts › preset *Built-in: wake a computer*) turns on another machine on
 your network, for example a NAS or a second PC. Put its MAC address in the arguments (`AA:BB:CC:DD:EE:FF`; dashes work
 too). A second value is an optional broadcast address (`AA:BB:CC:DD:EE:FF 192.168.1.255`) for networks where the
-default does not reach the machine. The agent sends a standard "magic packet" (UDP, port 9) from every private LAN
+default does not reach the machine; it has to be the broadcast address of one of this computer's own networks (or
+`255.255.255.255`), because the packet never leaves the local network. The agent sends a standard "magic packet" (UDP, port 9) from every private LAN
 adapter of the computer it runs on, so the key also works when the phone is away, for example over Tailscale. It
 reports "packets sent", not "the machine is up": the machine has to be set up to listen.
 
