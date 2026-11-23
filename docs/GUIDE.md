@@ -300,6 +300,15 @@ Share what you copy between the Mac and the phone. It starts with the clipboard.
   phone's key; nothing on the Mac itself can read it from the agent's local port. It is kept in memory and never stored
   or logged. A phone whose connection drops for a moment is sent what it missed when it reconnects (at most the last 20
   copies, and only those from the last two minutes). See [PRIVACY.md](../PRIVACY.md).
+- **Notifications from the phone:** on the Phone bridge screen turn on **Show notifications on the Mac**, then tap **Allow
+  notification access** and switch PhoneBox on in the list (on Android 13 and later the switch is greyed out until you
+  open **App info**, tap ⋮ and choose **Allow restricted settings**; the screen says so). **Choose apps** lists your apps
+  with a switch each: only the ones you turn on are sent. At first only the phone's own dialer and messaging app are on.
+  The Mac's switch (Settings › Phone bridge › Show phone notifications) must be on too; the screen shows whether the
+  last notification reached the Mac.
+- **Calls and delivery:** a call is sent once, when it starts ringing, and is not repeated when you answer or hang up; a
+  missed call is sent as "Missed call". If the Mac is asleep or away, notifications are kept for two minutes and sent when it
+  is back, then dropped (a login code older than that is no use).
 - **Notifications on the Mac:** turn on **Settings › Phone bridge › Show phone notifications on this Mac**. Calls (who is
   calling), messages and the apps you allow on the phone then appear as macOS notifications, with the text of the
   message. They carry the PhoneBox icon, with the phone app's own icon (Facebook, Messages) as the picture. The first time, the agent builds
