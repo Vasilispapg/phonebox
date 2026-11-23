@@ -128,3 +128,32 @@ public class UpdateBundleTests : IDisposable
         Assert.Contains("no PhoneBox.app", error.Message);
     }
 }
+
+public class UpdateBundleSigningTests
+{
+    private const string Certificate = "identifier \"net.oxog.phonebox.agent\" and certificate leaf = H\"cf6ad85695a84739b74f60e8a9700f13881707ce\"";
+
+    [Fact]
+    public void TheRequirementIsReadFromCodesignsOutput()
+    {
+        var output = "Executable=/Applications/PhoneBox.app/Contents/MacOS/PhoneBoxAgent\n# designated => something old\ndesignated => " + Certificate + "\n";
+        Assert.Equal(Certificate, UpdateService.ParseDesignatedRequirement(output));
+        Assert.Null(UpdateService.ParseDesignatedRequirement("code object is not signed at all"));
+    }
+
+    [Theory]
+    [InlineData(Certificate, true)]
+    [InlineData("identifier \"x\" and anchor apple generic and certificate root = H\"abcdef\"", true)]
+    [InlineData("cdhash H\"9217e8b460b7d216df7b9665c1e608edacfe0319\"", false)] // ad hoc: only a hash, nothing to pin
+    [InlineData(null, false)]
+    public void OnlyACertificateRequirementCanPinTheUpdatesIdentity(string? requirement, bool pinned) =>
+        Assert.Equal(pinned, UpdateService.CertificatePinned(requirement));
+
+    [Fact]
+    public void TheRestartPathCanBeReadBeforeTheAppMoves()
+    {
+        AppRestart.Executable = "/Applications/PhoneBox.app/Contents/MacOS/PhoneBoxAgent";
+        try { Assert.Equal("/Applications/PhoneBox.app/Contents/MacOS/PhoneBoxAgent", AppRestart.Executable); }
+        finally { AppRestart.Executable = null; }
+    }
+}

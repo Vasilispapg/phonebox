@@ -1069,7 +1069,7 @@ app.Run();
 // Restart requested from the settings page (e.g. Wi-Fi turned on): hand over to a fresh instance.
 single.ReleaseMutex();
 single.Dispose();
-if (AppRestart.Requested && Environment.ProcessPath is { } exe)
+if (AppRestart.Requested && (AppRestart.Executable ?? Environment.ProcessPath) is { } exe)
 {
     if (AppRestart.ServiceManaged(Environment.GetEnvironmentVariable, Environment.ProcessId, AppRestart.ParentName)) Environment.ExitCode = AppRestart.ServiceRestartCode;
     else System.Diagnostics.Process.Start(AppRestart.StartInfo(exe, args));

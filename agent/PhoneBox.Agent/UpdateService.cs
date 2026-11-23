@@ -108,7 +108,7 @@ public sealed class UpdateService(ConfigStore cfg, AdbReverse adb, IHostApplicat
                 // a failed check (GitHub answering 504 now and then) is retried soon instead of in 6 hours
                 nextCheck = DateTime.UtcNow + (_error?.StartsWith("Update check failed") == true ? TimeSpan.FromMinutes(15) : TimeSpan.FromHours(6));
             }
-            if (cfg.Get().Updates.Auto) await ApplyAsync(ct);
+            if (cfg.Get().Updates.Auto) await ApplyAsync(ct, automatic: true);
             await Task.Delay(TimeSpan.FromMinutes(1), ct);
         }
     }
@@ -146,7 +146,8 @@ public sealed class UpdateService(ConfigStore cfg, AdbReverse adb, IHostApplicat
     }
 
     /// <summary>Installs whatever is newer: the phone app first (needs USB), then the agent (restarts it).</summary>
-    public async Task ApplyAsync(CancellationToken ct = default)
+    /// <param name="automatic">Called by the once-a-minute loop: an app update that already failed for this release is not tried again by itself.</param>
+    public async Task ApplyAsync(CancellationToken ct = default, bool automatic = false)
     {
         var s = Status();
         if (!s.AppUpdate && !s.AgentUpdate) return;
@@ -170,7 +171,7 @@ public sealed class UpdateService(ConfigStore cfg, AdbReverse adb, IHostApplicat
                     log.LogWarning("phone update failed: {Msg}", ex.Message);
                 }
             }
-            if (s.AgentUpdate && CanUpdateAgent)
+            if (s.AgentUpdate && CanUpdateAgent && !(automatic && RunningInBundle && _bundleFailedVersion is { } failed1 && failed1 == _latest?.Version))
             {
                 attempted = true;
                 if (RunningInBundle) await UpdateBundleAsync(ct);
@@ -292,24 +293,54 @@ public sealed class UpdateService(ConfigStore cfg, AdbReverse adb, IHostApplicat
     /// </summary>
     private async Task UpdateBundleAsync(CancellationToken ct)
     {
+        try { await UpdateBundleCoreAsync(ct); }
+        // A failure that trying again will not change (a folder that is not writable, a signature that does not match) is
+        // remembered for this release: the loop that runs every minute must not download and check the image again each time.
+        catch (Exception ex) when (ex is not OperationCanceledException && !Transient(ex, ct))
+        {
+            _bundleFailedVersion = _latest?.Version;
+            throw;
+        }
+    }
+
+    // the release whose app update failed for a reason that a retry does not fix; a newer release, or Install update by hand, tries again
+    private volatile string? _bundleFailedVersion;
+
+    private async Task UpdateBundleCoreAsync(CancellationToken ct)
+    {
         _state = "updating agent";
         var app = BundleDir(AppContext.BaseDirectory)!;
         var parent = Path.GetDirectoryName(app)!;
-        var dmg = await VerifiedDownloadAsync(_latest!.AgentDmg!, $"PhoneBox-{_latest.Version}-{AppPaths.Rid}.dmg", ct);
         var staging = Path.Combine(parent, BundleStaging);
+        // before the download: an app in a folder the user cannot write to fails at once, not after 50 MB
+        if (Directory.Exists(staging)) Directory.Delete(staging, true);
+        try { Directory.CreateDirectory(staging); Directory.Delete(staging); }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        {
+            throw new InvalidOperationException($"{parent} is not writable, so PhoneBox.app cannot update itself there; move it to ~/Applications or install the new version by hand");
+        }
+        var dmg = await VerifiedDownloadAsync(_latest!.AgentDmg!, $"PhoneBox-{_latest.Version}-{AppPaths.Rid}.dmg", ct);
         try
         {
-            if (Directory.Exists(staging)) Directory.Delete(staging, true);
-            try { Directory.CreateDirectory(staging); Directory.Delete(staging); }
-            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
-            {
-                throw new InvalidOperationException($"{parent} is not writable, so PhoneBox.app cannot update itself there; move it to ~/Applications or install the new version by hand");
-            }
             await ExtractAppAsync(dmg, staging, ct);
             var verify = new ProcessStartInfo("/usr/bin/codesign");
             foreach (var arg in new[] { "--verify", "--deep", "--strict", staging }) verify.ArgumentList.Add(arg);
             var signed = await ToolProcess.RunAsync(verify, TimeSpan.FromMinutes(1), ct);
             if (signed.ExitCode != 0) throw new InvalidOperationException("the new PhoneBox.app's signature does not verify; the update was not installed: " + (signed.Output + signed.Error).Trim());
+            // The new app must be signed by the identity of the one that runs. A valid signature alone would accept any
+            // certificate (SHA256SUMS comes from the same release as the image). A copy signed ad hoc (a build from source) has
+            // only a hash as its requirement, which cannot be pinned.
+            var running = await DesignatedRequirementAsync(app, ct);
+            if (CertificatePinned(running))
+            {
+                var pin = new ProcessStartInfo("/usr/bin/codesign");
+                foreach (var arg in new[] { "--verify", "-R=" + running, staging }) pin.ArgumentList.Add(arg);
+                var pinned = await ToolProcess.RunAsync(pin, TimeSpan.FromMinutes(1), ct);
+                if (pinned.ExitCode != 0) throw new InvalidOperationException("the new PhoneBox.app is not signed by the same identity as the running one; the update was not installed: " + (pinned.Output + pinned.Error).Trim());
+            }
+            else log.LogWarning("the running PhoneBox.app is signed ad hoc, so the update's signing identity cannot be checked against it");
+            // The path is read now: once the running app is renamed, the OS no longer says where it lives.
+            AppRestart.Executable = Environment.ProcessPath;
             SwapBundle(app, staging);
         }
         catch
@@ -322,6 +353,27 @@ public sealed class UpdateService(ConfigStore cfg, AdbReverse adb, IHostApplicat
         AppRestart.Requested = true;
         life.StopApplication();
     }
+
+    /// <summary>The designated requirement codesign reports for a signed app or binary, or null.</summary>
+    internal static async Task<string?> DesignatedRequirementAsync(string path, CancellationToken ct)
+    {
+        var start = new ProcessStartInfo("/usr/bin/codesign");
+        foreach (var arg in new[] { "-d", "-r-", path }) start.ArgumentList.Add(arg);
+        var result = await ToolProcess.RunAsync(start, TimeSpan.FromMinutes(1), ct);
+        return ParseDesignatedRequirement(result.Output + "\n" + result.Error);
+    }
+
+    internal static string? ParseDesignatedRequirement(string codesignOutput)
+    {
+        const string prefix = "designated => ";
+        foreach (var line in codesignOutput.Split('\n'))
+            if (line.StartsWith(prefix, StringComparison.Ordinal)) return line[prefix.Length..].Trim();
+        return null;
+    }
+
+    /// <summary>True for a requirement tied to a certificate (PhoneBox's own), false for an ad hoc one, which is just a code hash.</summary>
+    internal static bool CertificatePinned(string? requirement) =>
+        requirement is not null && (requirement.Contains("certificate leaf = H\"", StringComparison.Ordinal) || requirement.Contains("certificate root = H\"", StringComparison.Ordinal));
 
     /// <summary>Copies PhoneBox.app out of a disk image into <paramref name="destination"/> (the image is mounted read-only and detached again).</summary>
     internal static async Task ExtractAppAsync(string dmg, string destination, CancellationToken ct)
@@ -681,6 +733,12 @@ public sealed class UpdateService(ConfigStore cfg, AdbReverse adb, IHostApplicat
 public static class AppRestart
 {
     public static volatile bool Requested;
+
+    /// <summary>
+    /// Where to start the new instance, when it has to be read before the running one moves (an app update renames its
+    /// bundle); null means <see cref="Environment.ProcessPath"/> as usual.
+    /// </summary>
+    public static volatile string? Executable;
 
     /// <summary>Exit code for a restart under a service manager: not 0, so launchd and systemd start the agent again.</summary>
     public const int ServiceRestartCode = 75;
