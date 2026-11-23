@@ -2,9 +2,6 @@ package net.oxog.phonebox.deskpanel
 
 import android.content.Context
 
-/** Where the clipboard service is, for the Phone bridge screen. Kept in memory: it describes this process only. */
-enum class ClipboardState { STOPPED, WAITING, RUNNING, MAC_OFF }
-
 /**
  * The phone's own bridge switches ("Phone bridge" screen). A feature runs only when this switch and the one on the
  * computer (Settings › Phone bridge) are both on; the computer's switch is enforced by the agent.

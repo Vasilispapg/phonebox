@@ -134,9 +134,10 @@ class AgentLink(private val context: Context) {
     @Volatile private var usbFactory: Pair<String, SSLSocketFactory>? = null // its own: the USB agent's pin may differ from the Wi-Fi PC's
 
     /** Opens a long-lived GET (the live stream) over the best route; null when the PC is unreachable. */
-    fun stream(path: String): Pair<Route, Reply>? {
-        usb("GET", path, STREAM_READ_TIMEOUT)?.let { route = Route.USB; return Route.USB to it }
-        wifi("GET", path, STREAM_READ_TIMEOUT)?.let { route = Route.WIFI; return Route.WIFI to it }
+    /** [readTimeoutMs]: how long a silent stream may stay open before the read gives up (the panel's stream sends every second). */
+    fun stream(path: String, readTimeoutMs: Int = STREAM_READ_TIMEOUT): Pair<Route, Reply>? {
+        usb("GET", path, readTimeoutMs)?.let { route = Route.USB; return Route.USB to it }
+        wifi("GET", path, readTimeoutMs)?.let { route = Route.WIFI; return Route.WIFI to it }
         return null
     }
 
@@ -650,7 +651,7 @@ class AgentLink(private val context: Context) {
 
         private const val USB_BASE = "https://127.0.0.1:8765"
         /** The agent sends "state" every second, so a silent connection for this long is dead. */
-        private const val STREAM_READ_TIMEOUT = 8000
+        const val STREAM_READ_TIMEOUT = 8000
     }
 }
 

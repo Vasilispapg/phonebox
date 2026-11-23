@@ -28,4 +28,6 @@
     <string name="bridge_send_unreachable">Mac nicht erreichbar</string>
     <string name="bridge_send_nothing">Nichts zu senden: Die Zwischenablage ist leer oder privat</string>
     <string name="bridge_send_too_large">Zu lang zum Senden (Grenze: 64 KiB)</string>
+    <string name="bridge_state_unsupported">Dieser Computer kann die Zwischenablage nicht teilen: Die Telefonbrücke braucht den PhoneBox-Agenten auf einem Mac</string>
+    <string name="bridge_state_stopped">Von Android beendet. Öffne diesen Bildschirm erneut oder starte PhoneBox neu, um die Verbindung wiederherzustellen</string>
 </resources>

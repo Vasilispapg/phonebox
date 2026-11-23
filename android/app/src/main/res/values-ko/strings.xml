@@ -28,4 +28,6 @@
     <string name="bridge_send_unreachable">Mac에 연결할 수 없습니다</string>
     <string name="bridge_send_nothing">보낼 내용이 없습니다: 클립보드가 비어 있거나 비공개입니다</string>
     <string name="bridge_send_too_large">너무 길어서 보낼 수 없습니다(제한 64 KiB)</string>
+    <string name="bridge_state_unsupported">이 컴퓨터는 클립보드를 공유할 수 없습니다: 휴대폰 브리지에는 Mac의 PhoneBox 에이전트가 필요합니다</string>
+    <string name="bridge_state_stopped">Android에서 중지했습니다. 이 화면을 다시 열거나 PhoneBox를 다시 시작하여 다시 연결하세요</string>
 </resources>

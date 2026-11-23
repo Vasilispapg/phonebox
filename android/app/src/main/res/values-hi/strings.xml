@@ -28,4 +28,6 @@
     <string name="bridge_send_unreachable">Mac तक नहीं पहुँच सका</string>
     <string name="bridge_send_nothing">भेजने के लिए कुछ नहीं: क्लिपबोर्ड खाली या निजी है</string>
     <string name="bridge_send_too_large">भेजने के लिए बहुत लंबा (सीमा 64 KiB है)</string>
+    <string name="bridge_state_unsupported">यह कंप्यूटर क्लिपबोर्ड साझा नहीं कर सकता: फ़ोन ब्रिज के लिए Mac पर PhoneBox एजेंट चाहिए</string>
+    <string name="bridge_state_stopped">Android ने रोक दिया। फिर से जुड़ने के लिए यह स्क्रीन दोबारा खोलें या PhoneBox को फिर से शुरू करें</string>
 </resources>

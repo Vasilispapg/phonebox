@@ -10,10 +10,16 @@ import java.io.Closeable
 class AgentStream(
     private val link: AgentLink,
     private val path: String = "/api/stream",
-    /** How long to wait before asking again after the agent answers 403 (the bridge's switch is off on the computer). */
+    /** How long a silent connection may stay open. The panel's stream sends every second; the bridge's only pings every 15 s. */
+    private val readTimeoutMs: Int = AgentLink.STREAM_READ_TIMEOUT,
+    /** Wait before asking again after a failure: it starts at [retryMinMs], doubles up to [retryMaxMs], and starts over after a
+     *  connection that opened. The defaults keep the panel's fixed 2 s. */
+    private val retryMinMs: Long = 2000,
+    private val retryMaxMs: Long = 2000,
+    /** Wait after the agent answers 403 (the computer's bridge switch is off). */
     private val refusedRetryMs: Long = 2000,
-    /** Called each time the agent answers 403, so a screen can say the computer's switch is off. */
-    private val onRefused: (() -> Unit)? = null,
+    /** Called for every failed attempt with the HTTP status the agent answered, or null when it could not be reached. */
+    private val onFailure: ((Int?) -> Unit)? = null,
     private val deliver: (event: String, data: String) -> Unit,
 ) {
 
@@ -62,16 +68,18 @@ class AgentStream(
 
     private fun loop(gen: Int) {
         val alive = { running && gen == generation }
+        var failures = 0 // in a row, for the backoff
         while (alive()) {
             var opened = false
-            var refused = false
+            var failedWith: Int? = null // the HTTP status of a refused attempt; null with failed = no route
+            var failed = false
             var body: Closeable? = null
             try {
-                val (route, reply) = link.stream(path) ?: throw java.io.IOException("offline")
+                val (route, reply) = link.stream(path, readTimeoutMs) ?: run { failed = true; throw java.io.IOException("offline") }
                 if (reply.code != 200) {
-                    refused = reply.code == 403
+                    failed = true
+                    failedWith = reply.code
                     reply.body.close()
-                    if (refused && alive()) onRefused?.invoke()
                     throw java.io.IOException("HTTP ${reply.code}")
                 }
                 val attached = synchronized(gate) {
@@ -106,11 +114,20 @@ class AgentStream(
                     }
                 }
             } catch (_: Exception) {
+                if (!opened) failed = true // an error before the connection was usable counts as unreachable
             } finally {
                 synchronized(gate) { if (current === body) current = null } // a newer thread may own it already
             }
             if (opened) dispatch(gen, "close", "{}")
-            if (alive()) try { Thread.sleep(if (opened) 300 else if (refused) refusedRetryMs else 2000) } catch (_: InterruptedException) {}
+            if (opened) failures = 0
+            else if (failed && alive()) onFailure?.invoke(failedWith)
+            val wait = when {
+                opened -> 300L
+                failedWith == 403 -> refusedRetryMs
+                else -> minOf(retryMaxMs, retryMinMs shl minOf(failures, 16))
+            }
+            if (!opened) failures++
+            if (alive()) try { Thread.sleep(wait) } catch (_: InterruptedException) {}
         }
     }
 }

@@ -28,4 +28,6 @@
     <string name="bridge_send_unreachable">No se pudo conectar con el Mac</string>
     <string name="bridge_send_nothing">Nada que enviar: el portapapeles está vacío o es privado</string>
     <string name="bridge_send_too_large">Demasiado largo para enviar (el límite es 64 KiB)</string>
+    <string name="bridge_state_unsupported">Este ordenador no puede compartir el portapapeles: el puente del teléfono necesita el agente de PhoneBox en un Mac</string>
+    <string name="bridge_state_stopped">Detenido por Android. Abre esta pantalla de nuevo, o reinicia PhoneBox, para reconectar</string>
 </resources>

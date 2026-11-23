@@ -61,7 +61,7 @@ export const $ = (id) => document.getElementById(id);
 // The native bridge (window.Android) is in every frame, sandboxed widgets included, so each call carries a key that only
 // the panel's own frames receive (MainActivity.bridgeKey). This wrapper adds it.
 const BRIDGE = ['battery', 'buzz', 'haptic', 'is24Hour', 'pcs', 'selectPc', 'forgetPc', 'setBrightness', 'setHomeScreen', 'setOrientation',
-  'setPinned', 'setVolumeKeys', 'setLanguage', 'transport', 'sensors', 'version', 'canListen', 'listen', 'stopListening', 'cancelListening', 'trackpad', 'canWake', 'wakePc'];
+  'setPinned', 'setVolumeKeys', 'setLanguage', 'transport', 'sensors', 'version', 'canListen', 'listen', 'stopListening', 'cancelListening', 'trackpad', 'canWake', 'wakePc', 'openBridge'];
 export const bridge = typeof Android === 'undefined' ? null : Object.fromEntries(BRIDGE.filter((m) => typeof Android[m] === 'function')
   .map((m) => [m, (...args) => Android[m](window.__phoneboxKey || '', ...args)]));
 // Live preview inside the agent's layout editor: the layout comes from the editor (unsaved), not from the agent.
@@ -1988,6 +1988,10 @@ export function openOverview() {
   };
   $('ovGrid').replaceChildren(...pages.map(tile));
   renderRulesBtn();
+  // the phone's own Phone bridge screen (clipboard sharing with a Mac): only inside the Android app
+  const ob = $('ovBridge');
+  ob.hidden = PREVIEW || !bridge?.openBridge;
+  ob.replaceChildren(icon('smartphone', 'm'), t('s.bridge.title'));
   // several paired computers: switch between them here (a USB cable always wins)
   const pcs = pairedPcs();
   $('ovPcs').replaceChildren(...(pcs.length > 1 ? pcs.map((pc) => {
@@ -2013,6 +2017,7 @@ export function switchPc(pc) {
 export function closeOverview() { $('overview').hidden = true; }
 $('overview').addEventListener('click', closeOverview);
 $('ovRules').addEventListener('click', (e) => { e.stopPropagation(); toggleRulesPause(); });
+$('ovBridge').addEventListener('click', (e) => { e.stopPropagation(); haptic(); closeOverview(); bridge?.openBridge?.(); });
 
 let dotsHoldTimer = 0, dotsHoldStart = null, heldDots = false;
 // ---- the page bar: the dots shown as buttons with each page's icon and name (Settings › Display › Page navigation)

@@ -28,4 +28,6 @@
     <string name="bridge_send_unreachable">無法連線到 Mac</string>
     <string name="bridge_send_nothing">沒有可傳送的內容：剪貼簿是空的或屬於私密內容</string>
     <string name="bridge_send_too_large">內容太長，無法傳送（上限 64 KiB）</string>
+    <string name="bridge_state_unsupported">此電腦無法共享剪貼簿：手機橋接需要在 Mac 上執行 PhoneBox 代理程式</string>
+    <string name="bridge_state_stopped">已被 Android 停止。請再次開啟此畫面，或重新啟動 PhoneBox 以重新連線</string>
 </resources>

@@ -28,4 +28,6 @@
     <string name="bridge_send_unreachable">Tidak dapat menjangkau Mac</string>
     <string name="bridge_send_nothing">Tidak ada yang dikirim: papan klip kosong atau pribadi</string>
     <string name="bridge_send_too_large">Terlalu panjang untuk dikirim (batasnya 64 KiB)</string>
+    <string name="bridge_state_unsupported">Komputer ini tidak dapat membagikan papan klip: jembatan ponsel memerlukan agen PhoneBox di Mac</string>
+    <string name="bridge_state_stopped">Dihentikan oleh Android. Buka layar ini lagi, atau mulai ulang PhoneBox, untuk terhubung kembali</string>
 </resources>

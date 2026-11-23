@@ -48,9 +48,12 @@ class ClipboardService : Service() {
         stream?.stop()
         val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         BridgePrefs.clipboardState = ClipboardState.WAITING
+        // the bridge stream only pings every 15 s, so a read timeout of 40 s (the panel's 8 s would cut it and reconnect, losing
+        // copies and the battery); failures back off from 2 s to a minute instead of hammering an absent Mac all day
         stream = AgentStream(
-            AgentLink(applicationContext), "/api/bridge/stream", refusedRetryMs = 60_000,
-            onRefused = { BridgePrefs.clipboardState = ClipboardState.MAC_OFF },
+            AgentLink(applicationContext), "/api/bridge/stream", readTimeoutMs = 40_000,
+            retryMinMs = 2_000, retryMaxMs = 60_000, refusedRetryMs = 60_000,
+            onFailure = { code -> BridgePrefs.clipboardState = BridgeClip.stateAfterFailure(code) },
         ) { event, data ->
             when (event) {
                 "open" -> BridgePrefs.clipboardState = ClipboardState.RUNNING
@@ -104,6 +107,8 @@ class ClipboardService : Service() {
         fun sync(context: Context) {
             val app = context.applicationContext
             val intent = Intent(app, ClipboardService::class.java)
+            // "Send to Mac" shows in other apps' menus only while the bridge is on
+            BridgeEntryPoints.setEnabled(app, BridgePrefs.clipboardEnabled(app))
             if (!BridgePrefs.clipboardEnabled(app)) {
                 app.stopService(intent)
                 return

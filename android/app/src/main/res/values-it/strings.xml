@@ -28,4 +28,6 @@
     <string name="bridge_send_unreachable">Impossibile raggiungere il Mac</string>
     <string name="bridge_send_nothing">Niente da inviare: gli appunti sono vuoti o privati</string>
     <string name="bridge_send_too_large">Troppo lungo da inviare (il limite è 64 KiB)</string>
+    <string name="bridge_state_unsupported">Questo computer non può condividere gli appunti: il ponte telefono richiede l\'agente PhoneBox su un Mac</string>
+    <string name="bridge_state_stopped">Arrestato da Android. Riapri questa schermata, o riavvia PhoneBox, per riconnetterti</string>
 </resources>

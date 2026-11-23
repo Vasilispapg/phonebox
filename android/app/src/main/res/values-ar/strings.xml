@@ -28,4 +28,6 @@
     <string name="bridge_send_unreachable">تعذّر الوصول إلى Mac</string>
     <string name="bridge_send_nothing">لا شيء لإرساله: الحافظة فارغة أو خاصة</string>
     <string name="bridge_send_too_large">النص أطول من أن يُرسل (الحد 64 KiB)</string>
+    <string name="bridge_state_unsupported">لا يستطيع هذا الكمبيوتر مشاركة الحافظة: يحتاج جسر الهاتف إلى وكيل PhoneBox على جهاز Mac</string>
+    <string name="bridge_state_stopped">أوقفه Android. افتح هذه الشاشة مرة أخرى، أو أعد تشغيل PhoneBox، لإعادة الاتصال</string>
 </resources>

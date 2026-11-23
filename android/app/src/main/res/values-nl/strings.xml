@@ -28,4 +28,6 @@
     <string name="bridge_send_unreachable">Kan de Mac niet bereiken</string>
     <string name="bridge_send_nothing">Niets te sturen: het klembord is leeg of privé</string>
     <string name="bridge_send_too_large">Te lang om te sturen (de limiet is 64 KiB)</string>
+    <string name="bridge_state_unsupported">Deze computer kan het klembord niet delen: de telefoonbrug heeft de PhoneBox-agent op een Mac nodig</string>
+    <string name="bridge_state_stopped">Gestopt door Android. Open dit scherm opnieuw, of start PhoneBox opnieuw, om weer te verbinden</string>
 </resources>

@@ -28,4 +28,6 @@
     <string name="bridge_send_unreachable">เชื่อมต่อกับ Mac ไม่ได้</string>
     <string name="bridge_send_nothing">ไม่มีสิ่งที่จะส่ง: คลิปบอร์ดว่างหรือเป็นส่วนตัว</string>
     <string name="bridge_send_too_large">ยาวเกินไปที่จะส่ง (ขีดจำกัด 64 KiB)</string>
+    <string name="bridge_state_unsupported">คอมพิวเตอร์เครื่องนี้แชร์คลิปบอร์ดไม่ได้: สะพานเชื่อมโทรศัพท์ต้องใช้เอเจนต์ PhoneBox บน Mac</string>
+    <string name="bridge_state_stopped">ถูก Android หยุดไว้ เปิดหน้าจอนี้อีกครั้ง หรือรีสตาร์ต PhoneBox เพื่อเชื่อมต่อใหม่</string>
 </resources>
