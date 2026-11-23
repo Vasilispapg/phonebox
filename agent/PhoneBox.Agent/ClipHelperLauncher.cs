@@ -22,26 +22,53 @@ internal sealed class ClipHelperLauncher(Func<IReadOnlyList<string>, Cancellatio
     /// </summary>
     public static readonly string StartCommand =
         $"CLASSPATH=$(pm path {Package} | head -1 | cut -d: -f2) setsid nohup app_process /system/bin {HelperClass} " +
-        $"$(pm list packages -U {Package} | head -1 | sed 's/.*uid://') >/dev/null 2>&1 &";
+        $"$(pm list packages -U {Package} | head -1 | sed 's/.*uid://; s/[^0-9].*//') >/dev/null 2>&1 &";
+
+    private const long SlowCheckEveryMs = 600_000;
+    private const int FailuresBeforeSlow = 3;
 
     private readonly Dictionary<string, long> _checkedAt = [];
+    private readonly Dictionary<string, int> _failures = [];     // starts that were not followed by a running helper at the next look
+    private readonly HashSet<string> _startedAtLastLook = [];
 
-    /// <param name="wanted">Only on macOS while Settings › Phone bridge › clipboard is on.</param>
+    private void Forget(string device) { _checkedAt.Remove(device); _failures.Remove(device); _startedAtLastLook.Remove(device); }
+
+    /// <param name="wanted">Only on macOS while Settings › Phone bridge › clipboard is on, and while a phone has its bridge stream open
+    /// (see <see cref="BridgeStream.Listeners"/>): the phone's own switch is what opens it, and the agent cannot see that switch.</param>
+    /// <remarks>
+    /// A phone reached over USB and Wi-Fi at once has two serials; the second is looked at before the first start has bound its
+    /// socket, so a second helper is started. It exits at once because the name is taken, which is harmless.
+    /// </remarks>
     public async Task EnsureAsync(IReadOnlyCollection<string> devices, bool wanted, CancellationToken ct)
     {
-        if (!wanted) { _checkedAt.Clear(); return; } // when it is wanted again, every phone is looked at at once
-        foreach (var gone in _checkedAt.Keys.Except(devices).ToList()) _checkedAt.Remove(gone); // a phone that returns is looked at at once
+        if (!wanted) { _checkedAt.Clear(); _failures.Clear(); _startedAtLastLook.Clear(); return; } // when it is wanted again, every phone is looked at at once
+        foreach (var gone in _checkedAt.Keys.Except(devices).ToList()) Forget(gone); // a phone that returns is looked at at once
         foreach (var device in devices)
         {
             var now = clock();
-            if (_checkedAt.TryGetValue(device, out var at) && now - at < CheckEveryMs) continue;
+            var failures = _failures.GetValueOrDefault(device);
+            var every = failures >= FailuresBeforeSlow ? SlowCheckEveryMs : CheckEveryMs;
+            if (_checkedAt.TryGetValue(device, out var at) && now - at < every) continue;
             _checkedAt[device] = now;
             try
             {
-                var running = (await adb(["-s", device, "shell", CheckCommand], ct)).Trim() is { Length: > 0 } count && count != "0";
-                if (running) continue;
+                var last = (await adb(["-s", device, "shell", CheckCommand], ct)).Trim().Split('\n')[^1].Trim();
+                if (int.TryParse(last, out var count) && count > 0)
+                {
+                    _failures.Remove(device);
+                    _startedAtLastLook.Remove(device);
+                    continue;
+                }
+                // started at the last look and gone again: it does not stay up (an app too old to have the class, a bad uid)
+                if (_startedAtLastLook.Contains(device))
+                {
+                    _failures[device] = ++failures;
+                    if (failures == FailuresBeforeSlow)
+                        log.LogWarning("{Device}: the clipboard helper does not stay running on the phone; trying again only every 10 minutes", device);
+                }
                 await adb(["-s", device, "shell", StartCommand], ct);
-                log.LogInformation("{Device}: the automatic clipboard helper was started on the phone", device);
+                _startedAtLastLook.Add(device);
+                if (failures == 0 && !_failures.ContainsKey(device)) log.LogInformation("{Device}: the automatic clipboard helper was started on the phone", device);
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex) { log.LogWarning("{Device}: the clipboard helper could not be started: {Error}", device, ex.GetType().Name); }

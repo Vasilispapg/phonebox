@@ -26,6 +26,17 @@ public sealed class BridgeStream(TimeProvider? time = null)
 
     public long Seq { get { lock (_lock) return _seq; } }
 
+    private int _listeners;
+
+    /// <summary>
+    /// Phones that have their bridge stream open. A phone opens it only while its own clipboard switch is on, so this is how the
+    /// agent learns that the phone wants the automatic copy (the helper on the phone is started only while it is above zero).
+    /// </summary>
+    public int Listeners => Volatile.Read(ref _listeners);
+
+    public void ListenerOpened() => Interlocked.Increment(ref _listeners);
+    public void ListenerClosed() => Interlocked.Decrement(ref _listeners);
+
     /// <summary>Raised after every <see cref="Publish"/>, so a stream handler can wake up and send.</summary>
     public event Action? Emitted;
 
