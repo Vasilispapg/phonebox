@@ -33,4 +33,17 @@
     <string name="bridge_confirm_title">إرسال هذا النص إلى حافظة Mac؟</string>
     <string name="bridge_pair_again">لم يعد Mac يقبل مفتاح هذا الهاتف: تم الاقتران من جديد أو أُنشئ مفتاح جديد. صِل الهاتف عبر USB مرة واحدة، أو أعد الاقتران عبر Wi-Fi.</string>
     <string name="bridge_send_unknown">لم يصل رد من Mac: ربما وصل النص. تحقّق على Mac قبل إرساله مجددًا.</string>
+    <string name="bridge_notifications_switch">عرض الإشعارات على Mac</string>
+    <string name="bridge_notifications_help">تظهر المكالمات والرسائل والتطبيقات التي تختارها أدناه كإشعارات على Mac مع نصها (مثل رمز تسجيل الدخول). تُرسل فقط التطبيقات التي تشغّلها. ويجب أيضًا تشغيل مفتاح Mac (الإعدادات › جسر الهاتف في PhoneBox على الكمبيوتر).</string>
+    <string name="bridge_access_missing">لم يُسمح بالوصول إلى الإشعارات بعد. يحتاج PhoneBox إليه لرؤية إشعاراتك.</string>
+    <string name="bridge_access_granted">الوصول إلى الإشعارات مسموح.</string>
+    <string name="bridge_access_button">السماح بالوصول إلى الإشعارات</string>
+    <string name="bridge_restricted_help">إذا كان المفتاح باهتًا (Android 13 والأحدث): افتح معلومات التطبيق، واضغط على ⋮ في أعلى اليمين، واختر السماح بالإعدادات المقيّدة، ثم عد وحاول مرة أخرى.</string>
+    <string name="bridge_app_info_button">فتح معلومات التطبيق</string>
+    <string name="bridge_apps_button">اختيار التطبيقات</string>
+    <string name="bridge_apps_title">التطبيقات المعروضة على Mac</string>
+    <string name="bridge_last_none">لم يُرسل أي إشعار بعد</string>
+    <string name="bridge_last_ok">وصل آخر إشعار إلى Mac</string>
+    <string name="bridge_last_off">آخر إشعار: مفتاح الإشعارات في Mac متوقف</string>
+    <string name="bridge_last_failed">لم يصل آخر إشعار إلى Mac؛ يُحتفظ به لمدة دقيقتين</string>
 </resources>

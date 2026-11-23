@@ -33,4 +33,17 @@
     <string name="bridge_confirm_title">Надіслати цей текст у буфер обміну Mac?</string>
     <string name="bridge_pair_again">Mac більше не приймає ключ цього телефона: пару створено знову або видано новий ключ. Під’єднайте телефон через USB один раз або знову створіть пару через Wi-Fi.</string>
     <string name="bridge_send_unknown">Немає відповіді від Mac: можливо, текст дійшов. Перевірте на Mac, перш ніж надсилати знову.</string>
+    <string name="bridge_notifications_switch">Показувати сповіщення на Mac</string>
+    <string name="bridge_notifications_help">Дзвінки, повідомлення та обрані нижче застосунки з\'являються на Mac як сповіщення разом із текстом (наприклад, кодом для входу). Надсилаються лише ввімкнені застосунки. Перемикач на Mac (Налаштування › Міст із телефоном у PhoneBox на комп\'ютері) також має бути ввімкнено.</string>
+    <string name="bridge_access_missing">Доступ до сповіщень ще не дозволено. PhoneBox потрібен він, щоб бачити ваші сповіщення.</string>
+    <string name="bridge_access_granted">Доступ до сповіщень дозволено.</string>
+    <string name="bridge_access_button">Дозволити доступ до сповіщень</string>
+    <string name="bridge_restricted_help">Якщо перемикач неактивний (Android 13 і новіші): відкрийте «Про застосунок», торкніться ⋮ угорі праворуч, виберіть «Дозволити обмежені налаштування», потім поверніться й повторіть.</string>
+    <string name="bridge_app_info_button">Відкрити «Про застосунок»</string>
+    <string name="bridge_apps_button">Вибрати застосунки</string>
+    <string name="bridge_apps_title">Застосунки, що показуються на Mac</string>
+    <string name="bridge_last_none">Сповіщень ще не надсилалося</string>
+    <string name="bridge_last_ok">Останнє сповіщення дійшло до Mac</string>
+    <string name="bridge_last_off">Останнє сповіщення: перемикач сповіщень на Mac вимкнено</string>
+    <string name="bridge_last_failed">Останнє сповіщення не дійшло до Mac; воно зберігається дві хвилини</string>
 </resources>

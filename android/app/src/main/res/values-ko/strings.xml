@@ -33,4 +33,17 @@
     <string name="bridge_confirm_title">이 텍스트를 Mac의 클립보드로 보낼까요?</string>
     <string name="bridge_pair_again">Mac이 더 이상 이 휴대폰의 키를 받지 않습니다. 다시 페어링되었거나 새 키가 생성되었습니다. 휴대폰을 USB로 한 번 연결하거나 Wi-Fi로 다시 페어링하세요.</string>
     <string name="bridge_send_unknown">Mac에서 응답이 없습니다. 텍스트가 도착했을 수 있습니다. 다시 보내기 전에 Mac에서 확인하세요.</string>
+    <string name="bridge_notifications_switch">Mac에 알림 표시</string>
+    <string name="bridge_notifications_help">전화, 메시지, 아래에서 고른 앱이 문자(예: 로그인 코드)와 함께 Mac에 알림으로 표시됩니다. 켜 둔 앱만 전송됩니다. Mac의 스위치(컴퓨터의 PhoneBox 설정 › 휴대폰 브리지)도 켜져 있어야 합니다.</string>
+    <string name="bridge_access_missing">알림 접근이 아직 허용되지 않았습니다. PhoneBox가 알림을 보려면 필요합니다.</string>
+    <string name="bridge_access_granted">알림 접근이 허용되었습니다.</string>
+    <string name="bridge_access_button">알림 접근 허용</string>
+    <string name="bridge_restricted_help">스위치가 회색이면(Android 13 이상): 앱 정보를 열고 오른쪽 위 ⋮를 눌러 ‘제한된 설정 허용’을 선택한 다음 돌아와서 다시 시도하세요.</string>
+    <string name="bridge_app_info_button">앱 정보 열기</string>
+    <string name="bridge_apps_button">앱 선택</string>
+    <string name="bridge_apps_title">Mac에 표시할 앱</string>
+    <string name="bridge_last_none">아직 보낸 알림이 없습니다</string>
+    <string name="bridge_last_ok">마지막 알림이 Mac에 도착했습니다</string>
+    <string name="bridge_last_off">마지막 알림: Mac의 알림 스위치가 꺼져 있습니다</string>
+    <string name="bridge_last_failed">마지막 알림이 Mac에 도착하지 못했습니다. 2분 동안 보관됩니다</string>
 </resources>

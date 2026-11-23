@@ -33,4 +33,17 @@
     <string name="bridge_confirm_title">¿Enviar este texto al portapapeles del Mac?</string>
     <string name="bridge_pair_again">El Mac ya no acepta la clave de este teléfono: se volvió a emparejar o recibió una clave nueva. Conecta el teléfono por USB una vez o vuelve a emparejarlo por Wi-Fi.</string>
     <string name="bridge_send_unknown">Sin respuesta del Mac: puede que el texto haya llegado. Compruébalo en el Mac antes de enviarlo de nuevo.</string>
+    <string name="bridge_notifications_switch">Mostrar notificaciones en el Mac</string>
+    <string name="bridge_notifications_help">Las llamadas, los mensajes y las apps que elijas abajo aparecen como notificaciones en el Mac, con su texto (un código de acceso, por ejemplo). Solo se envían las apps que actives. El interruptor del Mac (Ajustes › Puente del teléfono en PhoneBox del ordenador) también debe estar activado.</string>
+    <string name="bridge_access_missing">Aún no se permite el acceso a las notificaciones. PhoneBox lo necesita para ver tus notificaciones.</string>
+    <string name="bridge_access_granted">Se permite el acceso a las notificaciones.</string>
+    <string name="bridge_access_button">Permitir el acceso a las notificaciones</string>
+    <string name="bridge_restricted_help">Si el interruptor aparece atenuado (Android 13 y posteriores): abre Información de la app, toca ⋮ arriba a la derecha, elige Permitir ajustes restringidos y vuelve a intentarlo.</string>
+    <string name="bridge_app_info_button">Abrir información de la app</string>
+    <string name="bridge_apps_button">Elegir apps</string>
+    <string name="bridge_apps_title">Apps que se muestran en el Mac</string>
+    <string name="bridge_last_none">Aún no se ha enviado ninguna notificación</string>
+    <string name="bridge_last_ok">La última notificación llegó al Mac</string>
+    <string name="bridge_last_off">Última notificación: el interruptor de notificaciones del Mac está desactivado</string>
+    <string name="bridge_last_failed">La última notificación no llegó al Mac; se conserva dos minutos</string>
 </resources>

@@ -33,4 +33,17 @@
     <string name="bridge_confirm_title">要將這段文字傳送到 Mac 的剪貼簿嗎？</string>
     <string name="bridge_pair_again">Mac 不再接受這支手機的金鑰：它已重新配對或換了新金鑰。請用 USB 連接手機一次，或透過 Wi-Fi 重新配對。</string>
     <string name="bridge_send_unknown">Mac 沒有回應：文字可能已經送達。再次傳送前，請先在 Mac 上確認。</string>
+    <string name="bridge_notifications_switch">在 Mac 上顯示通知</string>
+    <string name="bridge_notifications_help">來電、訊息以及你在下方選擇的 App 會以通知形式顯示在 Mac 上，並附帶文字（例如登入驗證碼）。只有你開啟的 App 才會被傳送。Mac 上的開關（電腦上 PhoneBox 的「設定 › 手機橋接」）也必須開啟。</string>
+    <string name="bridge_access_missing">尚未允許通知存取權。PhoneBox 需要它才能看到你的通知。</string>
+    <string name="bridge_access_granted">已允許通知存取權。</string>
+    <string name="bridge_access_button">允許通知存取權</string>
+    <string name="bridge_restricted_help">如果開關是灰色的（Android 13 以上）：開啟應用程式資訊，點一下右上角的 ⋮，選擇「允許受限制的設定」，然後返回再試一次。</string>
+    <string name="bridge_app_info_button">開啟應用程式資訊</string>
+    <string name="bridge_apps_button">選擇 App</string>
+    <string name="bridge_apps_title">在 Mac 上顯示的 App</string>
+    <string name="bridge_last_none">尚未傳送任何通知</string>
+    <string name="bridge_last_ok">最近一則通知已送達 Mac</string>
+    <string name="bridge_last_off">最近一則通知：Mac 的通知開關已關閉</string>
+    <string name="bridge_last_failed">最近一則通知未能送達 Mac；它會保留兩分鐘</string>
 </resources>

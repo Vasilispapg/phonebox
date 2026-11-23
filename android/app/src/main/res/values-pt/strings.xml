@@ -33,4 +33,17 @@
     <string name="bridge_confirm_title">Enviar este texto para a área de transferência do Mac?</string>
     <string name="bridge_pair_again">O Mac já não aceita a chave deste telemóvel: foi emparelhado de novo ou recebeu uma chave nova. Ligue o telemóvel por USB uma vez ou emparelhe-o de novo por Wi-Fi.</string>
     <string name="bridge_send_unknown">Sem resposta do Mac: o texto pode ter chegado. Verifique no Mac antes de o enviar de novo.</string>
+    <string name="bridge_notifications_switch">Mostrar notificações no Mac</string>
+    <string name="bridge_notifications_help">As chamadas, as mensagens e as aplicações que escolher abaixo aparecem como notificações no Mac, com o respetivo texto (um código de início de sessão, por exemplo). Só são enviadas as aplicações que ativar. O interruptor do Mac (Definições › Ponte do telemóvel no PhoneBox do computador) também tem de estar ativado.</string>
+    <string name="bridge_access_missing">O acesso às notificações ainda não está permitido. O PhoneBox precisa dele para ver as suas notificações.</string>
+    <string name="bridge_access_granted">O acesso às notificações está permitido.</string>
+    <string name="bridge_access_button">Permitir o acesso às notificações</string>
+    <string name="bridge_restricted_help">Se o interruptor estiver a cinzento (Android 13 e posterior): abra Informações da aplicação, toque em ⋮ no canto superior direito, escolha Permitir definições restritas e volte a tentar.</string>
+    <string name="bridge_app_info_button">Abrir informações da aplicação</string>
+    <string name="bridge_apps_button">Escolher aplicações</string>
+    <string name="bridge_apps_title">Aplicações mostradas no Mac</string>
+    <string name="bridge_last_none">Ainda não foi enviada nenhuma notificação</string>
+    <string name="bridge_last_ok">A última notificação chegou ao Mac</string>
+    <string name="bridge_last_off">Última notificação: o interruptor de notificações do Mac está desativado</string>
+    <string name="bridge_last_failed">A última notificação não chegou ao Mac; é guardada durante dois minutos</string>
 </resources>
