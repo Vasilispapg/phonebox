@@ -73,6 +73,18 @@ builder.Services.AddSingleton<PlexControl>();
 builder.Services.AddSingleton<ControlDeck>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ControlDeck>());
 builder.Services.AddSingleton<PushStore>();
+// Phone bridge (macOS only): clipboard sharing with the paired phone. Every switch is off until Settings turns it on.
+builder.Services.AddSingleton<BridgeStream>();
+#if !WINDOWS
+if (OperatingSystem.IsMacOS())
+{
+    builder.Services.AddSingleton<ITextPasteboard>(_ => new MacPasteboard());
+    // internal constructor, so the container cannot pick it: build it here
+    builder.Services.AddSingleton(sp => new ClipboardBridge(sp.GetRequiredService<ITextPasteboard>(), sp.GetRequiredService<ConfigStore>(),
+        sp.GetRequiredService<BridgeStream>(), sp.GetRequiredService<ILogger<ClipboardBridge>>()));
+    builder.Services.AddHostedService(sp => sp.GetRequiredService<ClipboardBridge>());
+}
+#endif
 builder.Services.AddSingleton<CommandRunner>();
 builder.Services.AddSingleton<ApprovalStore>();
 builder.Services.AddSingleton<HomeAssistant>();
@@ -214,7 +226,7 @@ app.Use((ctx, next) =>
 var timings = new RequestTimings();
 app.Use(async (ctx, next) =>
 {
-    if (!ctx.Request.Path.StartsWithSegments("/api") || ctx.Request.Path.StartsWithSegments("/api/stream")) { await next(ctx); return; }
+    if (!ctx.Request.Path.StartsWithSegments("/api") || ctx.Request.Path.StartsWithSegments("/api/stream") || ctx.Request.Path == "/api/bridge/stream") { await next(ctx); return; }
     var started = System.Diagnostics.Stopwatch.GetTimestamp();
     try { await next(ctx); }
     finally
@@ -819,6 +831,53 @@ app.MapPost("/api/rules/test", (RuleConfig rule, RuleEngine rules) =>
     if (string.IsNullOrWhiteSpace(rule.Id)) rule.Id = "test";
     rules.Test(rule);
     return Results.Ok(new { ok = true });
+});
+
+// Phone bridge: clipboard text from the phone, and the stream of text copied on this computer. Both answer 403 while the
+// switch in Settings is off, and 501 where the bridge does not exist (everything but macOS). Allowed over Wi-Fi in Lan.cs.
+app.MapPost("/api/bridge/clipboard", async (HttpRequest req) =>
+{
+    var (text, error) = await BridgeApi.ReadClipboardBody(req);
+    if (error is not null) return BridgeApi.BodyError(error);
+    return BridgeApi.PostClipboard(req.HttpContext.RequestServices.GetService<ClipboardBridge>(), text, BridgeApi.DeviceId(req.Headers["X-PhoneBox-Device"]));
+});
+app.MapGet("/api/bridge/stream", async (HttpContext ctx, ConfigStore cfg, BridgeStream bridge) =>
+{
+    if (ctx.RequestServices.GetService<ClipboardBridge>() is null) return Results.Json(new { error = "not supported on this system" }, statusCode: 501);
+    if (!BridgeApi.StreamAllowed(cfg)) return Results.Json(new { error = "off" }, statusCode: 403);
+    var ct = ctx.RequestAborted;
+    var device = BridgeApi.DeviceId(ctx.Request.Headers["X-PhoneBox-Device"]);
+    ctx.Response.ContentType = "text/event-stream";
+    ctx.Response.Headers["X-Accel-Buffering"] = "no";
+    using var wake = new SemaphoreSlim(0);
+    void OnEmit() { try { wake.Release(); } catch (ObjectDisposedException) { } }
+    bridge.Emitted += OnEmit;
+    try
+    {
+        var seq = bridge.Seq; // a new connection hears only what is copied from now on
+        var nextPing = Environment.TickCount64 + 15_000;
+        await ctx.Response.WriteAsync(BridgeApi.PingFrame, ct); // lets the phone see the connection is up
+        await ctx.Response.Body.FlushAsync(ct);
+        // the switch is checked every pass (at least once a second), so turning it off ends the stream
+        while (!ct.IsCancellationRequested && BridgeApi.StreamAllowed(cfg))
+        {
+            foreach (var e in bridge.Since(seq, device))
+            {
+                await ctx.Response.WriteAsync(BridgeApi.EventFrame(e), ct);
+                seq = e.Seq;
+            }
+            if (Environment.TickCount64 >= nextPing)
+            {
+                await ctx.Response.WriteAsync(BridgeApi.PingFrame, ct);
+                nextPing = Environment.TickCount64 + 15_000;
+            }
+            await ctx.Response.Body.FlushAsync(ct);
+            await wake.WaitAsync(TimeSpan.FromSeconds(1), ct);
+        }
+    }
+    catch (OperationCanceledException) { }
+    finally { bridge.Emitted -= OnEmit; }
+    return Results.Empty;
 });
 
 // The phone reports its battery (charge guard); the settings show the guard's state and can switch the power to test it.

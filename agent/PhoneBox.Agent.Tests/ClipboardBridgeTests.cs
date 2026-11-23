@@ -8,27 +8,6 @@ using Xunit;
 /// </summary>
 public sealed class ClipboardBridgeTests : IDisposable
 {
-    private sealed class FakePasteboard : ITextPasteboard
-    {
-        public long Count;
-        public string? Text;
-        public int Writes;
-        public bool Fail;
-        public bool ThrowOnCount;
-        public long ChangeCount => ThrowOnCount ? throw new InvalidOperationException("boom") : Count;
-        public string? ReadShareableText() => Text;
-        public bool WriteText(string text)
-        {
-            if (Fail) return false;
-            Writes++;
-            Text = text;
-            Count++;
-            return true;
-        }
-        /// <summary>Somebody copies something on the Mac (null: an item the bridge must not read).</summary>
-        public void Copy(string? text) { Text = text; Count++; }
-    }
-
     private readonly string _root = Path.Combine(Path.GetTempPath(), "pb-bridge-clip-" + Guid.NewGuid());
     private readonly string _config;
     private readonly ConfigStore _store;
