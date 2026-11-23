@@ -1077,7 +1077,19 @@ app.Lifetime.ApplicationStarted.Register(() =>
     app.Logger.LogInformation("PhoneBox agent {Version} ready on http://127.0.0.1:{Port}, phone USB port {UsbPort} (config: {Path})",
         AppPaths.Version, Port, usb.Port, configPath));
 
-app.Run();
+// macOS, running as PhoneBox.app: the main thread belongs to the menu bar icon, the host runs beside it
+if (MacMenuBar.Wanted(args, UpdateService.RunningInBundle, Environment.GetEnvironmentVariable) && MacMenuBar.CanRun())
+{
+    var host = app.RunAsync();
+    try
+    {
+        MacMenuBar.Run(MacMenuBar.Entries(app.Services.GetRequiredService<AdbReverse>(), app.Services.GetRequiredService<UpdateService>(),
+            app.Lifetime, endpoint.SettingsUrl, configDir), () => host.IsCompleted);
+    }
+    catch (Exception ex) { app.Logger.LogWarning("menu bar icon failed: {Msg}", ex.Message); }
+    host.GetAwaiter().GetResult();
+}
+else app.Run();
 
 // Restart requested from the settings page (e.g. Wi-Fi turned on): hand over to a fresh instance.
 single.ReleaseMutex();
