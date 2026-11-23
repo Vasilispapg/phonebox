@@ -278,8 +278,16 @@ Share what you copy between the Mac and the phone. It starts with the clipboard.
   the agent refuses everything the phone sends for it.
 - **Mac to phone:** copy plain text on the Mac and the paired phone's clipboard has it within about a second. Text over
   64 KiB is not sent, and neither is anything a password manager marked concealed.
-- **Phone to Mac:** the phone sends text to the Mac, which puts it on the Mac's clipboard. Android does not let an app
-  read the clipboard in the background, so the phone's side is one tap (the Android app adds the ways to send).
+- **Phone to Mac:** Android does not let an app read the clipboard in the background, so sending from the phone is one
+  tap, in any of four places: **Send to Mac** in the text-selection menu (select text, it sits next to Copy, and the
+  text is sent without copying first), **Share › Send to Mac**, a **Send to Mac** tile (add it under Quick Settings
+  › Edit), or the **Send clipboard** button on the app's "sharing the clipboard" notification. A short message says
+  whether it arrived.
+- **On the phone:** open the app's **Phone bridge** screen (long-press a PhoneBox tile in Quick Settings, or tap the
+  notification) and turn on **Share the clipboard with the Mac**. Both switches, this one and the Mac's, must be on;
+  the screen says whether it is connected or the Mac's switch is off. Android 13 and later asks to show notifications.
+  On Samsung phones set PhoneBox's battery use to **Unrestricted** (Settings › Apps › PhoneBox › Battery), or the
+  system may stop the service.
 - The text goes only to your own paired phones over the PhoneBox link (USB or paired Wi-Fi / Tailscale), is kept in
   memory and never stored or logged. See [PRIVACY.md](../PRIVACY.md).
 - Needs macOS: on Windows and Linux the card is hidden and the agent answers the phone with 501.
