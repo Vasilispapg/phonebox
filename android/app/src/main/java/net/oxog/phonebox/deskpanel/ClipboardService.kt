@@ -194,10 +194,9 @@ class ClipboardService : Service() {
         fun sync(context: Context) {
             val app = context.applicationContext
             val intent = Intent(app, ClipboardService::class.java)
-            val on = BridgePrefs.clipboardEnabled(app)
-            // "Send to Mac" shows in other apps' menus only while the bridge is on (a no-op when nothing changes)
-            BridgeEntryPoints.setEnabled(app, on)
-            if (!on) {
+            // "Send to Mac" and the notification-access entry show only while their switches are on (a no-op when nothing changes)
+            BridgeEntryPoints.update(app)
+            if (!BridgePrefs.clipboardEnabled(app)) {
                 app.stopService(intent) // nothing happens when it is not running
                 return
             }

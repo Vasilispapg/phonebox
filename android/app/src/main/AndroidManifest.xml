@@ -156,6 +156,19 @@
                 android:value="Shares the clipboard with the paired computer while the user has Phone bridge turned on" />
         </service>
 
+        <!-- Phone bridge notifications: sees the phone's notifications to show them on the Mac. Disabled until the notification
+             switch is on (BridgeEntryPoints), so it is not in the system's Notification access list for anyone else. -->
+        <service
+            android:name=".PhoneNotificationListener"
+            android:enabled="false"
+            android:exported="true"
+            android:label="@string/bridge_title"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
         <!-- Disabled until Phone bridge is turned on (BridgeEntryPoints): for everyone else the app does not start at boot. -->
         <receiver android:name=".BridgeBootReceiver" android:enabled="false" android:exported="true">
             <intent-filter>
