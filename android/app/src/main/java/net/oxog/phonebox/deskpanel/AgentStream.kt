@@ -7,7 +7,13 @@ import java.io.Closeable
  * Reconnects after errors. On Wi-Fi it reconnects every minute so a freshly plugged-in USB cable is preferred again.
  * "open" / "close" pseudo-events tell the panel when to stop or resume its polling fallback.
  */
-class AgentStream(private val link: AgentLink, private val deliver: (event: String, data: String) -> Unit) {
+class AgentStream(
+    private val link: AgentLink,
+    private val path: String = "/api/stream",
+    /** How long to wait before asking again after the agent answers 403 (the bridge's switch is off on the computer). */
+    private val refusedRetryMs: Long = 2000,
+    private val deliver: (event: String, data: String) -> Unit,
+) {
 
     private val gate = Any()
     @Volatile private var running = false
@@ -56,10 +62,11 @@ class AgentStream(private val link: AgentLink, private val deliver: (event: Stri
         val alive = { running && gen == generation }
         while (alive()) {
             var opened = false
+            var refused = false
             var body: Closeable? = null
             try {
-                val (route, reply) = link.stream("/api/stream") ?: throw java.io.IOException("offline")
-                if (reply.code != 200) { reply.body.close(); throw java.io.IOException("HTTP ${reply.code}") }
+                val (route, reply) = link.stream(path) ?: throw java.io.IOException("offline")
+                if (reply.code != 200) { refused = reply.code == 403; reply.body.close(); throw java.io.IOException("HTTP ${reply.code}") }
                 val attached = synchronized(gate) {
                     if (!alive()) false
                     else {
@@ -96,7 +103,7 @@ class AgentStream(private val link: AgentLink, private val deliver: (event: Stri
                 synchronized(gate) { if (current === body) current = null } // a newer thread may own it already
             }
             if (opened) dispatch(gen, "close", "{}")
-            if (alive()) try { Thread.sleep(if (opened) 300 else 2000) } catch (_: InterruptedException) {}
+            if (alive()) try { Thread.sleep(if (opened) 300 else if (refused) refusedRetryMs else 2000) } catch (_: InterruptedException) {}
         }
     }
 }
