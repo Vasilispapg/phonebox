@@ -38,16 +38,36 @@ object BridgeClip {
     /** The body of POST /api/bridge/clipboard. */
     fun requestBody(text: String): String = buildString(text.length + 12) {
         append("{\"text\":\"")
-        for (c in text) when {
-            c == '"' -> append("\\\"")
-            c == '\\' -> append("\\\\")
-            c == '\n' -> append("\\n")
-            c == '\r' -> append("\\r")
-            c == '\t' -> append("\\t")
-            c < ' ' -> append("\\u").append(c.code.toString(16).padStart(4, '0'))
-            else -> append(c)
-        }
+        escapeInto(this, text)
         append("\"}")
+    }
+
+    /** The body of POST /api/bridge/notification; [time] is when the phone posted it (milliseconds). */
+    fun notificationBody(key: String, app: String, pkg: String, title: String, text: String, category: String, time: Long): String =
+        buildString(title.length + text.length + 120) {
+            fun field(name: String, value: String, last: Boolean = false) {
+                append('"').append(name).append("\":\"")
+                escapeInto(this, value)
+                append(if (last) "\"," else "\",")
+            }
+            append('{')
+            field("key", key); field("app", app); field("package", pkg); field("title", title); field("text", text); field("category", category)
+            append("\"time\":").append(time).append('}')
+        }
+
+    /** A JSON object as a map (strings, numbers as Double, booleans, null, nested maps and lists), or null when it is not one. */
+    fun parseObject(json: String): Map<String, Any?>? = Json(json).parseObject()
+
+    private fun escapeInto(out: StringBuilder, text: String) {
+        for (c in text) when {
+            c == '"' -> out.append("\\\"")
+            c == '\\' -> out.append("\\\\")
+            c == '\n' -> out.append("\\n")
+            c == '\r' -> out.append("\\r")
+            c == '\t' -> out.append("\\t")
+            c < ' ' -> out.append("\\u").append(c.code.toString(16).padStart(4, '0'))
+            else -> out.append(c)
+        }
     }
 
     /**

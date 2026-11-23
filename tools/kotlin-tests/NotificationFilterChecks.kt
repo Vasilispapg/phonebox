@@ -88,6 +88,22 @@ private fun queueChecks() {
     check("a retried item keeps its original time and expires on schedule", q.take().isEmpty())
 }
 
+private fun notificationBodyChecks() {
+    val hostile = "He said \"hi\" & \\ back\nline2\ttab \u0001 </script> Καλημέρα 🌍 {\"key\":\"evil\"}"
+    val body = BridgeClip.notificationBody("0|com.msg|7|null|10042", "Μηνύματα", "com.msg", hostile, hostile + "!", "call", 1_700_000_000_123L)
+    val m = BridgeClip.parseObject(body)
+    check("the body is one JSON object the agent can read", m != null)
+    check("the key survives", m!!["key"] == "0|com.msg|7|null|10042")
+    check("the app name survives in Greek", m["app"] == "Μηνύματα")
+    check("the package survives", m["package"] == "com.msg")
+    check("a hostile title survives byte for byte", m["title"] == hostile)
+    check("a hostile text survives byte for byte", m["text"] == hostile + "!")
+    check("the category survives", m["category"] == "call")
+    check("the time is a number", (m["time"] as Double).toLong() == 1_700_000_000_123L)
+    check("the body has no raw control character", body.none { it < ' ' })
+    check("the body names exactly the seven fields the agent reads", m.keys == setOf("key", "app", "package", "title", "text", "category", "time"))
+}
+
 private fun jsonChecks() {
     check("notifications true is read", BridgeClip.notificationsOn("""{"bridge":{"clipboard":false,"notifications":true}}""") == true)
     check("notifications false is read", BridgeClip.notificationsOn("""{"bridge":{"notifications":false}}""") == false)
@@ -158,6 +174,7 @@ fun main() {
     filterChecks()
     callKeyChecks()
     queueChecks()
+    notificationBodyChecks()
     jsonChecks()
     configCacheChecks()
     println("ALL $passed CHECKS PASSED")

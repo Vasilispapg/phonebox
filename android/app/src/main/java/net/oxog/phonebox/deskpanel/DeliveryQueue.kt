@@ -16,6 +16,9 @@ class DeliveryQueue<T>(private val max: Int = 20, private val ttlMs: Long = 120_
         while (items.size > max) items.removeFirst()
     }
 
+    @Synchronized
+    fun isEmpty(): Boolean = items.isEmpty()
+
     /** Empties the queue and returns what is still fresh, oldest first. */
     @Synchronized
     fun take(): List<Entry<T>> {
