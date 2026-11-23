@@ -288,6 +288,15 @@ Share what you copy between the Mac and the phone. It starts with the clipboard.
   connected, the Mac's switch is off, the computer has no bridge, or Android stopped the service (opening the screen
   starts it again). Android 13 and later asks to show notifications. On Samsung phones set PhoneBox's battery use to
   **Unrestricted** (Settings › Apps › PhoneBox › Battery), or the system may stop the service.
+- **Notifications from the phone:** on the Phone bridge screen turn on **Show notifications on the Mac**, then tap **Allow
+  notification access** and switch PhoneBox on in the list (on Android 13 and later the switch is greyed out until you
+  open **App info**, tap ⋮ and choose **Allow restricted settings**; the screen says so). **Choose apps** lists your apps
+  with a switch each: only the ones you turn on are sent. At first only the phone's own dialer and messaging app are on.
+  The Mac's switch (Settings › Phone bridge › Show phone notifications) must be on too; the screen shows whether the
+  last notification reached the Mac.
+- **Calls and delivery:** a call is sent once, when it starts ringing, and is not repeated when you answer or hang up; a
+  missed call is sent as "Missed call". If the Mac is asleep or away, notifications are kept for two minutes and sent when it
+  is back, then dropped (a login code older than that is no use).
 - The text goes only to your own paired phones over the PhoneBox link (USB or paired Wi-Fi / Tailscale), is kept in
   memory and never stored or logged. See [PRIVACY.md](../PRIVACY.md).
 - Needs macOS: on Windows and Linux the card is hidden and the agent answers the phone with 501.
