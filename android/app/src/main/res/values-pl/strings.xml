@@ -30,4 +30,17 @@
     <string name="bridge_send_too_large">Za długie do wysłania (limit to 64 KiB)</string>
     <string name="bridge_state_unsupported">Ten komputer nie może udostępniać schowka: most telefonu wymaga agenta PhoneBox na Macu</string>
     <string name="bridge_state_stopped">Zatrzymane przez Androida. Otwórz ten ekran ponownie lub uruchom PhoneBox od nowa, aby się połączyć</string>
+    <string name="bridge_notifications_switch">Pokazuj powiadomienia na Macu</string>
+    <string name="bridge_notifications_help">Połączenia, wiadomości i aplikacje wybrane poniżej pojawiają się jako powiadomienia na Macu razem z tekstem (na przykład kodem logowania). Wysyłane są tylko aplikacje, które włączysz. Przełącznik na Macu (Ustawienia › Most telefonu w PhoneBox na komputerze) też musi być włączony.</string>
+    <string name="bridge_access_missing">Dostęp do powiadomień nie jest jeszcze dozwolony. PhoneBox potrzebuje go, aby widzieć Twoje powiadomienia.</string>
+    <string name="bridge_access_granted">Dostęp do powiadomień jest dozwolony.</string>
+    <string name="bridge_access_button">Zezwól na dostęp do powiadomień</string>
+    <string name="bridge_restricted_help">Jeśli przełącznik jest wyszarzony (Android 13 i nowszy): otwórz Informacje o aplikacji, dotknij ⋮ w prawym górnym rogu, wybierz Zezwól na ustawienia z ograniczeniami, a potem wróć i spróbuj ponownie.</string>
+    <string name="bridge_app_info_button">Otwórz informacje o aplikacji</string>
+    <string name="bridge_apps_button">Wybierz aplikacje</string>
+    <string name="bridge_apps_title">Aplikacje pokazywane na Macu</string>
+    <string name="bridge_last_none">Nie wysłano jeszcze żadnego powiadomienia</string>
+    <string name="bridge_last_ok">Ostatnie powiadomienie dotarło na Maca</string>
+    <string name="bridge_last_off">Ostatnie powiadomienie: przełącznik powiadomień na Macu jest wyłączony</string>
+    <string name="bridge_last_failed">Ostatnie powiadomienie nie dotarło na Maca; jest przechowywane przez dwie minuty</string>
 </resources>

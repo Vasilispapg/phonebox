@@ -32,4 +32,17 @@
     <string name="bridge_send_too_large">Quá dài để gửi (giới hạn 64 KiB)</string>
     <string name="bridge_state_unsupported">Máy tính này không thể chia sẻ bộ nhớ tạm: cầu nối điện thoại cần tác nhân PhoneBox trên máy Mac</string>
     <string name="bridge_state_stopped">Android đã dừng. Hãy mở lại màn hình này, hoặc khởi động lại PhoneBox, để kết nối lại</string>
+    <string name="bridge_notifications_switch">Hiện thông báo trên Mac</string>
+    <string name="bridge_notifications_help">Cuộc gọi, tin nhắn và các ứng dụng bạn chọn bên dưới hiện trên Mac dưới dạng thông báo, kèm nội dung (ví dụ mã đăng nhập). Chỉ những ứng dụng bạn bật mới được gửi. Công tắc trên Mac (Cài đặt › Cầu nối điện thoại trong PhoneBox trên máy tính) cũng phải bật.</string>
+    <string name="bridge_access_missing">Chưa cho phép truy cập thông báo. PhoneBox cần quyền này để xem thông báo của bạn.</string>
+    <string name="bridge_access_granted">Đã cho phép truy cập thông báo.</string>
+    <string name="bridge_access_button">Cho phép truy cập thông báo</string>
+    <string name="bridge_restricted_help">Nếu công tắc bị mờ (Android 13 trở lên): mở Thông tin ứng dụng, chạm ⋮ ở góc trên bên phải, chọn Cho phép cài đặt bị hạn chế, rồi quay lại thử lại.</string>
+    <string name="bridge_app_info_button">Mở Thông tin ứng dụng</string>
+    <string name="bridge_apps_button">Chọn ứng dụng</string>
+    <string name="bridge_apps_title">Ứng dụng hiện trên Mac</string>
+    <string name="bridge_last_none">Chưa gửi thông báo nào</string>
+    <string name="bridge_last_ok">Thông báo gần nhất đã tới Mac</string>
+    <string name="bridge_last_off">Thông báo gần nhất: công tắc thông báo của Mac đang tắt</string>
+    <string name="bridge_last_failed">Thông báo gần nhất không tới được Mac; nó được giữ hai phút</string>
 </resources>

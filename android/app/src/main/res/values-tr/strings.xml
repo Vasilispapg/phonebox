@@ -30,4 +30,17 @@
     <string name="bridge_send_too_large">Göndermek için çok uzun (sınır 64 KiB)</string>
     <string name="bridge_state_unsupported">Bu bilgisayar panoyu paylaşamıyor: telefon köprüsü için bir Mac\'te PhoneBox aracısı gerekir</string>
     <string name="bridge_state_stopped">Android tarafından durduruldu. Yeniden bağlanmak için bu ekranı tekrar açın veya PhoneBox\'ı yeniden başlatın</string>
+    <string name="bridge_notifications_switch">Bildirimleri Mac\'te göster</string>
+    <string name="bridge_notifications_help">Aramalar, mesajlar ve aşağıda seçtiğiniz uygulamalar, metinleriyle (örneğin bir giriş kodu) Mac\'te bildirim olarak görünür. Yalnızca açtığınız uygulamalar gönderilir. Mac\'teki anahtar (bilgisayardaki PhoneBox\'ta Ayarlar › Telefon köprüsü) de açık olmalıdır.</string>
+    <string name="bridge_access_missing">Bildirim erişimine henüz izin verilmedi. PhoneBox\'ın bildirimlerinizi görmesi için buna ihtiyacı var.</string>
+    <string name="bridge_access_granted">Bildirim erişimine izin verildi.</string>
+    <string name="bridge_access_button">Bildirim erişimine izin ver</string>
+    <string name="bridge_restricted_help">Anahtar soluksa (Android 13 ve sonrası): Uygulama bilgisi\'ni açın, sağ üstteki ⋮ simgesine dokunun, Kısıtlı ayarlara izin ver\'i seçin, sonra geri dönüp yeniden deneyin.</string>
+    <string name="bridge_app_info_button">Uygulama bilgisini aç</string>
+    <string name="bridge_apps_button">Uygulamaları seç</string>
+    <string name="bridge_apps_title">Mac\'te gösterilen uygulamalar</string>
+    <string name="bridge_last_none">Henüz bildirim gönderilmedi</string>
+    <string name="bridge_last_ok">Son bildirim Mac\'e ulaştı</string>
+    <string name="bridge_last_off">Son bildirim: Mac\'in bildirim anahtarı kapalı</string>
+    <string name="bridge_last_failed">Son bildirim Mac\'e ulaşamadı; iki dakika saklanır</string>
 </resources>

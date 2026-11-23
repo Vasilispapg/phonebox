@@ -30,4 +30,17 @@
     <string name="bridge_send_too_large">ยาวเกินไปที่จะส่ง (ขีดจำกัด 64 KiB)</string>
     <string name="bridge_state_unsupported">คอมพิวเตอร์เครื่องนี้แชร์คลิปบอร์ดไม่ได้: สะพานเชื่อมโทรศัพท์ต้องใช้เอเจนต์ PhoneBox บน Mac</string>
     <string name="bridge_state_stopped">ถูก Android หยุดไว้ เปิดหน้าจอนี้อีกครั้ง หรือรีสตาร์ต PhoneBox เพื่อเชื่อมต่อใหม่</string>
+    <string name="bridge_notifications_switch">แสดงการแจ้งเตือนบน Mac</string>
+    <string name="bridge_notifications_help">สายเรียกเข้า ข้อความ และแอปที่คุณเลือกด้านล่างจะแสดงเป็นการแจ้งเตือนบน Mac พร้อมข้อความ (เช่น รหัสเข้าสู่ระบบ) ระบบจะส่งเฉพาะแอปที่คุณเปิดไว้ สวิตช์บน Mac (การตั้งค่า › สะพานเชื่อมโทรศัพท์ ใน PhoneBox บนคอมพิวเตอร์) ต้องเปิดอยู่ด้วย</string>
+    <string name="bridge_access_missing">ยังไม่ได้อนุญาตการเข้าถึงการแจ้งเตือน PhoneBox ต้องใช้เพื่อดูการแจ้งเตือนของคุณ</string>
+    <string name="bridge_access_granted">อนุญาตการเข้าถึงการแจ้งเตือนแล้ว</string>
+    <string name="bridge_access_button">อนุญาตการเข้าถึงการแจ้งเตือน</string>
+    <string name="bridge_restricted_help">หากสวิตช์เป็นสีเทา (Android 13 ขึ้นไป): เปิดข้อมูลแอป แตะ ⋮ ที่มุมขวาบน เลือกอนุญาตการตั้งค่าที่ถูกจำกัด แล้วกลับมาลองอีกครั้ง</string>
+    <string name="bridge_app_info_button">เปิดข้อมูลแอป</string>
+    <string name="bridge_apps_button">เลือกแอป</string>
+    <string name="bridge_apps_title">แอปที่แสดงบน Mac</string>
+    <string name="bridge_last_none">ยังไม่ได้ส่งการแจ้งเตือน</string>
+    <string name="bridge_last_ok">การแจ้งเตือนล่าสุดถึง Mac แล้ว</string>
+    <string name="bridge_last_off">การแจ้งเตือนล่าสุด: สวิตช์การแจ้งเตือนของ Mac ปิดอยู่</string>
+    <string name="bridge_last_failed">การแจ้งเตือนล่าสุดส่งไปไม่ถึง Mac ระบบจะเก็บไว้สองนาที</string>
 </resources>

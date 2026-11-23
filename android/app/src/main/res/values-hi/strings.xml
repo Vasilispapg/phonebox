@@ -30,4 +30,17 @@
     <string name="bridge_send_too_large">भेजने के लिए बहुत लंबा (सीमा 64 KiB है)</string>
     <string name="bridge_state_unsupported">यह कंप्यूटर क्लिपबोर्ड साझा नहीं कर सकता: फ़ोन ब्रिज के लिए Mac पर PhoneBox एजेंट चाहिए</string>
     <string name="bridge_state_stopped">Android ने रोक दिया। फिर से जुड़ने के लिए यह स्क्रीन दोबारा खोलें या PhoneBox को फिर से शुरू करें</string>
+    <string name="bridge_notifications_switch">Mac पर सूचनाएँ दिखाएँ</string>
+    <string name="bridge_notifications_help">कॉल, संदेश और नीचे चुने गए ऐप उनके टेक्स्ट (जैसे लॉगिन कोड) के साथ Mac पर सूचनाओं के रूप में दिखते हैं। केवल वही ऐप भेजे जाते हैं जिन्हें आप चालू करते हैं। Mac का स्विच (कंप्यूटर पर PhoneBox में सेटिंग्स › फ़ोन ब्रिज) भी चालू होना चाहिए।</string>
+    <string name="bridge_access_missing">सूचना एक्सेस की अनुमति अभी नहीं दी गई है। आपकी सूचनाएँ देखने के लिए PhoneBox को इसकी ज़रूरत है।</string>
+    <string name="bridge_access_granted">सूचना एक्सेस की अनुमति है।</string>
+    <string name="bridge_access_button">सूचना एक्सेस की अनुमति दें</string>
+    <string name="bridge_restricted_help">अगर स्विच धुँधला है (Android 13 और बाद के): ऐप की जानकारी खोलें, ऊपर दाईं ओर ⋮ पर टैप करें, “प्रतिबंधित सेटिंग की अनुमति दें” चुनें, फिर वापस आकर दोबारा कोशिश करें।</string>
+    <string name="bridge_app_info_button">ऐप की जानकारी खोलें</string>
+    <string name="bridge_apps_button">ऐप चुनें</string>
+    <string name="bridge_apps_title">Mac पर दिखाए जाने वाले ऐप</string>
+    <string name="bridge_last_none">अभी तक कोई सूचना नहीं भेजी गई</string>
+    <string name="bridge_last_ok">आखिरी सूचना Mac तक पहुँची</string>
+    <string name="bridge_last_off">आखिरी सूचना: Mac का सूचना स्विच बंद है</string>
+    <string name="bridge_last_failed">आखिरी सूचना Mac तक नहीं पहुँची; उसे दो मिनट तक रखा जाता है</string>
 </resources>

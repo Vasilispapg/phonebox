@@ -30,4 +30,17 @@
     <string name="bridge_send_too_large">長すぎて送信できません（上限は 64 KiB）</string>
     <string name="bridge_state_unsupported">このコンピューターはクリップボードを共有できません：スマホブリッジには Mac 上の PhoneBox エージェントが必要です</string>
     <string name="bridge_state_stopped">Android によって停止されました。この画面をもう一度開くか、PhoneBox を再起動して再接続してください</string>
+    <string name="bridge_notifications_switch">Mac に通知を表示</string>
+    <string name="bridge_notifications_help">着信、メッセージ、下で選んだアプリが、テキスト（たとえばログインコード）付きの通知として Mac に表示されます。オンにしたアプリだけが送信されます。Mac 側のスイッチ（コンピューターの PhoneBox の「設定 › スマホブリッジ」）もオンにする必要があります。</string>
+    <string name="bridge_access_missing">通知へのアクセスがまだ許可されていません。PhoneBox が通知を見るために必要です。</string>
+    <string name="bridge_access_granted">通知へのアクセスは許可されています。</string>
+    <string name="bridge_access_button">通知へのアクセスを許可</string>
+    <string name="bridge_restricted_help">スイッチがグレーになっている場合（Android 13 以降）：アプリ情報を開き、右上の ⋮ をタップして「制限付き設定を許可」を選び、戻ってもう一度試してください。</string>
+    <string name="bridge_app_info_button">アプリ情報を開く</string>
+    <string name="bridge_apps_button">アプリを選ぶ</string>
+    <string name="bridge_apps_title">Mac に表示するアプリ</string>
+    <string name="bridge_last_none">まだ通知を送信していません</string>
+    <string name="bridge_last_ok">直近の通知は Mac に届きました</string>
+    <string name="bridge_last_off">直近の通知：Mac の通知スイッチがオフです</string>
+    <string name="bridge_last_failed">直近の通知は Mac に届きませんでした。2 分間保持されます</string>
 </resources>

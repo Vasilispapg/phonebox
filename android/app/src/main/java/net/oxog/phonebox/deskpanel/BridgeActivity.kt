@@ -2,12 +2,16 @@ package net.oxog.phonebox.deskpanel
 
 import android.Manifest
 import android.app.Activity
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.ViewGroup
+import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Switch
@@ -20,10 +24,19 @@ import android.widget.TextView
  */
 class BridgeActivity : Activity() {
     private lateinit var status: TextView
+    private lateinit var access: TextView
+    private lateinit var last: TextView
     private val handler = Handler(Looper.getMainLooper())
     private val refresh = object : Runnable {
         override fun run() {
             status.text = statusText()
+            access.text = getString(if (notificationAccessAllowed()) R.string.bridge_access_granted else R.string.bridge_access_missing)
+            last.text = getString(when (BridgePrefs.notificationOutcome) {
+                NotificationOutcome.NONE -> R.string.bridge_last_none
+                NotificationOutcome.OK -> R.string.bridge_last_ok
+                NotificationOutcome.MAC_OFF -> R.string.bridge_last_off
+                NotificationOutcome.UNREACHABLE -> R.string.bridge_last_failed
+            })
             handler.postDelayed(this, 1000)
         }
     }
@@ -51,6 +64,37 @@ class BridgeActivity : Activity() {
         status = TextView(this).apply { textSize = 16f }
         add(status, 1)
         add(TextView(this).apply { text = getString(R.string.bridge_clipboard_help); textSize = 14f }, 2)
+
+        // ---- notifications on the Mac
+        add(Switch(this).apply {
+            text = getString(R.string.bridge_notifications_switch)
+            textSize = 18f
+            isChecked = BridgePrefs.notificationsEnabled(this@BridgeActivity)
+            setOnCheckedChangeListener { _, on ->
+                BridgePrefs.setNotificationsEnabled(this@BridgeActivity, on)
+                BridgeEntryPoints.update(this@BridgeActivity) // the listener shows in the system's Notification access list only now
+            }
+        }, 5)
+        add(TextView(this).apply { text = getString(R.string.bridge_notifications_help); textSize = 14f }, 1)
+        access = TextView(this).apply { textSize = 16f }
+        add(access, 2)
+        add(Button(this).apply {
+            text = getString(R.string.bridge_access_button)
+            setOnClickListener { openNotificationAccess() }
+        }, 1)
+        add(TextView(this).apply { text = getString(R.string.bridge_restricted_help); textSize = 14f }, 1)
+        add(Button(this).apply {
+            text = getString(R.string.bridge_app_info_button)
+            setOnClickListener {
+                startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+            }
+        }, 1)
+        add(Button(this).apply {
+            text = getString(R.string.bridge_apps_button)
+            setOnClickListener { startActivity(Intent(this@BridgeActivity, BridgeAppsActivity::class.java)) }
+        }, 2)
+        last = TextView(this).apply { textSize = 14f }
+        add(last, 1)
         setContentView(ScrollView(this).apply { addView(column) })
     }
 
@@ -64,6 +108,14 @@ class BridgeActivity : Activity() {
     override fun onPause() {
         handler.removeCallbacks(refresh)
         super.onPause()
+    }
+
+    private fun notificationAccessAllowed(): Boolean =
+        Settings.Secure.getString(contentResolver, "enabled_notification_listeners")?.contains(packageName) == true
+
+    private fun openNotificationAccess() {
+        try { startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")) }
+        catch (_: Exception) { startActivity(Intent(Settings.ACTION_SETTINGS)) }
     }
 
     private fun statusText(): String {

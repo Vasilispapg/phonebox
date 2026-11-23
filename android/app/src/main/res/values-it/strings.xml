@@ -30,4 +30,17 @@
     <string name="bridge_send_too_large">Troppo lungo da inviare (il limite è 64 KiB)</string>
     <string name="bridge_state_unsupported">Questo computer non può condividere gli appunti: il ponte telefono richiede l\'agente PhoneBox su un Mac</string>
     <string name="bridge_state_stopped">Arrestato da Android. Riapri questa schermata, o riavvia PhoneBox, per riconnetterti</string>
+    <string name="bridge_notifications_switch">Mostra le notifiche sul Mac</string>
+    <string name="bridge_notifications_help">Chiamate, messaggi e le app che scegli qui sotto compaiono come notifiche sul Mac, con il loro testo (un codice di accesso, per esempio). Vengono inviate solo le app che attivi. Anche l\'interruttore del Mac (Impostazioni › Ponte telefono in PhoneBox sul computer) deve essere attivo.</string>
+    <string name="bridge_access_missing">L\'accesso alle notifiche non è ancora consentito. PhoneBox ne ha bisogno per vedere le tue notifiche.</string>
+    <string name="bridge_access_granted">L\'accesso alle notifiche è consentito.</string>
+    <string name="bridge_access_button">Consenti l\'accesso alle notifiche</string>
+    <string name="bridge_restricted_help">Se l\'interruttore è disattivato (Android 13 e successivi): apri Info app, tocca ⋮ in alto a destra, scegli Consenti impostazioni con limitazioni, poi torna qui e riprova.</string>
+    <string name="bridge_app_info_button">Apri Info app</string>
+    <string name="bridge_apps_button">Scegli le app</string>
+    <string name="bridge_apps_title">App mostrate sul Mac</string>
+    <string name="bridge_last_none">Nessuna notifica ancora inviata</string>
+    <string name="bridge_last_ok">L\'ultima notifica è arrivata sul Mac</string>
+    <string name="bridge_last_off">Ultima notifica: l\'interruttore delle notifiche del Mac è disattivato</string>
+    <string name="bridge_last_failed">L\'ultima notifica non ha raggiunto il Mac; viene conservata per due minuti</string>
 </resources>

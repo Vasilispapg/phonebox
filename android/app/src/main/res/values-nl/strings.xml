@@ -30,4 +30,17 @@
     <string name="bridge_send_too_large">Te lang om te sturen (de limiet is 64 KiB)</string>
     <string name="bridge_state_unsupported">Deze computer kan het klembord niet delen: de telefoonbrug heeft de PhoneBox-agent op een Mac nodig</string>
     <string name="bridge_state_stopped">Gestopt door Android. Open dit scherm opnieuw, of start PhoneBox opnieuw, om weer te verbinden</string>
+    <string name="bridge_notifications_switch">Meldingen op de Mac tonen</string>
+    <string name="bridge_notifications_help">Gesprekken, berichten en de apps die je hieronder kiest verschijnen als meldingen op de Mac, met hun tekst (bijvoorbeeld een inlogcode). Alleen apps die je aanzet worden verstuurd. De schakelaar van de Mac (Instellingen › Telefoonbrug in PhoneBox op de computer) moet ook aan staan.</string>
+    <string name="bridge_access_missing">Toegang tot meldingen is nog niet toegestaan. PhoneBox heeft die nodig om je meldingen te zien.</string>
+    <string name="bridge_access_granted">Toegang tot meldingen is toegestaan.</string>
+    <string name="bridge_access_button">Toegang tot meldingen toestaan</string>
+    <string name="bridge_restricted_help">Als de schakelaar grijs is (Android 13 en later): open App-info, tik rechtsboven op ⋮, kies Beperkte instellingen toestaan en probeer het daarna opnieuw.</string>
+    <string name="bridge_app_info_button">App-info openen</string>
+    <string name="bridge_apps_button">Apps kiezen</string>
+    <string name="bridge_apps_title">Apps die op de Mac worden getoond</string>
+    <string name="bridge_last_none">Nog geen melding verstuurd</string>
+    <string name="bridge_last_ok">De laatste melding is op de Mac aangekomen</string>
+    <string name="bridge_last_off">Laatste melding: de meldingsschakelaar van de Mac staat uit</string>
+    <string name="bridge_last_failed">De laatste melding kon de Mac niet bereiken; hij wordt twee minuten bewaard</string>
 </resources>

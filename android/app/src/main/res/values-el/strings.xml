@@ -32,4 +32,17 @@
     <string name="bridge_send_too_large">Πολύ μεγάλο για αποστολή (το όριο είναι 64 KiB)</string>
     <string name="bridge_state_unsupported">Αυτός ο υπολογιστής δεν μπορεί να μοιραστεί το πρόχειρο: η γέφυρα τηλεφώνου χρειάζεται τον πράκτορα PhoneBox σε Mac</string>
     <string name="bridge_state_stopped">Σταμάτησε από το Android. Άνοιξε ξανά αυτή την οθόνη ή επανεκκίνησε το PhoneBox για να συνδεθείς</string>
+    <string name="bridge_notifications_switch">Εμφάνιση ειδοποιήσεων στο Mac</string>
+    <string name="bridge_notifications_help">Οι κλήσεις, τα μηνύματα και οι εφαρμογές που επιλέγεις παρακάτω εμφανίζονται ως ειδοποιήσεις στο Mac, με το κείμενό τους (για παράδειγμα έναν κωδικό σύνδεσης). Στέλνονται μόνο οι εφαρμογές που ενεργοποιείς. Ο διακόπτης του Mac (Ρυθμίσεις › Γέφυρα τηλεφώνου στο PhoneBox του υπολογιστή) πρέπει επίσης να είναι ενεργός.</string>
+    <string name="bridge_access_missing">Η πρόσβαση στις ειδοποιήσεις δεν έχει επιτραπεί ακόμη. Το PhoneBox τη χρειάζεται για να βλέπει τις ειδοποιήσεις σου.</string>
+    <string name="bridge_access_granted">Η πρόσβαση στις ειδοποιήσεις επιτρέπεται.</string>
+    <string name="bridge_access_button">Να επιτρέπεται η πρόσβαση στις ειδοποιήσεις</string>
+    <string name="bridge_restricted_help">Αν ο διακόπτης είναι γκριζαρισμένος (Android 13 και νεότερο): άνοιξε τις Πληροφορίες εφαρμογής, πάτησε ⋮ πάνω δεξιά, επίλεξε Να επιτρέπονται οι περιορισμένες ρυθμίσεις και ξαναδοκίμασε.</string>
+    <string name="bridge_app_info_button">Άνοιγμα πληροφοριών εφαρμογής</string>
+    <string name="bridge_apps_button">Επιλογή εφαρμογών</string>
+    <string name="bridge_apps_title">Εφαρμογές που εμφανίζονται στο Mac</string>
+    <string name="bridge_last_none">Δεν έχει σταλεί ακόμη ειδοποίηση</string>
+    <string name="bridge_last_ok">Η τελευταία ειδοποίηση έφτασε στο Mac</string>
+    <string name="bridge_last_off">Τελευταία ειδοποίηση: ο διακόπτης ειδοποιήσεων του Mac είναι ανενεργός</string>
+    <string name="bridge_last_failed">Η τελευταία ειδοποίηση δεν έφτασε στο Mac· διατηρείται για δύο λεπτά</string>
 </resources>

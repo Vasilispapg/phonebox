@@ -17,6 +17,11 @@
 
     <!-- Android 11+: the speech recognizer has to be visible to the app (Dictation widget) -->
     <queries>
+        <!-- the apps that can be switched on for the Mac (launchable apps only; no all-packages permission) -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
         <intent>
             <action android:name="android.speech.RecognitionService" />
         </intent>
@@ -135,6 +140,12 @@
             </intent-filter>
             <meta-data android:name="android.service.quicksettings.ACTIVE_TILE" android:value="false" />
         </service>
+
+        <activity
+            android:name=".BridgeAppsActivity"
+            android:exported="false"
+            android:label="@string/bridge_apps_title"
+            android:theme="@android:style/Theme.Material.NoActionBar" />
 
         <service
             android:name=".ClipboardService"
