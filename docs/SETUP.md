@@ -273,6 +273,9 @@ phone; over Wi-Fi the panel shows "plug in USB to update") and replaces its own 
 accepts an update signed with the same key as the installed app; the agent never uninstalls to force one.
 When GitHub turns away anonymous requests (it answers 503 / 504 now and then), the agent asks again with the
 [GitHub CLI](https://cli.github.com)'s token if `gh` is signed in; the token only goes to `api.github.com`.
+A Mac agent running from `PhoneBox.app` (the `.dmg` of a release) updates the same way, by replacing the whole app: it
+downloads the release's `PhoneBox-<version>-<rid>.dmg`, checks it against the release checksums and the new app's signature, swaps it
+in and restarts. The app must sit in a folder you can write to, such as `~/Applications`.
 See the [changelog](../CHANGELOG.md).
 
 ## FAQ & troubleshooting

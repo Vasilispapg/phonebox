@@ -16,6 +16,12 @@ a release or deploys Pages. Changes to Pages deployment still need a successful 
 Published releases update the Scoop bucket and generate winget manifests in a follow-up commit.
 Winget manifests are prepared for submission; generation alone does not mean the package is accepted into winget-pkgs.
 
+An agent running from `PhoneBox.app` updates itself from the release's DMG (`UpdateService.UpdateBundleAsync`): it downloads
+`PhoneBox-<version>-<rid>.dmg`, checks it against `SHA256SUMS-<version>.txt`, copies the new app out of the image, verifies its signature,
+swaps it for the running app (two renames in the same folder) and restarts. So a release must carry a DMG for every macOS `rid`, named
+`PhoneBox-<version>-<rid>.dmg`, or apps on that `rid` see no update; a folder the user cannot write to (an admin-only /Applications)
+makes the update fail with a message instead.
+
 The agent zips are self-contained single files: each one carries its own .NET runtime, so .NET security fixes
 reach users only through a PhoneBox release. When .NET ships a fix for Kestrel, TLS or the runtime, publish a patch
 release (`setup-dotnet` with `10.0.x` picks up the newest runtime). Single-file bundles are not compressed on
