@@ -17,7 +17,7 @@ Each macOS leg also builds `PhoneBox-<version>-<rid>.dmg`: the same signed agent
 with the same certificate and identifier, so its designated requirement equals the zip's. `tools/check-macos-dmg.sh` mounts the image,
 verifies the signature, compares the two requirements and smoke-runs the agent from the app; `build.yml` runs the same steps with its
 throwaway certificate on every change. The DMG is not notarized (that needs an Apple Developer ID), so a copy downloaded to another Mac
-needs right-click > Open the first time.
+is blocked the first time and needs System Settings > Privacy & Security > Open Anyway (right-click > Open only works up to macOS 14).
 
 Published releases update the Scoop bucket and generate winget manifests in a follow-up commit.
 Winget manifests are prepared for submission; generation alone does not mean the package is accepted into winget-pkgs.

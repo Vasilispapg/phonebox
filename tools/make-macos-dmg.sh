@@ -5,8 +5,8 @@
 #   tools/make-macos-dmg.sh dmg <PhoneBox.app> <version> <out.dmg>         # put the app and an Applications shortcut in a disk image
 #
 # It does not sign anything. Sign the .app between the two steps: release.yml and build.yml use the
-# sign-macos-agent action (the same certificate and identifier as the zip, so macOS keeps the Accessibility permission
-# and the designated requirement is the same as the zip's), scripts/build.sh signs ad hoc.
+# sign-macos-agent action (the same certificate and identifier as the zip, so the designated requirement is the same as
+# the zip's and stays the same from release to release), scripts/build.sh signs ad hoc.
 #
 # There is no tray icon on macOS, so the app has no Dock icon or window (LSUIElement): it runs in the background and the
 # settings are at http://127.0.0.1:8765. The agent's identifier and the bundle identifier are the same on purpose.
@@ -24,6 +24,12 @@ case "$mode" in
     mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
     # Only the executable goes in MacOS: codesign treats every other file there as code that must be signed itself. The
     # rest (the third-party notices, copies of what the agent embeds) is data, so it goes in Resources. Debug symbols stay out.
+    # The self-contained single-file agent has no loose native libraries today. If one ever appears it would belong next to
+    # the executable and must be signed, which this script does not do: stop here rather than leave it out of the app.
+    if find "$src" -maxdepth 1 -name '*.dylib' | grep -q .; then
+      echo "native libraries (*.dylib) next to PhoneBoxAgent in $src: make-macos-dmg.sh has to put them in Contents/MacOS and sign them" >&2
+      exit 1
+    fi
     cp "$src/PhoneBoxAgent" "$app/Contents/MacOS/PhoneBoxAgent"
     find "$src" -maxdepth 1 -type f ! -name PhoneBoxAgent ! -name '*.pdb' -exec cp {} "$app/Contents/Resources/" \;
     [ -x "$app/Contents/MacOS/PhoneBoxAgent" ] || { echo "copying the agent into the app failed" >&2; exit 1; }

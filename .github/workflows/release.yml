@@ -139,8 +139,9 @@ jobs:
           New-Item -ItemType Directory -Force dist | Out-Null
           Compress-Archive -Path out/* -DestinationPath "dist/PhoneBoxAgent-${{ needs.version.outputs.version }}-${{ matrix.rid }}.zip"
       # The same signed agent as in the zip, in PhoneBox.app inside a disk image. The app is signed with the same
-      # certificate and identifier, so its designated requirement equals the zip's (checked below) and macOS keeps the
-      # Accessibility permission. Not notarized: a downloaded copy needs right-click > Open the first time.
+      # certificate and identifier, so its designated requirement equals the zip's (checked below) and every release of
+      # the app satisfies the same requirement. Not notarized: a downloaded copy is blocked the first time and needs
+      # System Settings > Privacy & Security > Open Anyway.
       - name: Build the macOS app
         if: startsWith(matrix.rid, 'osx-')
         run: tools/make-macos-dmg.sh app out '${{ needs.version.outputs.version }}' "$RUNNER_TEMP/dmg/PhoneBox.app"

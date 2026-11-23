@@ -3,8 +3,10 @@
 #   tools/check-macos-dmg.sh <PhoneBox.dmg> <signed PhoneBoxAgent from the zip> <version>
 #
 # 1. the disk image mounts and holds PhoneBox.app and the Applications shortcut
-# 2. the app's signature verifies, and its designated requirement is the same as the zip's agent: identical certificate and
-#    identifier, so macOS keeps the Accessibility permission when someone moves from the zip to the app (or back)
+# 2. the app's signature verifies, and its designated requirement is the same as the zip's agent (identical certificate and
+#    identifier), so the app is signed by the same identity as every other PhoneBox build. That is what keeps a grant across
+#    updates of the app itself; it does not make macOS share a grant between a bare executable (recorded by path) and an
+#    app (recorded by bundle id), so someone moving between the two allows Accessibility once more
 # 3. the agent inside, copied out of the read-only image, starts and serves its API (tools/smoke-agent.py)
 set -euo pipefail
 

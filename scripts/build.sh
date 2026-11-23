@@ -10,7 +10,8 @@
 #   linux-*     PhoneBoxAgent-<version>-<rid>.tar.gz    a single executable file; the archive keeps the run bit
 #
 # Every file is self-contained: no .NET runtime is needed to run it. Building needs the .NET 10 SDK (or newer).
-# The .dmg is ad-hoc signed, so a copy downloaded to another Mac shows a first-run warning (right-click > Open); the
+# The .dmg is ad-hoc signed, so a copy downloaded to another Mac is blocked the first time (System Settings > Privacy & Security >
+# Open Anyway; right-click > Open only works up to macOS 14); the
 # official releases come from the GitHub release workflow. The Windows .exe (tray icon, WinForms) can only be built
 # on Windows: run scripts/build.ps1 there.
 set -euo pipefail
@@ -37,6 +38,14 @@ version="$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' "$proj/PhoneBox.Agent.c
 target="${1:-$host-$arch}"
 if [ "$target" = all ]; then targets="linux-x64 linux-arm64 osx-arm64 osx-x64"; else targets="$target"; fi
 
+# a .dmg needs hdiutil, which only exists on macOS: say so now instead of publishing a build that is then thrown away
+if ! command -v hdiutil >/dev/null; then
+  case "$target" in
+    osx-*) echo "A macOS .dmg can only be built on a Mac (hdiutil). Take the .dmg or the zip from a release instead." >&2; exit 1 ;;
+    all) targets="linux-x64 linux-arm64"; echo "Skipping the macOS targets: a .dmg can only be built on a Mac." >&2 ;;
+  esac
+fi
+
 mkdir -p "$dist"
 work="$(mktemp -d "${TMPDIR:-/tmp}/phonebox-build.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
@@ -50,10 +59,9 @@ publish() { # publish <rid> <out dir>
 
 make_dmg() { # make_dmg <rid> <published dir>
   local rid="$1" out="$2" app="$work/PhoneBox-$1.app" dmg="$dist/PhoneBox-$version-$1.dmg"
-  command -v hdiutil >/dev/null || { echo "  skipped the .dmg: hdiutil only exists on macOS (take the zip from a release instead)" >&2; return 0; }
   "$root/tools/make-macos-dmg.sh" app "$out" "$version" "$app"
   # Ad hoc signing makes macOS accept the unsigned binary. Releases sign with PhoneBox's own certificate instead
-  # (.github/actions/sign-macos-agent), so a copy built here does not keep the Accessibility permission across updates.
+  # (.github/actions/sign-macos-agent), so a copy built here has a different identity from a release and has to be allowed again.
   codesign --force --deep --sign - --identifier net.oxog.phonebox.agent "$app" >/dev/null 2>&1
   "$root/tools/make-macos-dmg.sh" dmg "$app" "$version" "$dmg"
   echo "  $dmg"

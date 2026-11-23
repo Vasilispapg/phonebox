@@ -134,7 +134,9 @@ The settings are at <http://127.0.0.1:8765>, on Windows also from the tray icon.
   APK and agents for Windows x64, Linux x64/ARM64 and macOS Apple silicon/Intel, with SHA-256 checksums and build
   provenance. Unzip the agent and run it. It can update itself only from the install folder in the table above. On a Mac,
   the `.dmg` holds `PhoneBox.app`: drag it to Applications (or `~/Applications`) and open it. It has no window; the settings
-  are at http://127.0.0.1:8765. It is not notarized, so the first time use right-click › Open.
+  are at http://127.0.0.1:8765. It is not notarized, so macOS blocks it the first time: open it once, then allow it in *System Settings › Privacy &
+  Security › Open Anyway* (right-click › Open works only up to macOS 14). The Accessibility permission is recorded per
+  app, so allow PhoneBox there once more when you move between this app and an agent started from the zip or `setup.sh`.
 - **Scoop** (Windows), which can then put the app on the phone from *Settings › General › Install the phone app*:
 
   ```powershell
