@@ -13,6 +13,8 @@ internal static class BridgeApi
 {
     /// <summary>The largest request the clipboard endpoint reads (the text limit is lower; JSON escapes make the body bigger).</summary>
     public const int MaxRequestBytes = 512 * 1024; // 64 KiB of text can grow six times once JSON escapes it (each character as a six-character escape)
+    /// <summary>The largest notification request: a title and text are cut to 2.2 KB anyway, the rest is JSON.</summary>
+    public const int MaxNotificationBytes = 64 * 1024;
     public const string RequestTooLarge = "request too large";
     /// <summary>An SSE comment, sent now and then so a dead connection is noticed.</summary>
     public const string PingFrame = ": ping\n\n";
@@ -20,13 +22,20 @@ internal static class BridgeApi
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
 
     /// <summary>
-    /// POST /api/bridge/clipboard and GET /api/bridge/stream. <see cref="RequestGate"/> already refuses them on the local port;
-    /// each endpoint asks it again (a middleware moved in front of the gate must not open them), and the stream keeps asking.
+    /// POST /api/bridge/clipboard, POST /api/bridge/notification and GET /api/bridge/stream. <see cref="RequestGate"/> already
+    /// refuses them on the local port; each endpoint asks it again (a middleware moved in front of the gate must not open them),
+    /// and the stream keeps asking. POST /api/bridge/notification/test, the Settings page's test button, is the reverse: only the
+    /// local port serves it (the gate lets exactly that path through there, and it is on neither the USB nor the Wi-Fi allow-list).
     /// </summary>
     public static void Map(IEndpointRouteBuilder app, RequestGate gate)
     {
         app.MapPost("/api/bridge/clipboard", (HttpContext ctx, ConfigStore cfg) =>
             PostClipboardAsync(ctx, ctx.RequestServices.GetService<ClipboardBridge>(), cfg, () => Authorized(gate, ctx)));
+        app.MapPost("/api/bridge/notification", (HttpContext ctx) =>
+            PostNotificationAsync(ctx, ctx.RequestServices.GetService<NotificationBridge>(), () => Authorized(gate, ctx)));
+        app.MapPost("/api/bridge/notification/test", (HttpContext ctx) =>
+            PostTestNotificationAsync(ctx.RequestServices.GetService<NotificationBridge>(), () => gate.IsLocalPort(ctx.Connection.LocalPort),
+                DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()));
         app.MapGet("/api/bridge/stream", async (HttpContext ctx, ConfigStore cfg, BridgeStream bridge, IHostApplicationLifetime life) =>
         {
             // what the request came with, so the open stream can be checked again with exactly that (see StreamAsync)
@@ -59,6 +68,20 @@ internal static class BridgeApi
         return PostClipboard(bridge, text, DeviceId(ctx.Request.Headers["X-PhoneBox-Device"]));
     }
 
+    /// <summary>The notification endpoint, in the same order as the clipboard's: who is asking, 501, the switch (403), then the body.</summary>
+    public static async Task<IResult> PostNotificationAsync(HttpContext ctx, NotificationBridge? bridge, Func<bool> authorized)
+    {
+        if (!authorized()) return Results.Json(new { error = "not allowed here" }, statusCode: 403);
+        if (NotificationGate(bridge) is { } refused) return refused; // not macOS, or the switch is off: no body is read
+        var (notification, error) = await ReadNotificationBody(ctx.Request);
+        if (error is not null) return BodyError(error);
+        return PostNotification(bridge, notification, DeviceId(ctx.Request.Headers["X-PhoneBox-Device"]));
+    }
+
+    /// <summary>The test button's endpoint: only from the local port, then the same 501 and switch checks, and no body.</summary>
+    public static Task<IResult> PostTestNotificationAsync(NotificationBridge? bridge, Func<bool> local, long now) =>
+        Task.FromResult(!local() ? Results.Json(new { error = "not allowed here" }, statusCode: 403) : PostTestNotification(bridge, now));
+
     public static IResult PostClipboard(ClipboardBridge? bridge, string? text, string? deviceId)
     {
         if (bridge is null) return Results.Json(new { error = "not supported on this system" }, statusCode: 501);
@@ -72,13 +95,17 @@ internal static class BridgeApi
         };
     }
 
-    /// <summary>Reads <c>{"text": "..."}</c>. A body without a usable text gives (null, null); the caller answers 400.</summary>
-    public static async Task<(string? Text, string? Error)> ReadClipboardBody(HttpRequest req)
+    /// <summary>
+    /// Reads at most <paramref name="max"/> bytes of JSON, also for chunked requests that state no length, and hands the root to
+    /// <paramref name="parse"/> while the buffer is still held. A request that is no JSON, or whose text is not valid Unicode, gives
+    /// an error for the caller to answer; a body <paramref name="parse"/> finds unusable gives (default, null).
+    /// </summary>
+    private static async Task<(T? Value, string? Error)> ReadJson<T>(HttpRequest req, int max, Func<JsonElement, T?> parse)
     {
-        if (req.ContentLength > MaxRequestBytes) return (null, RequestTooLarge);
+        if (req.ContentLength > max) return (default, RequestTooLarge);
         // Sized from Content-Length when the phone sends one (Kestrel ends the body there); a chunked request, which has none,
         // gets room for the limit and one byte more, so a body over it is noticed. Pooled, and cleared on return: it held the text.
-        var room = (int)(req.ContentLength ?? MaxRequestBytes) + 1;
+        var room = (int)(req.ContentLength ?? max) + 1;
         var buf = ArrayPool<byte>.Shared.Rent(room); // may be larger than asked: never read past room
         try
         {
@@ -89,21 +116,70 @@ internal static class BridgeApi
                 if (count == 0) break;
                 n += count;
             }
-            if (n > MaxRequestBytes) return (null, RequestTooLarge);
+            if (n > max) return (default, RequestTooLarge);
             try
             {
                 using var doc = JsonDocument.Parse(buf.AsMemory(0, n));
-                return doc.RootElement is { ValueKind: JsonValueKind.Object } root
-                       && root.TryGetProperty("text", out var t) && t.ValueKind == JsonValueKind.String
-                    ? (t.GetString(), null)
-                    : (null, null);
+                return (parse(doc.RootElement), null);
             }
-            catch (JsonException) { return (null, "invalid JSON"); }
+            catch (JsonException) { return (default, "invalid JSON"); }
             // JSON whose text is not valid Unicode (a lone surrogate escape such as "\ud800", or bytes that are not UTF-8): GetString
             // throws this for it, and uncaught it would become a 500 instead of a request error
-            catch (InvalidOperationException) { return (null, "invalid text"); }
+            catch (InvalidOperationException) { return (default, "invalid text"); }
         }
         finally { ArrayPool<byte>.Shared.Return(buf, clearArray: true); }
+    }
+
+    /// <summary>Reads <c>{"text": "..."}</c>. A body without a usable text gives (null, null); the caller answers 400.</summary>
+    public static Task<(string? Text, string? Error)> ReadClipboardBody(HttpRequest req) =>
+        ReadJson<string>(req, MaxRequestBytes, root =>
+            root is { ValueKind: JsonValueKind.Object } && root.TryGetProperty("text", out var t) && t.ValueKind == JsonValueKind.String
+                ? t.GetString()
+                : null);
+
+    /// <summary>
+    /// Reads a phone notification: <c>{"key","app","package","title","text","category","time"}</c>. A body that is not one (no
+    /// text key, or neither a title nor a text) gives (null, null); the caller answers 400.
+    /// </summary>
+    public static Task<(PhoneNotification? Notification, string? Error)> ReadNotificationBody(HttpRequest req) =>
+        ReadJson<PhoneNotification>(req, MaxNotificationBytes, root =>
+        {
+            if (root is not { ValueKind: JsonValueKind.Object }) return null;
+            string? Str(string name) => root.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+            var key = Str("key");
+            var title = Str("title") ?? "";
+            var text = Str("text") ?? "";
+            if (string.IsNullOrEmpty(key) || (title.Length == 0 && text.Length == 0)) return null;
+            var time = root.TryGetProperty("time", out var tv) && tv.ValueKind == JsonValueKind.Number && tv.TryGetInt64(out var t) ? t : 0;
+            var category = Str("category") is { Length: > 0 and <= 32 } c ? c : "message";
+            return new PhoneNotification(key.Length > 128 ? key[..128] : key, Str("app") ?? "", Str("package") ?? "", title, text, category, time);
+        });
+
+    public static IResult PostNotification(NotificationBridge? bridge, PhoneNotification? notification, string? deviceId)
+    {
+        if (bridge is null) return Results.Json(new { error = "not supported on this system" }, statusCode: 501);
+        if (notification is null) return Results.Json(new { error = "give a key and a title or a text" }, statusCode: 400);
+        return bridge.Receive(notification, deviceId) switch
+        {
+            NotifyResult.Queued or NotifyResult.Duplicate => Results.Ok(new { ok = true }),
+            NotifyResult.Off => Results.Json(new { error = "off" }, statusCode: 403),
+            _ => Results.Json(new { error = "could not show the notification" }, statusCode: 500),
+        };
+    }
+
+    /// <summary>Refuses before a body is read: 501 without a bridge, 403 while the switch is off; null when the request may go on.</summary>
+    public static IResult? NotificationGate(NotificationBridge? bridge) =>
+        bridge is null ? Results.Json(new { error = "not supported on this system" }, statusCode: 501)
+        : !bridge.Enabled ? Results.Json(new { error = "off" }, statusCode: 403)
+        : null;
+
+    /// <summary>The Settings page's "Send a test notification" button (local only, see Lan.cs): a notification through the same switch.</summary>
+    public static IResult PostTestNotification(NotificationBridge? bridge, long now)
+    {
+        if (bridge is null) return Results.Json(new { error = "not supported on this system" }, statusCode: 501);
+        if (!bridge.Enabled) return Results.Json(new { error = "Show phone notifications is off: turn it on and save first" }, statusCode: 403);
+        return PostNotification(bridge, new PhoneNotification("test-" + now, "PhoneBox", "net.oxog.phonebox", "PhoneBox test",
+            "If you can read this, the phone bridge works on this computer.", "message", now), "test");
     }
 
     public static IResult BodyError(string error) =>

@@ -300,6 +300,16 @@ Share what you copy between the Mac and the phone. It starts with the clipboard.
   phone's key; nothing on the Mac itself can read it from the agent's local port. It is kept in memory and never stored
   or logged. A phone whose connection drops for a moment is sent what it missed when it reconnects (at most the last 20
   copies, and only those from the last two minutes). See [PRIVACY.md](../PRIVACY.md).
+- **Notifications on the Mac:** turn on **Settings › Phone bridge › Show phone notifications on this Mac**. Calls (who is
+  calling), messages and the apps you allow on the phone then appear as macOS notifications, with the text of the
+  message. They carry Script Editor's icon, which is how macOS labels a notification from a program that has no app of
+  its own. A banner stays for about five seconds and then waits in **Notification Center** (click the clock). **Send a
+  test notification** shows one right away; save the settings first.
+- **Login codes:** with **Copy one-time codes from messages** on as well, a code in a message ("Your verification code is
+  482913", also in Greek) is put on the Mac's clipboard when the notification arrives, and the notification says "Code
+  copied", so you can paste it into the site at once. It copies only when it finds exactly one code next to a word like
+  code, OTP, PIN or κωδικός; with two numbers, or none, it copies nothing. It does not send the code on to your phones.
+- Calls show who is calling; the voice stays on the phone. Answer there.
 - **macOS asking before an app reads the clipboard:** newer macOS versions can ask whether an app may paste from other
   apps (System Settings › Privacy & Security). If macOS asks about PhoneBox, choose Allow there, or it asks again at each
   copy. If PhoneBox is denied, macOS gives it no text, nothing you copy reaches the phone, and the Phone bridge card says

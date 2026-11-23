@@ -6,7 +6,8 @@ namespace PhoneBox.Agent;
 /// <list type="bullet">
 /// <item>Local port (127.0.0.1 only): the Host check blocks DNS rebinding; from browsers only the settings page itself (same
 /// origin) is accepted (no CSRF). The phone bridge's paths are refused here: nothing on this computer needs them, and any
-/// local process (another user's, a sandboxed app with network access) could otherwise read every copy.</item>
+/// local process (another user's, a sandboxed app with network access) could otherwise read every copy. The one exception is
+/// the Settings page's "send a test notification" button, which exists only for this computer's own page.</item>
 /// <item>The phone's USB tunnel ends on a port of its own (UsbLink): every app on the phone can reach the tunnel, so it is
 /// TLS with the certificate the app pins (handed over adb), needs the key the PhoneBox app made (read over adb), and serves
 /// only the phone API.</item>
@@ -20,6 +21,15 @@ internal sealed class RequestGate(int localPort, string[] sameOrigins, UsbLink u
 {
     /// <summary>The phone bridge's namespace: reached only through the USB tunnel or the Wi-Fi port, with the phone's key.</summary>
     public static bool IsBridgePath(PathString path) => path.StartsWithSegments("/api/bridge");
+
+    /// <summary>
+    /// The one bridge path that is for the local port only: the Settings page's test notification. It is not on the Wi-Fi allow-list
+    /// (Lan.AllowedOverLan) and the USB tunnel does not serve it either, and the exact path is exempt from the local refusal.
+    /// </summary>
+    public static bool IsLocalOnlyBridgePath(PathString path) => path == "/api/bridge/notification/test";
+
+    /// <summary>True for the agent's own local port, the only one the Settings page uses.</summary>
+    public bool IsLocalPort(int port) => port == localPort;
 
     /// <summary>
     /// True while a request on this port with this key may reach a phone path: the USB key check or the Wi-Fi check, the
@@ -74,7 +84,7 @@ internal sealed class RequestGate(int localPort, string[] sameOrigins, UsbLink u
         {
             var host = ctx.Request.Host.Host;
             if ((host != "127.0.0.1" && host != "localhost") || (origin != "" && !sameOrigins.Contains(origin))
-                || IsBridgePath(ctx.Request.Path)
+                || (IsBridgePath(ctx.Request.Path) && !IsLocalOnlyBridgePath(ctx.Request.Path))
                 || (!spotifyCallback(ctx) && BrowserGuard.IsForeign(ctx.Request.Headers["Sec-Fetch-Site"], ctx.Request.Headers["Sec-Fetch-Mode"], ctx.Request.Method, ctx.Request.Path)))
             {
                 ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
