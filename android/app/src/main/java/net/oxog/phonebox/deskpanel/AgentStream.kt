@@ -12,6 +12,8 @@ class AgentStream(
     private val path: String = "/api/stream",
     /** How long to wait before asking again after the agent answers 403 (the bridge's switch is off on the computer). */
     private val refusedRetryMs: Long = 2000,
+    /** Called each time the agent answers 403, so a screen can say the computer's switch is off. */
+    private val onRefused: (() -> Unit)? = null,
     private val deliver: (event: String, data: String) -> Unit,
 ) {
 
@@ -66,7 +68,12 @@ class AgentStream(
             var body: Closeable? = null
             try {
                 val (route, reply) = link.stream(path) ?: throw java.io.IOException("offline")
-                if (reply.code != 200) { refused = reply.code == 403; reply.body.close(); throw java.io.IOException("HTTP ${reply.code}") }
+                if (reply.code != 200) {
+                    refused = reply.code == 403
+                    reply.body.close()
+                    if (refused && alive()) onRefused?.invoke()
+                    throw java.io.IOException("HTTP ${reply.code}")
+                }
                 val attached = synchronized(gate) {
                     if (!alive()) false
                     else {

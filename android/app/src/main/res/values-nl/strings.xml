@@ -13,4 +13,19 @@
     <string name="pair_failed_certificate">De computer heeft een ander certificaat dan de code QR. Begin opnieuw met koppelen.</string>
     <string name="ok">OK</string>
     <string name="webview_failed">Het paneel kan niet op deze telefoon draaien: Android kon zijn WebView niet starten. Sommige Android 5-telefoons kunnen de WebView-versies die PhoneBox nodig heeft niet uitvoeren.</string>
+    <string name="bridge_title">Telefoonbrug</string>
+    <string name="bridge_clipboard_switch">Klembord delen met de Mac</string>
+    <string name="bridge_clipboard_help">Tekst die je op de Mac kopieert, verschijnt op deze telefoon. Om tekst naar de Mac te sturen, selecteer je hem en tik je op ‘Naar Mac sturen’, gebruik je Delen › Naar Mac sturen of de tegel Naar Mac sturen in Snelle instellingen. De schakelaar Telefoonbrug van de Mac (in de PhoneBox-instellingen op de computer) moet ook aan staan.</string>
+    <string name="bridge_state_off">Uit</string>
+    <string name="bridge_state_waiting">Wachten op de Mac…</string>
+    <string name="bridge_state_running">Verbonden met de Mac</string>
+    <string name="bridge_state_mac_off">De klembordschakelaar van de Mac staat uit (Instellingen › Telefoonbrug op de computer)</string>
+    <string name="bridge_notification_channel">Klembord delen</string>
+    <string name="bridge_notification_title">PhoneBox deelt het klembord</string>
+    <string name="bridge_send_to_mac">Naar Mac sturen</string>
+    <string name="bridge_sent">Naar de Mac gestuurd</string>
+    <string name="bridge_send_off">De klembordschakelaar van de Mac staat uit</string>
+    <string name="bridge_send_unreachable">Kan de Mac niet bereiken</string>
+    <string name="bridge_send_nothing">Niets te sturen: het klembord is leeg of privé</string>
+    <string name="bridge_send_too_large">Te lang om te sturen (de limiet is 64 KiB)</string>
 </resources>

@@ -321,6 +321,7 @@ class MainActivity : Activity(), SensorEventListener {
 
     override fun onResume() {
         super.onResume()
+        ClipboardService.sync(applicationContext) // Phone bridge: starts, stops or reconnects it to match the switch
         if (!hasWeb) return
         resumed = true
         web.onResume()
