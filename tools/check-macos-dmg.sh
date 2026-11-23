@@ -26,6 +26,8 @@ hdiutil attach "$dmg" -nobrowse -readonly -mountpoint "$mount" >/dev/null
 
 cp -R "$mount/PhoneBox.app" "$work/PhoneBox.app"
 app="$work/PhoneBox.app"
+[ -f "$app/Contents/Resources/PhoneBox.icns" ] || { echo "::error::the app has no icon (Contents/Resources/PhoneBox.icns)"; exit 1; }
+[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$app/Contents/Info.plist")" = PhoneBox ] || { echo "::error::Info.plist does not name the icon"; exit 1; }
 codesign --verify --deep --strict --verbose=2 "$app"
 
 req() { codesign -d -r- "$1" 2>&1 | sed -n 's/^designated => //p'; }

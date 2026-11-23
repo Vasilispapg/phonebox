@@ -31,6 +31,9 @@ case "$mode" in
       exit 1
     fi
     cp "$src/PhoneBoxAgent" "$app/Contents/MacOS/PhoneBoxAgent"
+    icon="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/packaging/macos/PhoneBox.icns"
+    [ -f "$icon" ] || { echo "the app icon is missing: $icon (made by tools/make-macos-icon.swift)" >&2; exit 1; }
+    cp "$icon" "$app/Contents/Resources/PhoneBox.icns"
     find "$src" -maxdepth 1 -type f ! -name PhoneBoxAgent ! -name '*.pdb' -exec cp {} "$app/Contents/Resources/" \;
     [ -x "$app/Contents/MacOS/PhoneBoxAgent" ] || { echo "copying the agent into the app failed" >&2; exit 1; }
     cat > "$app/Contents/Info.plist" <<EOF
@@ -41,6 +44,7 @@ case "$mode" in
   <key>CFBundleDisplayName</key><string>PhoneBox</string>
   <key>CFBundleIdentifier</key><string>net.oxog.phonebox.agent</string>
   <key>CFBundleExecutable</key><string>PhoneBoxAgent</string>
+  <key>CFBundleIconFile</key><string>PhoneBox</string>
   <key>CFBundleVersion</key><string>$version</string>
   <key>CFBundleShortVersionString</key><string>$version</string>
   <key>CFBundlePackageType</key><string>APPL</string>
