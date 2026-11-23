@@ -666,7 +666,30 @@ public sealed class AdbReverse(ConfigStore cfg, ILogger<AdbReverse> log, AgentEn
             }
         }
         else _awakeSet.Clear();
+        // Settings › Phone bridge › clipboard (macOS): the helper that lets a copy on the phone reach this computer without a tap
+        _adbPath = adb;
+        await Launcher.EnsureAsync([.. devices.Where(d => !_missingApp.Contains(d) && !unreachable.Contains(d))],
+            OperatingSystem.IsMacOS() && cfg.Get().Bridge.Clipboard, ct);
         Report($"phone connected: {Devices}");
+    }
+
+    private string? _adbPath;
+    private ClipHelperLauncher? _launcher;
+    private ClipHelperLauncher Launcher => _launcher ??= new((args, ct) => AdbArgs(_adbPath!, args, ct), () => Environment.TickCount64, log);
+
+    /// <summary>Like <see cref="Adb"/> but the arguments go in as a list, so a command with spaces and quotes reaches the phone's shell as one piece.</summary>
+    internal static async Task<string> AdbArgs(string adb, IReadOnlyList<string> args, CancellationToken ct)
+    {
+        if (SessionEnding) throw new OperationCanceledException("the session is ending");
+        var psi = new ProcessStartInfo(adb)
+        {
+            RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true,
+            WorkingDirectory = AppPaths.NeutralCwd,
+        };
+        foreach (var a in args) psi.ArgumentList.Add(a);
+        var result = await ToolProcess.RunAsync(psi, TimeSpan.FromSeconds(8), ct);
+        if (result.ExitCode != 0) throw new IOException($"ADB exited with code {result.ExitCode}");
+        return result.Output;
     }
 
     /// <summary>
