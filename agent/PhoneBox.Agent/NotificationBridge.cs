@@ -46,6 +46,9 @@ public sealed class NotificationBridge : IHostedService, IDisposable
         _phones = phones ?? PhoneRegistry.All;
     }
 
+    /// <summary>True while Settings › Phone bridge shows phone notifications; the endpoints refuse before reading a body when it is off.</summary>
+    public bool Enabled => _config.Get().Bridge.Notifications;
+
     public NotifyResult Receive(PhoneNotification n, string? deviceId)
     {
         var bridge = _config.Get().Bridge;

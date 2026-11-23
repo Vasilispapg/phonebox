@@ -110,6 +110,15 @@ Last updated: 2026-11-20 (PhoneBox 0.9.6).
   clipboard event in memory (not the text) and sends it when it reconnects. **On Android 9 and older, every app on the
   phone can read the clipboard at any time**, not only the app in front: there, text you copy on the Mac is readable
   by all apps installed on the phone. Android 10 and later let only the app in front (and the keyboard) read it.
+- **Phone notifications on the computer, the phone bridge** (macOS only, off by default; **Settings › Phone bridge ›
+  Show phone notifications on this Mac**): while it is on, the agent shows the call, message and app notifications your
+  phone sends it, as ordinary macOS notifications: the app's name, the title (who is calling or who wrote), the text and
+  the time. Only the apps you allow on the phone are sent, and only to this computer over the same USB / paired Wi-Fi
+  link as other panel data. macOS shows them under Script Editor's name, because that is how a program without its own
+  app shows a notification, and keeps them in Notification Center like any other. The agent does not store them or
+  write their text to its log (the log counts notifications, never their words). With **Copy one-time codes from
+  messages** also on, a login code the agent finds in a message is put on this computer's clipboard, and is not sent on
+  to your phones. Turning the setting off stops all of it at once.
 - **Sound for the Spectrum bars widget** (Windows): while an enabled page with the widget is on the phone's screen,
   the agent captures what the default output device plays, analyzes it in memory and sends only 48 loudness levels
   per frame to the phone. Audio is never stored or sent; capture stops a few seconds after the widget leaves the
