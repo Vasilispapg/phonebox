@@ -14,14 +14,16 @@ public sealed class ClipHelperLauncherTests
         public readonly List<string[]> Calls = [];
         public readonly Dictionary<string, bool> Running = [];
         public readonly HashSet<string> Failing = [];
+        public bool StartsStay = true;          // false: app_process exits at once (an app too old to have the helper class)
+        public string CountAnswer = "";         // when set, the check answers this instead of 1 or 0
         public Task<string> Run(IReadOnlyList<string> args, CancellationToken ct)
         {
             Calls.Add([.. args]);
             var device = args[1];
             if (Failing.Contains(device)) throw new IOException("adb: device offline");
             var command = args[3];
-            if (command == ClipHelperLauncher.CheckCommand) return Task.FromResult(Running.GetValueOrDefault(device) ? "1\n" : "0\n");
-            if (command == ClipHelperLauncher.StartCommand) { Running[device] = true; return Task.FromResult(""); }
+            if (command == ClipHelperLauncher.CheckCommand) return Task.FromResult(CountAnswer != "" ? CountAnswer : Running.GetValueOrDefault(device) ? "1\n" : "0\n");
+            if (command == ClipHelperLauncher.StartCommand) { if (StartsStay) Running[device] = true; return Task.FromResult(""); }
             throw new InvalidOperationException("an unexpected command: " + command);
         }
         public IEnumerable<string> Started => Calls.Where(c => c[3] == ClipHelperLauncher.StartCommand).Select(c => c[1]);
@@ -31,11 +33,13 @@ public sealed class ClipHelperLauncherTests
     private sealed class CountingLogger : ILogger
     {
         public int Warnings;
+        public int Infos;
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
         public bool IsEnabled(LogLevel logLevel) => true;
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
         {
             if (logLevel == LogLevel.Warning) Warnings++;
+            if (logLevel == LogLevel.Information) Infos++;
         }
     }
 
@@ -154,6 +158,68 @@ public sealed class ClipHelperLauncherTests
     }
 
     [Fact]
+    public async Task AHelperThatDoesNotStayUpIsRetriedThreeTimesThenOnlyEveryTenMinutes()
+    {
+        _adb.StartsStay = false;
+        var launcher = Launcher();
+        for (var i = 0; i < 6; i++) { await launcher.EnsureAsync(["phone1"], true, CancellationToken.None); _now += 30_000; }
+        Assert.Equal(4, _adb.Started.Count());      // the first start, then three more after it was found missing again
+        _now += 570_000;                              // ten minutes since the last try
+        await launcher.EnsureAsync(["phone1"], true, CancellationToken.None);
+        Assert.Equal(5, _adb.Started.Count());
+        Assert.Equal(1, _log.Warnings);               // said once that it does not stay up, not at every try
+        Assert.Equal(1, _log.Infos);                  // "started" is said once, not at every try
+    }
+
+    [Fact]
+    public async Task AHelperThatStaysUpResetsTheRetryCount()
+    {
+        _adb.StartsStay = false;
+        var launcher = Launcher();
+        for (var i = 0; i < 6; i++) { await launcher.EnsureAsync(["phone1"], true, CancellationToken.None); _now += 30_000; }
+        _adb.StartsStay = true;
+        _now += 600_000;
+        await launcher.EnsureAsync(["phone1"], true, CancellationToken.None);   // started, and it stays
+        _now += 600_000;                                                         // still on the slow pace until it is seen running
+        await launcher.EnsureAsync(["phone1"], true, CancellationToken.None);   // seen running: count back to zero
+        _adb.Running["phone1"] = false;
+        _now += 30_000;
+        await launcher.EnsureAsync(["phone1"], true, CancellationToken.None);   // a new start, at the normal pace
+        Assert.Equal(6, _adb.Started.Count());
+    }
+
+    [Fact]
+    public async Task TheRetryLimitStartsOverWhenThePhoneComesBack()
+    {
+        _adb.StartsStay = false;
+        var launcher = Launcher();
+        for (var i = 0; i < 6; i++) { await launcher.EnsureAsync(["phone1"], true, CancellationToken.None); _now += 30_000; }
+        await launcher.EnsureAsync([], true, CancellationToken.None);
+        await launcher.EnsureAsync(["phone1"], true, CancellationToken.None);
+        Assert.Equal(5, _adb.Started.Count());
+    }
+
+    [Theory]
+    [InlineData("warning: something\n0\n", false)]   // a line on stdout that is not the count
+    [InlineData("error: closed", false)]
+    [InlineData("2\n", true)]
+    [InlineData("1", true)]
+    public async Task OnlyANumberAboveZeroOnTheLastLineMeansItIsRunning(string answer, bool running)
+    {
+        _adb.CountAnswer = answer;
+        var launcher = Launcher();
+        await launcher.EnsureAsync(["phone1"], true, CancellationToken.None);
+        Assert.Equal(running ? 0 : 1, _adb.Started.Count());
+    }
+
+    [Fact]
+    public void TheUidIsOnlyDigitsEvenWhenSeveralUsersAreListed()
+    {
+        // pm may print "uid:10234,1010234" (a work profile): everything after the first uid must go
+        Assert.Contains("s/.*uid://; s/[^0-9].*//", ClipHelperLauncher.StartCommand);
+    }
+
+    [Fact]
     public void TheStartCommandRunsTheHelperFromTheAppsOwnApkAndDetachesIt()
     {
         var c = ClipHelperLauncher.StartCommand;
@@ -171,5 +237,33 @@ public sealed class ClipHelperLauncherTests
         Assert.Contains("net.oxog.phonebox.cliphelper", ClipHelperLauncher.CheckCommand);
         Assert.Contains("/proc/net/unix", ClipHelperLauncher.CheckCommand);
         Assert.EndsWith("; true", ClipHelperLauncher.CheckCommand);                      // grep exits 1 for "none", which adb would report as a failure
+    }
+}
+
+/// <summary>When the agent wants a helper on the phones: all of Mac, the Mac's switch and a phone that opened its stream.</summary>
+public sealed class ClipHelperWantedTests
+{
+    private static AgentConfig WithClipboard(bool on) => new() { Bridge = new BridgeConfig { Clipboard = on } };
+
+    [Fact]
+    public void WantedOnlyOnAMacWithTheSwitchOnAndAPhoneStreamOpen()
+    {
+        Assert.True(AdbReverse.HelperWanted(true, WithClipboard(true), 1));
+        Assert.False(AdbReverse.HelperWanted(false, WithClipboard(true), 1));   // Windows and Linux never start it
+        Assert.False(AdbReverse.HelperWanted(true, WithClipboard(false), 1));   // the Mac's switch is off
+        Assert.False(AdbReverse.HelperWanted(true, WithClipboard(true), 0));    // no phone has its own switch on: nothing would use it
+    }
+
+    [Fact]
+    public void TheStreamCountFollowsPhonesOpeningAndClosingTheirStream()
+    {
+        var stream = new BridgeStream();
+        Assert.Equal(0, stream.Listeners);
+        stream.ListenerOpened();
+        stream.ListenerOpened();
+        Assert.Equal(2, stream.Listeners);
+        stream.ListenerClosed();
+        stream.ListenerClosed();
+        Assert.Equal(0, stream.Listeners);
     }
 }

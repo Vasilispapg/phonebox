@@ -9,7 +9,7 @@ namespace PhoneBox.Agent;
 /// (unless Settings › Display › open on connect is off).
 /// </summary>
 public sealed class AdbReverse(ConfigStore cfg, ILogger<AdbReverse> log, AgentEndpoint? endpoint = null, UsbLink? usb = null,
-    IHostApplicationLifetime? lifetime = null) : BackgroundService
+    IHostApplicationLifetime? lifetime = null, BridgeStream? bridge = null) : BackgroundService
 {
     public const string PanelActivity = "net.oxog.phonebox.deskpanel/.MainActivity";
     private const string HomeAlias = "net.oxog.phonebox.deskpanel/.HomeAlias";
@@ -85,9 +85,16 @@ public sealed class AdbReverse(ConfigStore cfg, ILogger<AdbReverse> log, AgentEn
             if (SessionEnding) { await Task.Delay(TimeSpan.FromSeconds(4), ct); continue; }
             try { await _round.WaitAsync(ct); }
             catch (OperationCanceledException) { return; }
-            try { if (!_stopping) await Ensure(rounds.Token); }
-            catch (OperationCanceledException) { return; }
-            catch (Exception ex) { Report($"adb error: {ex.Message}"); }
+            try
+            {
+                try { if (!_stopping) await Ensure(rounds.Token); }
+                catch (OperationCanceledException) { return; }
+                catch (Exception ex) { Report($"adb error: {ex.Message}"); }
+                // a failure above (keep awake, one phone's reverse rule) must not keep the helper from starting on any phone
+                try { if (!_stopping) await EnsureHelperAsync(rounds.Token); }
+                catch (OperationCanceledException) { return; }
+                catch (Exception ex) { log.LogWarning("the clipboard helper round failed: {Error}", ex.GetType().Name); }
+            }
             finally { _round.Release(); }
             await Task.Delay(TimeSpan.FromSeconds(4), ct);
         }
@@ -501,6 +508,7 @@ public sealed class AdbReverse(ConfigStore cfg, ILogger<AdbReverse> log, AgentEn
             return;
         }
 
+        _adbPath = adb;
         var serial = cfg.Get().DeviceSerial;
         string listed;
         try { listed = await Adb(adb, "devices", ct); }
@@ -540,7 +548,7 @@ public sealed class AdbReverse(ConfigStore cfg, ILogger<AdbReverse> log, AgentEn
 
         // A phone that did not answer "reverse --list" sits out the rest of this round (home screen, keep awake): one
         // more failure there would end the round before the phones after it. The next round tries it again.
-        var unreachable = new HashSet<string>();
+        var unreachable = _unreachable = new HashSet<string>();
         Dictionary<string, string>? transports = null; // read at most once a round, only for Android 5 and 6
         foreach (var d in devices)
         {
@@ -666,13 +674,23 @@ public sealed class AdbReverse(ConfigStore cfg, ILogger<AdbReverse> log, AgentEn
             }
         }
         else _awakeSet.Clear();
-        // Settings › Phone bridge › clipboard (macOS): the helper that lets a copy on the phone reach this computer without a tap
-        _adbPath = adb;
-        await Launcher.EnsureAsync([.. devices.Where(d => !_missingApp.Contains(d) && !unreachable.Contains(d))],
-            OperatingSystem.IsMacOS() && cfg.Get().Bridge.Clipboard, ct);
         Report($"phone connected: {Devices}");
     }
 
+    /// <summary>
+    /// The helper is wanted on macOS only, while Settings › Phone bridge › clipboard is on and at least one phone has its bridge
+    /// stream open (the phone opens it only while its own switch is on). Without the second condition the agent would start a
+    /// helper that nothing uses, which reads the clipboard for no one.
+    /// </summary>
+    internal static bool HelperWanted(bool isMac, AgentConfig config, int openStreams) => isMac && config.Bridge.Clipboard && openStreams > 0;
+
+    private async Task EnsureHelperAsync(CancellationToken ct)
+    {
+        var wanted = _adbPath is not null && HelperWanted(OperatingSystem.IsMacOS(), cfg.Get(), bridge?.Listeners ?? 0);
+        await Launcher.EnsureAsync([.. _devices.Where(d => !_missingApp.Contains(d) && !_unreachable.Contains(d))], wanted, ct);
+    }
+
+    private volatile HashSet<string> _unreachable = [];
     private string? _adbPath;
     private ClipHelperLauncher? _launcher;
     private ClipHelperLauncher Launcher => _launcher ??= new((args, ct) => AdbArgs(_adbPath!, args, ct), () => Environment.TickCount64, log);
@@ -680,7 +698,7 @@ public sealed class AdbReverse(ConfigStore cfg, ILogger<AdbReverse> log, AgentEn
     /// <summary>Like <see cref="Adb"/> but the arguments go in as a list, so a command with spaces and quotes reaches the phone's shell as one piece.</summary>
     internal static async Task<string> AdbArgs(string adb, IReadOnlyList<string> args, CancellationToken ct)
     {
-        if (SessionEnding) throw new OperationCanceledException("the session is ending");
+        if (SessionEnding) throw new IOException("the session is ending"); // not a cancellation: that would end the whole adb loop
         var psi = new ProcessStartInfo(adb)
         {
             RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true,

@@ -94,6 +94,7 @@ internal static class BridgeApi
         using var wake = new SemaphoreSlim(0);
         void OnEmit() { try { wake.Release(); } catch (ObjectDisposedException) { } }
         bridge.Emitted += OnEmit;
+        bridge.ListenerOpened(); // a phone with its stream open is how the agent knows the phone wants the automatic copy
         try
         {
             var seq = bridge.Seq; // a new connection hears only what is copied from now on
@@ -120,7 +121,7 @@ internal static class BridgeApi
         }
         catch (OperationCanceledException) { }
         catch (IOException) { } // the phone went away in the middle of a write
-        finally { bridge.Emitted -= OnEmit; }
+        finally { bridge.Emitted -= OnEmit; bridge.ListenerClosed(); }
     }
 
     /// <summary>One server-sent event. The text travels as a JSON string, so a newline inside it cannot end the frame.</summary>
