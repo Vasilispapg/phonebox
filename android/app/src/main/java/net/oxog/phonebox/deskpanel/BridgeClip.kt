@@ -10,9 +10,18 @@ object BridgeClip {
     /** The most text the agent takes (UTF-8 bytes); longer text is refused with 413, so it is not even sent. */
     const val MAX_BYTES = 64 * 1024
 
+    /** Why a clip is not sent: there is nothing to send (empty, or private), or it is over the limit. */
+    enum class Skip { NOTHING, TOO_LARGE }
+
+    /** Null when the clip may be sent. A sensitive clip (a password manager's) counts as nothing, whatever its size. */
+    fun skipReason(text: String?, sensitive: Boolean): Skip? = when {
+        text.isNullOrBlank() || sensitive -> Skip.NOTHING
+        text.toByteArray(Charsets.UTF_8).size > MAX_BYTES -> Skip.TOO_LARGE
+        else -> null
+    }
+
     /** Whether to send this clip: not empty, not marked sensitive (a password manager's), and within the limit. */
-    fun shouldSend(text: String?, sensitive: Boolean): Boolean =
-        !text.isNullOrBlank() && !sensitive && text.toByteArray(Charsets.UTF_8).size <= MAX_BYTES
+    fun shouldSend(text: String?, sensitive: Boolean): Boolean = skipReason(text, sensitive) == null
 
     /** The text of a bridge "clipboard" event (data is {"seq":n,"text":"..."}); null for any other event or a bad frame. */
     fun parseEvent(event: String, data: String): String? {

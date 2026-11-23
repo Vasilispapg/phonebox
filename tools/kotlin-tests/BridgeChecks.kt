@@ -56,6 +56,18 @@ private fun requestBodyChecks() {
     }
 }
 
+private fun skipReasonChecks() {
+    check("null is skipped as nothing", BridgeClip.skipReason(null, false) == BridgeClip.Skip.NOTHING)
+    check("blank is skipped as nothing", BridgeClip.skipReason(" \n ", false) == BridgeClip.Skip.NOTHING)
+    check("sensitive is skipped as nothing (private)", BridgeClip.skipReason("hunter2", true) == BridgeClip.Skip.NOTHING)
+    check("over the limit is skipped as too large", BridgeClip.skipReason("a".repeat(BridgeClip.MAX_BYTES + 1), false) == BridgeClip.Skip.TOO_LARGE)
+    check("a long sensitive clip is private, not too large", BridgeClip.skipReason("a".repeat(BridgeClip.MAX_BYTES + 1), true) == BridgeClip.Skip.NOTHING)
+    check("ordinary text has no skip reason", BridgeClip.skipReason("ok", false) == null)
+    for (t in listOf<String?>(null, "", " ", "x", "a".repeat(BridgeClip.MAX_BYTES), "a".repeat(BridgeClip.MAX_BYTES + 1)))
+        for (sensitive in listOf(false, true))
+            check("shouldSend agrees with skipReason for ${t?.length} / $sensitive", BridgeClip.shouldSend(t, sensitive) == (BridgeClip.skipReason(t, sensitive) == null))
+}
+
 private fun resultChecks() {
     check("200 is OK", BridgeClip.resultFor(200) == SendResult.OK)
     check("403 means the Mac's switch is off", BridgeClip.resultFor(403) == SendResult.OFF)
@@ -120,6 +132,7 @@ fun main() {
     shouldSendChecks()
     parseEventChecks()
     requestBodyChecks()
+    skipReasonChecks()
     resultChecks()
     streamPathChecks()
     defaultPathCheck()
