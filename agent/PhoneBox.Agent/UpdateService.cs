@@ -381,7 +381,8 @@ public sealed class UpdateService(ConfigStore cfg, AdbReverse adb, IHostApplicat
     internal static bool CodeHashOnly(string? requirement)
     {
         if (string.IsNullOrWhiteSpace(requirement)) throw new InvalidOperationException("the running PhoneBox.app has an empty signing requirement, so the update's signer cannot be checked and it was not installed");
-        return requirement.StartsWith("cdhash H\"", StringComparison.Ordinal) && !requirement.Contains(" and ", StringComparison.Ordinal);
+        // the whole expression, nothing before or after: "cdhash H"..." or anchor apple generic" is not a plain hash
+        return System.Text.RegularExpressions.Regex.IsMatch(requirement.Trim(), "^cdhash H\"[0-9a-fA-F]+\"$");
     }
 
     /// <summary>Copies PhoneBox.app out of a disk image into <paramref name="destination"/> (the image is mounted read-only and detached again).</summary>

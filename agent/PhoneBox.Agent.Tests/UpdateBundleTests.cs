@@ -147,6 +147,9 @@ public class UpdateBundleSigningTests
     [InlineData("identifier \"x\" and info[CFBundleVersion] >= \"1\"", false)] // not a certificate form, still enforced
     [InlineData("cdhash H\"9217e8b460b7d216df7b9665c1e608edacfe0319\"", true)] // ad hoc: only a hash, nothing to pin
     [InlineData("cdhash H\"9217e8b460b7d216df7b9665c1e608edacfe0319\" and identifier \"x\"", false)]
+    [InlineData("cdhash H\"9217e8b460b7d216df7b9665c1e608edacfe0319\" or anchor apple generic", false)] // a disjunction is not a plain hash
+    [InlineData("anchor apple generic or cdhash H\"9217e8b460b7d216df7b9665c1e608edacfe0319\"", false)]
+    [InlineData(" cdhash H\"9217e8b460b7d216df7b9665c1e608edacfe0319\" \n", true)]
     public void OnlyARequirementThatIsJustACodeHashSkipsThePin(string requirement, bool codeHashOnly) =>
         Assert.Equal(codeHashOnly, UpdateService.CodeHashOnly(requirement));
 
