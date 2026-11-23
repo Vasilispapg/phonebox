@@ -32,8 +32,14 @@ Last updated: 2026-11-20 (PhoneBox 0.9.6).
   the first time. For the phone bridge's clipboard sharing (off until you turn it on in the app's Phone bridge screen)
   it also holds `FOREGROUND_SERVICE` and `FOREGROUND_SERVICE_SPECIAL_USE` (a service with a visible notification keeps
   the connection to your computer), `POST_NOTIFICATIONS` (so that notification can show, asked when you turn the
+<<<<<<< HEAD
   switch on) and `RECEIVE_BOOT_COMPLETED` (to start that service again after a restart; the receiver is switched off,
   and the app does not start at boot, while the bridge is off).
+=======
+  switch on) and `RECEIVE_BOOT_COMPLETED` (to start that service again after a restart). For notification forwarding (off until you
+  turn it on) it uses Android's **Notification access**, a special permission you grant yourself in Settings; it asks for
+  no SMS, call-log, contacts or phone-state permission, and lists launchable apps only to let you choose which ones to send.
+>>>>>>> 3cedec6b (Bridge (phone): privacy, guide and changelog for notifications)
 - **Computer data shown on the panel** (CPU, GPU, memory, disks, processes, media, volume, AI coding sessions and
   quotas, Docker / Podman, OBS) is read locally and goes only to your phone: over the USB cable (`adb reverse` to
   `127.0.0.1`, with a key only the PhoneBox app has) or, after pairing, over Wi-Fi / Tailscale with a pinned certificate and a key. On Linux, an Intel GPU's
@@ -110,6 +116,13 @@ Last updated: 2026-11-20 (PhoneBox 0.9.6).
   clipboard event in memory (not the text) and sends it when it reconnects. **On Android 9 and older, every app on the
   phone can read the clipboard at any time**, not only the app in front: there, text you copy on the Mac is readable
   by all apps installed on the phone. Android 10 and later let only the app in front (and the keyboard) read it.
+- **Phone notifications, on the phone side of the phone bridge** (off by default; the app's **Phone bridge** screen › Show
+  notifications on the Mac, plus Android's Notification access): the app reads the notifications of the apps you switched
+  on (their name, title, text and kind; for a call, who is calling) and sends them only to your paired computer over the
+  same USB / paired Wi-Fi link. Nothing else is read or sent: not apps you left off, PhoneBox's own notifications,
+  ongoing ones such as music, or a call after the first ring. If the computer cannot be reached, up to 20 notifications
+  are kept in the app's memory for two minutes and then dropped; nothing is written to the phone's storage or its log.
+  Until you turn the switch on, the app does not even appear in Android's Notification access list.
 - **Sound for the Spectrum bars widget** (Windows): while an enabled page with the widget is on the phone's screen,
   the agent captures what the default output device plays, analyzes it in memory and sends only 48 loudness levels
   per frame to the phone. Audio is never stored or sent; capture stops a few seconds after the widget leaves the
