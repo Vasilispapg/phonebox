@@ -43,4 +43,5 @@
     <string name="bridge_last_ok">وصل آخر إشعار إلى Mac</string>
     <string name="bridge_last_off">آخر إشعار: مفتاح الإشعارات في Mac متوقف</string>
     <string name="bridge_last_failed">لم يصل آخر إشعار إلى Mac؛ يُحتفظ به لمدة دقيقتين</string>
+    <string name="bridge_access_idle">الوصول إلى الإشعارات مسموح، لكن Android لم يبدأ المستمع بعد. افتح هذه الشاشة مرة أخرى أو تحقق من إعداد بطارية PhoneBox.</string>
 </resources>

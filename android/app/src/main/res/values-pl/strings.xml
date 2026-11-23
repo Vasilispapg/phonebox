@@ -43,4 +43,5 @@
     <string name="bridge_last_ok">Ostatnie powiadomienie dotarło na Maca</string>
     <string name="bridge_last_off">Ostatnie powiadomienie: przełącznik powiadomień na Macu jest wyłączony</string>
     <string name="bridge_last_failed">Ostatnie powiadomienie nie dotarło na Maca; jest przechowywane przez dwie minuty</string>
+    <string name="bridge_access_idle">Dostęp do powiadomień jest dozwolony, ale Android nie uruchomił jeszcze nasłuchu. Otwórz ten ekran ponownie lub sprawdź ustawienie baterii PhoneBox.</string>
 </resources>

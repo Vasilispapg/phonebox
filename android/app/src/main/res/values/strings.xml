@@ -35,6 +35,7 @@
     <string name="bridge_notifications_switch">Show notifications on the Mac</string>
     <string name="bridge_notifications_help">Calls, messages and the apps you choose below appear as notifications on the Mac, with their text (a login code, for example). Only apps you switch on are sent. The Mac\'s own switch (Settings › Phone bridge in PhoneBox on the computer) must be on too.</string>
     <string name="bridge_access_missing">Notification access is not allowed yet. PhoneBox needs it to see your notifications.</string>
+    <string name="bridge_access_idle">Notification access is allowed, but Android has not started the listener yet. Open this screen again, or check PhoneBox\'s battery setting.</string>
     <string name="bridge_access_granted">Notification access is allowed.</string>
     <string name="bridge_access_button">Allow notification access</string>
     <string name="bridge_restricted_help">If the switch is greyed out (Android 13 and later): open App info, tap ⋮ at the top right, choose Allow restricted settings, then come back and try again.</string>

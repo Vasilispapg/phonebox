@@ -30,7 +30,12 @@ class BridgeActivity : Activity() {
     private val refresh = object : Runnable {
         override fun run() {
             status.text = statusText()
-            access.text = getString(if (notificationAccessAllowed()) R.string.bridge_access_granted else R.string.bridge_access_missing)
+            access.text = getString(when {
+                !notificationAccessAllowed() -> R.string.bridge_access_missing
+                // allowed, switch on, but Android has not bound the listener (Samsung's battery management can unbind it)
+                BridgePrefs.notificationsEnabled(this@BridgeActivity) && !PhoneNotificationListener.connected -> R.string.bridge_access_idle
+                else -> R.string.bridge_access_granted
+            })
             last.text = getString(when (BridgePrefs.notificationOutcome) {
                 NotificationOutcome.NONE -> R.string.bridge_last_none
                 NotificationOutcome.OK -> R.string.bridge_last_ok

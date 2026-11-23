@@ -2,8 +2,6 @@ package net.oxog.phonebox.deskpanel
 
 import android.content.Context
 
-enum class NotificationOutcome { NONE, OK, MAC_OFF, UNREACHABLE }
-
 /**
  * The phone's own bridge switches ("Phone bridge" screen). A feature runs only when this switch and the one on the
  * computer (Settings › Phone bridge) are both on; the computer's switch is enforced by the agent.
@@ -25,6 +23,7 @@ object BridgePrefs {
         val edit = p.edit().putBoolean("notifications", on)
         if (on && !p.contains("apps")) edit.putStringSet("apps", defaultApps(context))
         edit.apply()
+        if (!on) PhoneNotificationListener.clearPending() // what was waiting for the Mac must not be sent after the switch is off
     }
 
     /** The apps whose notifications go to the Mac. */

@@ -19,6 +19,10 @@ class DeliveryQueue<T>(private val max: Int = 20, private val ttlMs: Long = 120_
     @Synchronized
     fun isEmpty(): Boolean = items.isEmpty()
 
+    /** Forgets everything waiting (the switch was turned off). */
+    @Synchronized
+    fun clear() = items.clear()
+
     /** Empties the queue and returns what is still fresh, oldest first. */
     @Synchronized
     fun take(): List<Entry<T>> {

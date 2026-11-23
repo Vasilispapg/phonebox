@@ -43,4 +43,5 @@
     <string name="bridge_last_ok">Последнее уведомление дошло до Mac</string>
     <string name="bridge_last_off">Последнее уведомление: переключатель уведомлений на Mac выключен</string>
     <string name="bridge_last_failed">Последнее уведомление не дошло до Mac; оно хранится две минуты</string>
+    <string name="bridge_access_idle">Доступ к уведомлениям разрешён, но Android ещё не запустил слушатель. Откройте этот экран снова или проверьте настройки батареи PhoneBox.</string>
 </resources>

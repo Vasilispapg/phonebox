@@ -104,29 +104,35 @@ private fun notificationBodyChecks() {
     check("the body names exactly the seven fields the agent reads", m.keys == setOf("key", "app", "package", "title", "text", "category", "time"))
 }
 
+/** The agent's real /api/config reply: {"version": "...", "config": { ...the public config... }}. */
+private fun cfg(inner: String) = """{"version":"1","config":$inner}"""
+
 private fun jsonChecks() {
-    check("notifications true is read", BridgeClip.notificationsOn("""{"bridge":{"clipboard":false,"notifications":true}}""") == true)
-    check("notifications false is read", BridgeClip.notificationsOn("""{"bridge":{"notifications":false}}""") == false)
-    check("an agent without a bridge section is off", BridgeClip.notificationsOn("""{"pages":[]}""") == false)
-    check("a null bridge section is off", BridgeClip.notificationsOn("""{"bridge":null}""") == false)
-    check("a text 'true' is not on", BridgeClip.notificationsOn("""{"bridge":{"notifications":"true"}}""") == false)
+    check("notifications true is read", BridgeClip.notificationsOn(cfg("""{"bridge":{"clipboard":false,"notifications":true}}""")) == true)
+    check("notifications false is read", BridgeClip.notificationsOn(cfg("""{"bridge":{"notifications":false}}""")) == false)
+    check("an agent without a bridge section is off", BridgeClip.notificationsOn(cfg("""{"pages":[]}""")) == false)
+    check("a null bridge section is off", BridgeClip.notificationsOn(cfg("""{"bridge":null}""")) == false)
+    check("a text 'true' is not on", BridgeClip.notificationsOn(cfg("""{"bridge":{"notifications":"true"}}""")) == false)
     check("nested arrays and objects before it are skipped over",
-        BridgeClip.notificationsOn("""{"pages":[{"a":[1,2,{"b":"x\"y"}],"c":{"d":[true,false,null]}}],"bridge":{"notifications":true}}""") == true)
+        BridgeClip.notificationsOn(cfg("""{"pages":[{"a":[1,2,{"b":"x\"y"}],"c":{"d":[true,false,null]}}],"bridge":{"notifications":true}}""")) == true)
+    check("a reply without the config wrapper is unknown, not off (the old top-level shape was a bug)",
+        BridgeClip.notificationsOn("""{"bridge":{"notifications":true}}""") == null)
+    check("a config that is not an object is unknown", BridgeClip.notificationsOn("""{"version":"1","config":5}""") == null)
     check("garbage is unknown (null), not off", BridgeClip.notificationsOn("not json") == null)
-    check("an unterminated config is unknown", BridgeClip.notificationsOn("""{"bridge":{"notifications":true""") == null)
-    check("an array at the top is unknown", BridgeClip.notificationsOn("""[{"bridge":{"notifications":true}}]""") == null)
+    check("an unterminated reply is unknown", BridgeClip.notificationsOn("""{"version":"1","config":{"bridge":{"notifications":true""") == null)
+    check("an array at the top is unknown", BridgeClip.notificationsOn("""[{"config":{"bridge":{"notifications":true}}}]""") == null)
     val deep = "[".repeat(200) + "]".repeat(200)
-    check("absurdly deep nesting is refused, not a stack overflow", BridgeClip.notificationsOn("""{"x":$deep}""") == null)
+    check("absurdly deep nesting is refused, not a stack overflow", BridgeClip.notificationsOn(cfg("""{"x":$deep}""")) == null)
 }
 
 private fun configCacheChecks() {
     var now = 5_000_000L
     val fetches = AtomicInteger()
-    var body: String? = """{"bridge":{"notifications":true}}"""
+    var body: String? = cfg("""{"bridge":{"notifications":true}}""")
     val cache = BridgeConfigCache({ fetches.incrementAndGet(); body }) { now }
     check("the first read asks the agent and finds it on", cache.notificationsOn())
     check("a second read inside a minute asks nothing", cache.notificationsOn() && fetches.get() == 1)
-    body = """{"bridge":{"notifications":false}}"""
+    body = cfg("""{"bridge":{"notifications":false}}""")
     now += 59_000
     check("still cached just under a minute", cache.notificationsOn() && fetches.get() == 1)
     now += 2_000
@@ -150,14 +156,14 @@ private fun configCacheChecks() {
     // a known 'off' survives an unreachable agent
     now += 500_000
     var phase = 0
-    val c3 = BridgeConfigCache({ if (phase++ == 0) """{"bridge":{"notifications":false}}""" else null }) { now }
+    val c3 = BridgeConfigCache({ if (phase++ == 0) cfg("""{"bridge":{"notifications":false}}""") else null }) { now }
     check("an agent that says off is off", !c3.notificationsOn())
     now += 70_000
     check("and stays off when the next ask fails", !c3.notificationsOn())
 
     // markOff: a 403 from the agent turns it off at once, and it asks again after a minute
     now += 500_000
-    val c4 = BridgeConfigCache({ """{"bridge":{"notifications":true}}""" }) { now }
+    val c4 = BridgeConfigCache({ cfg("""{"bridge":{"notifications":true}}""") }) { now }
     check("on before a 403", c4.notificationsOn())
     c4.markOff()
     check("a 403 (markOff) turns it off at once", !c4.notificationsOn())
@@ -170,12 +176,104 @@ private fun configCacheChecks() {
     check("an answer that is not JSON is unknown, so sending is tried", c5.notificationsOn())
 }
 
+private fun cutChecks() {
+    check("short text is not cut", BridgeClip.cut("hello", 10) == "hello")
+    check("text at the limit is not cut", BridgeClip.cut("a".repeat(200), 200) == "a".repeat(200))
+    check("text over the limit is cut to the limit with an ellipsis", BridgeClip.cut("a".repeat(201), 200).let { it.length == 200 && it.endsWith("…") })
+    val emoji = "a".repeat(198) + "🌍🌍"     // the cut would fall inside the first emoji
+    val cutEmoji = BridgeClip.cut(emoji, 200)
+    check("a cut never leaves half an emoji", cutEmoji.length <= 200 && cutEmoji.endsWith("…") && !cutEmoji.dropLast(1).last().isHighSurrogate())
+}
+
+private class Rig(val clock: () -> Long) {
+    val queue = DeliveryQueue<NotificationDelivery.Pending>(clock = clock)
+    var phoneOn = true
+    var macOn = true
+    val allowedApps = mutableSetOf("com.msg", "com.dialer")
+    val sent = mutableListOf<String>()
+    val answers = ArrayDeque<SendResult>()
+    var outcome = NotificationOutcome.NONE
+    var macMarkedOff = 0
+    var macMarkedOn = 0
+    val delivery = NotificationDelivery(queue, { phoneOn }, { it in allowedApps }, { macOn },
+        { body -> sent.add(body); answers.removeFirstOrNull() ?: SendResult.OK },
+        { outcome = it }, { macMarkedOff++ }, { macMarkedOn++ })
+    fun add(pkg: String, body: String, at: Long = clock()) = queue.add(NotificationDelivery.Pending(pkg, body), at)
+}
+
+private fun deliveryChecks() {
+    var now = 1_000_000L
+    var r = Rig { now }
+    r.add("com.msg", "one"); r.add("com.msg", "two"); r.add("com.dialer", "three")
+    check("a batch is sent in order and reports ok", !r.delivery.drain() && r.sent == listOf("one", "two", "three") && r.outcome == NotificationOutcome.OK)
+    check("a good send tells the config cache the Mac is on", r.macMarkedOn == 3)
+    check("nothing is left afterwards", r.queue.isEmpty())
+
+    r = Rig { now }
+    r.add("com.msg", "one"); r.phoneOn = false
+    check("with the phone's switch off nothing is sent", !r.delivery.drain() && r.sent.isEmpty())
+    r.phoneOn = true
+    check("and what was waiting is gone, not sent when the switch comes back", !r.delivery.drain() && r.sent.isEmpty() && r.queue.isEmpty())
+
+    r = Rig { now }
+    r.add("com.msg", "one"); r.macOn = false
+    check("with the Mac's switch known off nothing is sent and the screen says so", !r.delivery.drain() && r.sent.isEmpty() && r.outcome == NotificationOutcome.MAC_OFF)
+    check("and the queue is emptied", r.queue.isEmpty())
+
+    r = Rig { now }
+    r.add("com.msg", "one"); r.add("com.msg", "two"); r.add("com.msg", "three")
+    r.answers.addAll(listOf(SendResult.OK, SendResult.OFF))
+    val retry403 = r.delivery.drain()
+    check("a 403 stops the batch: the third is never sent", r.sent == listOf("one", "two") && !retry403)
+    check("a 403 empties the queue and marks the Mac off", r.queue.isEmpty() && r.macMarkedOff == 1 && r.outcome == NotificationOutcome.MAC_OFF)
+
+    r = Rig { now }
+    r.add("com.msg", "one", now); r.add("com.msg", "two", now); r.add("com.msg", "three", now)
+    r.answers.addAll(listOf(SendResult.OK, SendResult.UNREACHABLE))
+    check("an unreachable Mac stops the batch and asks to be retried", r.delivery.drain() && r.sent == listOf("one", "two") && r.outcome == NotificationOutcome.UNREACHABLE)
+    now += 60_000
+    check("the failed one and the rest are kept, in order", r.queue.take().map { it.item.body } == listOf("two", "three"))
+
+    now = 2_000_000L
+    r = Rig { now }
+    r.add("com.msg", "old", now)
+    now += 121_000
+    r.add("com.msg", "fresh", now)
+    check("a notification older than two minutes is never sent, the fresh one is", !r.delivery.drain() && r.sent == listOf("fresh"))
+
+    now = 3_000_000L
+    r = Rig { now }
+    r.add("com.msg", "kept-time", now)
+    r.answers.add(SendResult.UNREACHABLE)
+    r.delivery.drain()                       // unreachable: it goes back with its original time
+    now += 119_000
+    check("a retried notification is still sent just before two minutes", r.queue.take().size == 1)
+    now = 4_000_000L
+    r = Rig { now }
+    r.add("com.msg", "kept-time", now)
+    r.answers.add(SendResult.UNREACHABLE)
+    r.delivery.drain()
+    now += 121_000
+    check("and is dropped just after: the failed attempt did not renew it", r.queue.take().isEmpty())
+
+    r = Rig { now }
+    r.add("com.msg", "kept"); r.add("com.shop", "turned-off-meanwhile"); r.add("com.msg", "also kept")
+    check("an app the owner turned off meanwhile is skipped, the others sent", !r.delivery.drain() && r.sent == listOf("kept", "also kept"))
+
+    r = Rig { now }
+    r.add("com.msg", "huge"); r.add("com.msg", "next")
+    r.answers.add(SendResult.TOO_LARGE)
+    check("a notification the agent calls too large is dropped and the batch goes on", !r.delivery.drain() && r.sent == listOf("huge", "next"))
+}
+
 fun main() {
     filterChecks()
     callKeyChecks()
     queueChecks()
     notificationBodyChecks()
     jsonChecks()
+    cutChecks()
+    deliveryChecks()
     configCacheChecks()
     println("ALL $passed CHECKS PASSED")
 }
