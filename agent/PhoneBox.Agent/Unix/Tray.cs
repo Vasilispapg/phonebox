@@ -17,6 +17,28 @@ public sealed class Tray(ILogger<Tray> log, AgentEndpoint endpoint) : IHostedSer
     public Task StopAsync(CancellationToken ct) => Task.CompletedTask;
 }
 
+/// <summary>
+/// Runs the web host with the macOS menu bar icon when PhoneBox.app is wanted to have one (see <see cref="MacMenuBar"/>).
+/// Windows has its own tray (Tray.cs) and a stub of this class, so Program stays the same on every system.
+/// </summary>
+public static class MenuBarHost
+{
+    /// <summary>True when the host ran here, with the icon, until it stopped; false when the caller should just run it.</summary>
+    public static bool TryRun(WebApplication app, string[] args, AgentEndpoint endpoint, string configDir)
+    {
+        if (!MacMenuBar.Wanted(args, UpdateService.RunningInBundle, Environment.GetEnvironmentVariable) || !MacMenuBar.CanRun()) return false;
+        var host = app.RunAsync();
+        try
+        {
+            MacMenuBar.Run(MacMenuBar.Entries(app.Services.GetRequiredService<AdbReverse>(), app.Services.GetRequiredService<UpdateService>(),
+                app.Lifetime, endpoint.SettingsUrl, configDir), () => host.IsCompleted);
+        }
+        catch (Exception ex) { app.Logger.LogWarning("menu bar icon failed: {Msg}", ex.Message); }
+        host.GetAwaiter().GetResult();
+        return true;
+    }
+}
+
 /// <summary>Windows ties helper processes to the agent with a job object; elsewhere they are stopped on shutdown.</summary>
 public static class JobObject
 {
