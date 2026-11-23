@@ -44,6 +44,19 @@ public sealed class BridgeConfigTests : IDisposable
         Assert.Equal(JsonValueKind.False, doc.RootElement.GetProperty("bridge").GetProperty("clipboard").ValueKind);
     }
 
+    [Fact]
+    public void ANullBridgeSectionBecomesTheDefaultsAndDoesNotBreakTheConfig()
+    {
+        Directory.CreateDirectory(_root);
+        var path = Path.Combine(_root, "config-null.json");
+        File.WriteAllText(path, """{"bridge":null}""");
+        var config = new ConfigStore(path).Get();
+        Assert.NotNull(config.Bridge);
+        Assert.False(config.Bridge.Clipboard);
+        using var doc = JsonDocument.Parse(JsonSerializer.Serialize(config.ToPublic(), ConfigStore.WriteOpts));
+        Assert.Equal(JsonValueKind.False, doc.RootElement.GetProperty("bridge").GetProperty("clipboard").ValueKind);
+    }
+
     public void Dispose()
     {
         try { Directory.Delete(_root, true); } catch (IOException) { }

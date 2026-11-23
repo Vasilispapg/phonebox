@@ -78,7 +78,9 @@ builder.Services.AddSingleton<BridgeStream>();
 #if !WINDOWS
 if (OperatingSystem.IsMacOS())
 {
-    builder.Services.AddSingleton<ITextPasteboard>(_ => new MacPasteboard());
+    // created on first use: a Mac whose pasteboard cannot be reached (no window server) must still start the agent, and a
+    // switch that is off never touches the pasteboard at all
+    builder.Services.AddSingleton<ITextPasteboard>(sp => new LazyPasteboard(() => new MacPasteboard(), sp.GetRequiredService<ILogger<LazyPasteboard>>()));
     // internal constructor, so the container cannot pick it: build it here
     builder.Services.AddSingleton(sp => new ClipboardBridge(sp.GetRequiredService<ITextPasteboard>(), sp.GetRequiredService<ConfigStore>(),
         sp.GetRequiredService<BridgeStream>(), sp.GetRequiredService<ILogger<ClipboardBridge>>()));

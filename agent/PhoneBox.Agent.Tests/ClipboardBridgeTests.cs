@@ -161,6 +161,31 @@ public sealed class ClipboardBridgeTests : IDisposable
         Assert.Equal([("B", "phone1"), ("B", null)], _stream.Since(0, null).Select(e => (e.Text, e.Origin)));
     }
 
+    [Fact]
+    public void TheEchoGuardEndsAtTheFirstChangeAfterOurWriteEvenWhenThatChangeIsDifferentText()
+    {
+        _bridge.PollOnce();
+        _bridge.ReceiveFromPhone("B", "phone1");
+        _pb.Copy("Z");                              // the owner copies something else before the next poll
+        _bridge.PollOnce();                         // Z goes out, and B's guard must not survive it
+        _pb.Copy("B");
+        _bridge.PollOnce();                         // hours later: B copied on purpose
+        Assert.Equal(["B", "Z", "B"], _stream.Since(0, null).Select(e => e.Text));
+    }
+
+    [Fact]
+    public void TheEchoGuardEndsAtTheFirstChangeAfterOurWriteEvenWhenThatChangeIsNotShareable()
+    {
+        _bridge.PollOnce();
+        _bridge.ReceiveFromPhone("B", "phone1");
+        _pb.Copy(null);                             // a password manager's item replaces it, unreadable to the bridge
+        _bridge.PollOnce();
+        _pb.Copy("B");
+        _bridge.PollOnce();
+        Assert.Equal(["B", "B"], _stream.Since(0, null).Select(e => e.Text));
+        Assert.Equal(["phone1", null], _stream.Since(0, null).Select(e => e.Origin));
+    }
+
     // ---- the switch ----
 
     [Fact]

@@ -63,10 +63,13 @@ public sealed class ClipboardBridge : IHostedService, IDisposable
             if (!_primed) { _primed = true; _lastCount = count; return; }
             if (count == _lastCount) return;
             _lastCount = count;
+            // Only the first change after our own write can be its echo, whatever that change turns out to be: the guard
+            // never outlives it, so copying the same words again later still goes out.
+            var echo = _lastReceived;
+            _lastReceived = null;
             var text = _pasteboard.ReadShareableText();
             if (text is null || Encoding.UTF8.GetByteCount(text) > MaxBytes) return;
-            // the change may be our own write for a phone: swallow that echo once, so copying the same words again later still goes out
-            if (_lastReceived is not null && Hash(text).AsSpan().SequenceEqual(_lastReceived)) { _lastReceived = null; return; }
+            if (echo is not null && Hash(text).AsSpan().SequenceEqual(echo)) return;
             _stream.Publish("clipboard", text, null);
         }
     }

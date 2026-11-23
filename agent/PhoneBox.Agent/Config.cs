@@ -792,6 +792,7 @@ public sealed partial class ConfigStore(string path)
         c.Cursor ??= new();
         c.Antigravity ??= new();
         c.OpenCode ??= new();
+        c.Bridge ??= new(); // a hand-edited "bridge": null must not break /api/config or the clipboard poll
         c.OpenCode.TimeoutSec = Math.Clamp(c.OpenCode.TimeoutSec, 10, 3600);
         c.OpenCode.AlwaysCountdownSec = Math.Clamp(c.OpenCode.AlwaysCountdownSec, 0, 60);
         if (string.IsNullOrWhiteSpace(c.Updates.Repo)) c.Updates.Repo = "ersinkoc/phonebox";
