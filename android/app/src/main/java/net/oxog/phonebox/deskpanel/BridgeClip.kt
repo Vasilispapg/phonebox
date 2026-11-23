@@ -66,12 +66,34 @@ object BridgeClip {
         else -> SendResult.UNREACHABLE
     }
 
-    /** A strict reader for one flat JSON object; any problem makes [parseObject] return null. */
+    /**
+     * Whether the agent's /api/config says the computer shows phone notifications: true or false, or null when the text is
+     * not a JSON object (then the answer is unknown, not "off"). An agent without a bridge section is off.
+     */
+    fun notificationsOn(configJson: String): Boolean? {
+        val config = Json(configJson).parseObject() ?: return null
+        val bridge = config["bridge"] as? Map<*, *> ?: return false
+        return bridge["notifications"] == true
+    }
+
+    /** A strict reader for one JSON object (strings, numbers, booleans, null, and nested objects and arrays); any problem makes [parseObject] return null. */
+    private const val MAX_DEPTH = 64
+
     private class Json(private val s: String) {
         private var i = 0
 
+        private var depth = 0
+
         fun parseObject(): Map<String, Any?>? = try {
-            ws(); expect('{'); ws()
+            ws()
+            val out = obj()
+            ws(); if (i != s.length) fail()
+            out
+        } catch (_: IllegalArgumentException) { null }
+
+        private fun obj(): Map<String, Any?> {
+            if (++depth > MAX_DEPTH) fail()
+            expect('{'); ws()
             val out = HashMap<String, Any?>()
             if (peek() == '}') i++
             else while (true) {
@@ -79,9 +101,22 @@ object BridgeClip {
                 out[key] = value(); ws()
                 when (next()) { ',' -> continue; '}' -> break; else -> fail() }
             }
-            ws(); if (i != s.length) fail()
-            out
-        } catch (_: IllegalArgumentException) { null }
+            depth--
+            return out
+        }
+
+        private fun arr(): List<Any?> {
+            if (++depth > MAX_DEPTH) fail()
+            expect('['); ws()
+            val out = ArrayList<Any?>()
+            if (peek() == ']') i++
+            else while (true) {
+                ws(); out.add(value()); ws()
+                when (next()) { ',' -> continue; ']' -> break; else -> fail() }
+            }
+            depth--
+            return out
+        }
 
         private fun fail(): Nothing = throw IllegalArgumentException()
         private fun peek(): Char = if (i < s.length) s[i] else fail()
@@ -90,6 +125,8 @@ object BridgeClip {
         private fun ws() { while (i < s.length && s[i] in " \t\r\n") i++ }
 
         private fun value(): Any? = when (peek()) {
+            '{' -> obj()
+            '[' -> arr()
             '"' -> string()
             't' -> literal("true", true)
             'f' -> literal("false", false)
