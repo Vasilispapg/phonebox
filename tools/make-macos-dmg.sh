@@ -63,13 +63,12 @@ EOF
     cp -R "$app" "$stage/PhoneBox.app"
     ln -s /Applications "$stage/Applications"
     mkdir -p "$(dirname "$dmg")"
-    # Built next to the staging folder (the temp folder), then moved: hdiutil writes a temporary image beside its output and
-    # fails with "No space left on device" when that is an external drive.
-    built="$stage.dmg"
-    trap 'rm -rf "$stage" "$built"' EXIT
-    hdiutil create -volname "PhoneBox $version" -srcfolder "$stage" -ov -format UDZO "$built" >/dev/null
+    # hdiutil sizes the image itself and sometimes gets it wrong, failing with "No space left on device" whatever the free
+    # space (seen on an external drive and on a CI runner): give it the size, with room for the filesystem.
+    kb="$(du -sk "$stage" | cut -f1)"
+    mb=$(( kb / 1024 * 14 / 10 + 24 ))
     rm -f "$dmg"
-    mv "$built" "$dmg"
+    hdiutil create -volname "PhoneBox $version" -srcfolder "$stage" -fs HFS+ -size "${mb}m" -format UDZO "$dmg" >/dev/null
     ;;
   *) usage ;;
 esac
