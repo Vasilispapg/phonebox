@@ -111,7 +111,7 @@ public sealed class AgentConfig
         // OpenCode prompts: how long the Allow always button waits before it can be pressed (it saves a pattern)
         opencode = new { OpenCode.AlwaysCountdownSec },
         // the bridge switches: the phone's Phone bridge screen follows them (nothing here is a secret)
-        bridge = new { Bridge.Clipboard },
+        bridge = new { Bridge.Clipboard, Bridge.Notifications, Bridge.CopyCodes },
     };
 
     /// <summary>Ending processes is allowed when an enabled page has a processes widget that allows it.</summary>
@@ -358,6 +358,16 @@ public sealed class BridgeConfig
 {
     /// <summary>Share copied text with the phone, both ways (plain text, up to 64 KiB).</summary>
     public bool Clipboard { get; set; }
+
+    /// <summary>Show the phone's call, message and app notifications as macOS notifications (the text of messages included).</summary>
+    public bool Notifications { get; set; }
+
+    /// <summary>Put a one-time code found in a message on this computer's clipboard. Does nothing unless <see cref="Notifications"/> is on.</summary>
+    public bool CopyCodes { get; set; }
+
+    /// <summary>True when codes are really copied: both switches on. Computed, never written to the config file.</summary>
+    [JsonIgnore]
+    public bool CodesActive => CopyCodes && Notifications;
 }
 
 public sealed class PageConfig
