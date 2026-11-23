@@ -21,6 +21,8 @@ public sealed class AgentConfig
     public ClaudeConfig Claude { get; set; } = new();
     /// <summary>Cursor agent-transcript sessions on the AI sessions widget (off by default).</summary>
     public CursorConfig Cursor { get; set; } = new();
+    /// <summary>Clipboard and notification sharing with the paired phone (macOS only; every switch is off by default).</summary>
+    public BridgeConfig Bridge { get; set; } = new();
     /// <summary>Antigravity chats on the AI sessions widget (off by default).</summary>
     public AntigravityConfig Antigravity { get; set; } = new();
     /// <summary>OpenCode prompts and sessions on the phone; everything is off until the settings page turns it on.</summary>
@@ -108,6 +110,8 @@ public sealed class AgentConfig
         charge = new { Charge.Enabled, Charge.Min, Charge.Max },
         // OpenCode prompts: how long the Allow always button waits before it can be pressed (it saves a pattern)
         opencode = new { OpenCode.AlwaysCountdownSec },
+        // the bridge switches: the phone's Phone bridge screen follows them (nothing here is a secret)
+        bridge = new { Bridge.Clipboard },
     };
 
     /// <summary>Ending processes is allowed when an enabled page has a processes widget that allows it.</summary>
@@ -343,6 +347,17 @@ public sealed class OpenCodeConfig
     /// <summary>Show each OpenCode session's title on the phone. OpenCode draws the titles from the conversation,
     /// so they stay off the phone until you turn this on, like Claude's shareSessionTitles.</summary>
     public bool ShareSessionTitles { get; set; }
+}
+
+/// <summary>
+/// The phone bridge moves text from this computer to the phone and back, so every switch stays off until the owner turns
+/// it on. The agent enforces them (the bridge endpoints answer 403 while one is off); the phone reads them from the
+/// public config and stops sending.
+/// </summary>
+public sealed class BridgeConfig
+{
+    /// <summary>Share copied text with the phone, both ways (plain text, up to 64 KiB).</summary>
+    public bool Clipboard { get; set; }
 }
 
 public sealed class PageConfig
