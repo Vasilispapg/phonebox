@@ -48,4 +48,5 @@
     <string name="bridge_last_ok">Η τελευταία ειδοποίηση έφτασε στο Mac</string>
     <string name="bridge_last_off">Τελευταία ειδοποίηση: ο διακόπτης ειδοποιήσεων του Mac είναι ανενεργός</string>
     <string name="bridge_last_failed">Η τελευταία ειδοποίηση δεν έφτασε στο Mac· διατηρείται για δύο λεπτά</string>
+    <string name="bridge_access_idle">Η πρόσβαση στις ειδοποιήσεις επιτρέπεται, αλλά το Android δεν έχει ξεκινήσει ακόμη τον ακροατή. Άνοιξε ξανά αυτή την οθόνη ή έλεγξε τη ρύθμιση μπαταρίας του PhoneBox.</string>
 </resources>

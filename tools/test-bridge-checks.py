@@ -14,8 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 NS = {"m": "http://maven.apache.org/POM/4.0.0"}
 APP = ROOT / "android/app/src/main/java/net/oxog/phonebox/deskpanel"
 # production files that must compile on a plain JVM (no Android types), then the stand-in link and the checks
-PRODUCTION = ["BridgeClip.kt", "AgentStream.kt"]
-CHECKS = ["AgentLink.kt", "BridgeChecks.kt"]
+PRODUCTION = ["BridgeClip.kt", "AgentStream.kt", "NotificationFilter.kt", "DeliveryQueue.kt", "BridgeConfigCache.kt", "NotificationDelivery.kt"]
+CHECKS = ["AgentLink.kt", "BridgeChecks.kt", "NotificationFilterChecks.kt"]
 
 
 def main():

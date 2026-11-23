@@ -36,11 +36,13 @@ class PhoneNotificationListener : NotificationListenerService() {
         val decision = filter.decide(info)
         if (decision == Decision.SKIP) return
         val incomingCall = decision == Decision.SEND && info.category == "call"
-        // one call is sent once: answering, updating or ending it posts the same key again
+        // one call is sent once: answering, updating or ending it posts the same notification again
         if ((incomingCall || decision == Decision.SEND_AS_MISSED_CALL) && !callKeys.firstTime(info.key)) return
         val category = when { decision == Decision.SEND_AS_MISSED_CALL -> "missed_call"; incomingCall -> "call"; else -> "message" }
-        val body = BridgeClip.notificationBody(info.key, label(info.pkg), info.pkg, info.title, info.text, category, sbn.postTime)
-        worker.execute { deliver(app, body, System.currentTimeMillis()) }
+        // cut here, as the agent does: a long email in a BigText notification must arrive shortened, not be refused whole
+        val body = BridgeClip.notificationBody(info.key, label(info.pkg), info.pkg, BridgeClip.cut(info.title, 200), BridgeClip.cut(info.text, 2000), category, sbn.postTime)
+        queue.add(NotificationDelivery.Pending(info.pkg, body))
+        requestDrain(app)
     }
 
     private fun describe(sbn: StatusBarNotification): NotificationInfo? {
@@ -52,8 +54,12 @@ class PhoneNotificationListener : NotificationListenerService() {
         // brings its own full-screen screen with two or more buttons (answer, decline)
         val callStyleIncoming = extras.getInt("android.callType", 0) == 1
         val answerAction = n.fullScreenIntent != null && (n.actions?.size ?: 0) >= 2
+        val baseKey = sbn.key ?: "${sbn.packageName}|${sbn.id}|${sbn.tag}"
+        // dialers post every call under one id and tag, so a call's key includes when it started: without that, only the first
+        // call after the process started would ever be sent, here and on the agent (which de-duplicates by key and text)
+        val key = if (n.category == "call" || n.category == "missed_call") "$baseKey|${n.`when`}" else baseKey
         return NotificationInfo(
-            pkg = sbn.packageName, key = sbn.key ?: "${sbn.packageName}|${sbn.id}|${sbn.tag}",
+            pkg = sbn.packageName, key = key,
             ongoing = n.flags and Notification.FLAG_ONGOING_EVENT != 0,
             groupSummary = n.flags and Notification.FLAG_GROUP_SUMMARY != 0,
             category = n.category, callStyleIncoming = callStyleIncoming, hasAnswerAction = answerAction,
@@ -66,64 +72,62 @@ class PhoneNotificationListener : NotificationListenerService() {
     } catch (_: Exception) { pkg }
 
     companion object {
-        /** True while Android has this listener bound (notification access is allowed). */
+        /** True while Android has this listener bound (notification access is allowed and the system started it). */
         @Volatile var connected = false
 
         private val worker = Executors.newSingleThreadExecutor()
         private val callKeys = CallKeys()
-        private val queue = DeliveryQueue<String>(clock = System::currentTimeMillis)
+        private val queue = DeliveryQueue<NotificationDelivery.Pending>(clock = System::currentTimeMillis)
+        private val draining = AtomicBoolean(false)
         private val retryPending = AtomicBoolean(false)
         @Volatile private var cache: BridgeConfigCache? = null
 
+        /** Forgets what waits for the Mac: called when the switch is turned off, so nothing is sent afterwards. */
+        fun clearPending() = queue.clear()
+
         private fun configCache(app: Context): BridgeConfigCache =
-            cache ?: BridgeConfigCache({ withLink(app) { BridgeClient(it).fetchConfig() } }, System::currentTimeMillis).also { cache = it }
+            cache ?: BridgeConfigCache({ val link = AgentLink(app); try { BridgeClient(link).fetchConfig() } finally { link.close() } },
+                System::currentTimeMillis).also { cache = it }
 
-        private fun <T> withLink(app: Context, block: (AgentLink) -> T): T {
-            val link = AgentLink(app)
-            try { return block(link) } finally { link.close() }
-        }
-
-        /** On the worker thread: the older waiting ones first, then this one; none at all when the computer's switch is known to be off. */
-        private fun deliver(app: Context, body: String, at: Long) {
-            val config = configCache(app)
-            if (!config.notificationsOn()) return
-            withLink(app) { link ->
-                val client = BridgeClient(link)
-                var reachable = true
-                for (waiting in queue.take()) {
-                    if (reachable) reachable = send(client, config, waiting.item, waiting.at)
-                    else queue.add(waiting.item, waiting.at)
-                }
-                if (reachable) send(client, config, body, at) else queue.add(body, at)
+        /**
+         * One drain at a time on one thread: a burst of notifications is one pass over the queue, and the queue's two-minute
+         * limit applies to everything in it, so a slow or absent Mac cannot build a backlog that is sent late.
+         */
+        private fun requestDrain(app: Context) {
+            if (!draining.compareAndSet(false, true)) return // the running pass picks up the new item
+            worker.execute {
+                var again: Boolean
+                do {
+                    val retryLater = try { drainOnce(app) } catch (_: Exception) { false }
+                    draining.set(false)
+                    if (retryLater) scheduleRetry(app)
+                    again = !retryLater && !queue.isEmpty() && draining.compareAndSet(false, true)
+                } while (again)
             }
-            if (!queue.isEmpty()) scheduleRetry(app)
         }
 
-        /** True unless the computer could not be reached (then the notification is back in the queue with its original time). */
-        private fun send(client: BridgeClient, config: BridgeConfigCache, body: String, at: Long): Boolean = when (client.sendNotification(body)) {
-            SendResult.OK -> { config.markOn(); BridgePrefs.notificationOutcome = NotificationOutcome.OK; true }
-            SendResult.OFF -> { config.markOff(); BridgePrefs.notificationOutcome = NotificationOutcome.MAC_OFF; true } // dropped: nothing to retry
-            SendResult.TOO_LARGE -> true // cannot happen (the agent cuts long text); dropped
-            SendResult.UNREACHABLE -> { queue.add(body, at); BridgePrefs.notificationOutcome = NotificationOutcome.UNREACHABLE; false }
+        private fun drainOnce(app: Context): Boolean {
+            val config = configCache(app)
+            var link: AgentLink? = null // created only when something is really sent
+            try {
+                return NotificationDelivery(
+                    queue,
+                    phoneSwitchOn = { BridgePrefs.notificationsEnabled(app) },
+                    appAllowed = { BridgePrefs.allowedApps(app).contains(it) },
+                    macSwitchOn = { config.notificationsOn() },
+                    send = { body -> BridgeClient(link ?: AgentLink(app).also { link = it }).sendNotification(body) },
+                    onOutcome = { BridgePrefs.notificationOutcome = it },
+                    markMacOff = config::markOff,
+                    markMacOn = config::markOn,
+                ).drain()
+            } finally { link?.close() }
         }
 
         private fun scheduleRetry(app: Context) {
             if (!retryPending.compareAndSet(false, true)) return
             Handler(Looper.getMainLooper()).postDelayed({
                 retryPending.set(false)
-                worker.execute {
-                    val config = configCache(app)
-                    if (!config.notificationsOn()) return@execute
-                    withLink(app) { link ->
-                        val client = BridgeClient(link)
-                        var reachable = true
-                        for (waiting in queue.take()) {
-                            if (reachable) reachable = send(client, config, waiting.item, waiting.at)
-                            else queue.add(waiting.item, waiting.at)
-                        }
-                    }
-                    if (!queue.isEmpty()) scheduleRetry(app)
-                }
+                requestDrain(app)
             }, 30_000)
         }
     }
