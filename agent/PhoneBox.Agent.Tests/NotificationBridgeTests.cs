@@ -180,8 +180,11 @@ public sealed class NotificationBridgeTests : IDisposable
     {
         for (var i = 1; i <= 11; i++) _bridge.Receive(N("k" + i), "phoneA");
         await _bridge.DrainAsync();
+        Assert.Equal(10, _notifier.Posts.Count);                 // the summary waits for the end of the window
+        Assert.All(_notifier.Posts, p => Assert.Equal("Anna", p.Title));
+        _now += 10_000;
+        await _bridge.DrainAsync();
         Assert.Equal(11, _notifier.Posts.Count);
-        Assert.All(_notifier.Posts.Take(10), p => Assert.Equal("Anna", p.Title));
         Assert.Equal(("1 more from Messages", "", ""), _notifier.Posts[10]);
     }
 
@@ -189,9 +192,55 @@ public sealed class NotificationBridgeTests : IDisposable
     public async Task ATwelfthMakesItTwoMore()
     {
         for (var i = 1; i <= 12; i++) _bridge.Receive(N("k" + i), "phoneA");
+        _now += 10_000;
         await _bridge.DrainAsync();
         Assert.Equal(("2 more from Messages", "", ""), _notifier.Posts.Last());
         Assert.Equal(11, _notifier.Posts.Count);
+    }
+
+    [Fact]
+    public async Task AWorkerThatKeepsUpDoesNotPostASummaryPerMessage()
+    {
+        // what the real worker does: it drains after every message. 25 messages 300 ms apart are 10 banners and ONE summary.
+        for (var i = 1; i <= 25; i++)
+        {
+            _bridge.Receive(N("k" + i, "WhatsApp"), "phoneA");
+            await _bridge.DrainAsync();
+            _now += 300;
+        }
+        Assert.Equal(10, _notifier.Posts.Count);
+        _now += 10_000;
+        await _bridge.DrainAsync();
+        Assert.Equal(11, _notifier.Posts.Count);
+        Assert.Equal(("15 more from WhatsApp", "", ""), _notifier.Posts.Last());
+    }
+
+    [Fact]
+    public async Task ASummaryWaitsForItsWindowAndOnlyThenIsPosted()
+    {
+        for (var i = 1; i <= 11; i++) _bridge.Receive(N("k" + i), "phoneA");
+        await _bridge.DrainAsync();
+        _now += 9_999;
+        await _bridge.DrainAsync();
+        Assert.Equal(10, _notifier.Posts.Count);
+        _now += 1;
+        await _bridge.DrainAsync();
+        Assert.Equal(11, _notifier.Posts.Count);
+        await _bridge.DrainAsync();                              // and it is posted once, not on every drain
+        Assert.Equal(11, _notifier.Posts.Count);
+    }
+
+    [Fact]
+    public async Task TheWorkerKnowsWhenTheNextSummaryIsDue()
+    {
+        Assert.Null(_bridge.NextSummaryDelay());
+        for (var i = 1; i <= 11; i++) _bridge.Receive(N("k" + i), "phoneA");
+        Assert.Equal(TimeSpan.FromMilliseconds(10_000), _bridge.NextSummaryDelay());
+        _now += 4_000;
+        Assert.Equal(TimeSpan.FromMilliseconds(6_000), _bridge.NextSummaryDelay());
+        _now += 6_000;
+        await _bridge.DrainAsync();
+        Assert.Null(_bridge.NextSummaryDelay());                 // the summary went out
     }
 
     [Fact]
@@ -246,6 +295,14 @@ public sealed class NotificationBridgeTests : IDisposable
     }
 
     [Fact]
+    public async Task AnAmbiguousTextDoesNotFallBackToACodeInTheTitle()
+    {
+        SetBridge(notifications: true, copyCodes: true);
+        await Send(N("k1", "Messages", "OTP 118822", "Your PIN is 1234 and code 5678"));
+        Assert.Null(_pb.Text);
+    }
+
+    [Fact]
     public async Task NoCodeIsCopiedWhenTheCodeSwitchIsOff()
     {
         SetBridge(notifications: true, copyCodes: false);
@@ -294,6 +351,44 @@ public sealed class NotificationBridgeTests : IDisposable
         _pb.Copy("482913");                                             // the owner copying the same digits later is still sent
         _clipboard.PollOnce();
         Assert.Equal(["482913"], _stream.Since(0, null).Select(e => e.Text));
+    }
+
+    // ---- the switch turned off while notifications wait ----
+
+    [Fact]
+    public async Task NotificationsQueuedBeforeTheSwitchWentOffAreNeverShown()
+    {
+        for (var i = 1; i <= 5; i++) _bridge.Receive(N("k" + i, "App" + i), "phoneA");
+        SetBridge(notifications: false);
+        await _bridge.DrainAsync();
+        Assert.Empty(_notifier.Posts);
+        SetBridge(notifications: true);                          // turned back on: the old ones are gone, not waiting
+        await _bridge.DrainAsync();
+        Assert.Empty(_notifier.Posts);
+    }
+
+    [Fact]
+    public async Task AHeldBackSummaryIsDroppedWhenTheSwitchGoesOff()
+    {
+        for (var i = 1; i <= 11; i++) _bridge.Receive(N("k" + i), "phoneA");
+        await _bridge.DrainAsync();
+        SetBridge(notifications: false);
+        _now += 10_000;
+        await _bridge.DrainAsync();
+        Assert.Equal(10, _notifier.Posts.Count);
+        Assert.Null(_bridge.NextSummaryDelay());
+    }
+
+    [Fact]
+    public async Task OnlyTheNotificationsStillQueuedWhenTheSwitchGoesOffAreDropped()
+    {
+        _bridge.Receive(N("k1"), "phoneA");
+        await _bridge.DrainAsync();                              // shown while it was on
+        _bridge.Receive(N("k2"), "phoneA");
+        SetBridge(notifications: false);
+        await _bridge.DrainAsync();
+        Assert.Equal(["Anna"], _notifier.Posts.Select(p => p.Title));
+        Assert.Single(_notifier.Posts);
     }
 
     // ---- the log ----

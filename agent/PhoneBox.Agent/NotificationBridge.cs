@@ -18,6 +18,14 @@ public sealed class NotificationBridge : IHostedService, IDisposable
 
     private sealed record Post(string Title, string Subtitle, string Body);
 
+    /// <summary>Per app: when it was last let through (inside the window), and what was held back since <see cref="HeldSince"/>.</summary>
+    private sealed class Window
+    {
+        public readonly List<long> Times = [];
+        public int Held;
+        public long HeldSince;
+    }
+
     private readonly IMacNotifier _notifier;
     private readonly ConfigStore _config;
     private readonly ClipboardBridge? _clipboard;
@@ -28,8 +36,7 @@ public sealed class NotificationBridge : IHostedService, IDisposable
     private readonly Queue<Post> _queue = new();
     private readonly Dictionary<string, string> _seen = [];       // device|key -> hash of what was shown
     private readonly Queue<string> _seenOrder = new();
-    private readonly Dictionary<string, List<long>> _recent = []; // app -> times it was let through in the last 10 s
-    private readonly Dictionary<string, int> _extra = [];         // app -> notifications held back, waiting for a summary
+    private readonly Dictionary<string, Window> _windows = [];    // per app: the burst limiter
     private readonly SemaphoreSlim _wake = new(0);
     private readonly SemaphoreSlim _drain = new(1, 1);
     private CancellationTokenSource? _stop;
@@ -72,19 +79,23 @@ public sealed class NotificationBridge : IHostedService, IDisposable
         string? copied = null;
         if (!isCall && bridge.CodesActive && _clipboard is not null)
         {
-            var code = OneTimeCode.Find(text) ?? OneTimeCode.Find(title);
+            // the title is searched only when the text had no candidate at all: two codes in the text are ambiguous, not a reason to try the title
+            var fromText = OneTimeCode.Search(text);
+            var code = fromText.Code ?? (fromText.Ambiguous ? null : OneTimeCode.Find(title));
             if (code is not null && _clipboard.WriteLocalOnly(code)) copied = code;
         }
 
         lock (_gate)
         {
-            var times = _recent.TryGetValue(app, out var list) ? list : _recent[app] = [];
-            times.RemoveAll(t => now - t >= BurstWindowMs);
-            if (times.Count >= BurstLimit)
-                _extra[app] = _extra.GetValueOrDefault(app) + 1; // shown as one "N more" once the rest is out
+            var window = _windows.TryGetValue(app, out var existing) ? existing : _windows[app] = new Window();
+            window.Times.RemoveAll(t => now - t >= BurstWindowMs);
+            if (window.Times.Count >= BurstLimit)
+            {
+                if (window.Held++ == 0) window.HeldSince = now; // one "N more from App" goes out when this window is over
+            }
             else
             {
-                times.Add(now);
+                window.Times.Add(now);
                 _queue.Enqueue(Format(app, title, text, n.Category, deviceId, copied is not null, now));
                 while (_queue.Count > MaxQueued) _queue.Dequeue();
             }
@@ -106,7 +117,10 @@ public sealed class NotificationBridge : IHostedService, IDisposable
         return new Post(title.Length > 0 ? title : app, string.Join(" · ", parts), text);
     }
 
-    /// <summary>Posts everything queued, then one "N more from App" for each app that went over the burst limit.</summary>
+    /// <summary>
+    /// Posts everything queued, then a "N more from App" for each app whose burst window is over. It looks at the switch
+    /// before every post: what was queued when the owner turned it off is dropped, never shown.
+    /// </summary>
     internal async Task DrainAsync()
     {
         await _drain.WaitAsync();
@@ -114,16 +128,51 @@ public sealed class NotificationBridge : IHostedService, IDisposable
         {
             while (true)
             {
+                if (!Enabled) { DropPending(); return; }
                 Post? next;
                 lock (_gate) next = _queue.Count > 0 ? _queue.Dequeue() : null;
                 if (next is null) break;
                 await Show(next);
             }
-            List<KeyValuePair<string, int>> summaries;
-            lock (_gate) { summaries = [.. _extra]; _extra.Clear(); }
-            foreach (var (app, count) in summaries) await Show(new Post($"{count} more from {app}", "", ""));
+            List<KeyValuePair<string, int>> due = [];
+            var now = _clock();
+            lock (_gate)
+            {
+                foreach (var (app, window) in _windows)
+                    if (window.Held > 0 && now - window.HeldSince >= BurstWindowMs) { due.Add(new(app, window.Held)); window.Held = 0; }
+                // an app that has been quiet for a window needs no entry
+                foreach (var app in _windows.Where(w => w.Value.Held == 0 && w.Value.Times.All(t => now - t >= BurstWindowMs)).Select(w => w.Key).ToList())
+                    _windows.Remove(app);
+            }
+            foreach (var (app, count) in due)
+            {
+                if (!Enabled) { DropPending(); return; }
+                await Show(new Post($"{count} more from {app}", "", ""));
+            }
         }
         finally { _drain.Release(); }
+    }
+
+    private void DropPending()
+    {
+        lock (_gate)
+        {
+            _queue.Clear();
+            _windows.Clear();
+        }
+    }
+
+    /// <summary>How long until the earliest held-back summary is due, or null when none is waiting (the worker sleeps until then).</summary>
+    internal TimeSpan? NextSummaryDelay()
+    {
+        lock (_gate)
+        {
+            var now = _clock();
+            long? soonest = null;
+            foreach (var window in _windows.Values)
+                if (window.Held > 0) soonest = Math.Min(soonest ?? long.MaxValue, window.HeldSince + BurstWindowMs - now);
+            return soonest is { } ms ? TimeSpan.FromMilliseconds(Math.Max(0, ms)) : null;
+        }
     }
 
     private async Task Show(Post post)
@@ -153,7 +202,7 @@ public sealed class NotificationBridge : IHostedService, IDisposable
         {
             while (!token.IsCancellationRequested)
             {
-                try { await _wake.WaitAsync(token); await DrainAsync(); }
+                try { await _wake.WaitAsync(NextSummaryDelay() ?? Timeout.InfiniteTimeSpan, token); await DrainAsync(); }
                 catch (OperationCanceledException) { break; }
                 catch (Exception ex) { _log.LogWarning("the notification worker failed: {Error}", ex.GetType().Name); }
             }

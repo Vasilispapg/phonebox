@@ -23,7 +23,6 @@ public sealed class OneTimeCodeTests
 
     [Theory]
     [InlineData("Your PIN is 1234 and code 5678")]                       // two codes: do not guess
-    [InlineData("Order 483920 shipped. Code: 123456")]                   // two numbers near a keyword
     [InlineData("Your balance is 123456 EUR")]                           // a number but no keyword
     [InlineData("Call me on 2105551234 code")]                           // ten digits are a phone number
     [InlineData("Call 210-555-1234 about your code")]                    // a phone number written with dashes
@@ -36,6 +35,55 @@ public sealed class OneTimeCodeTests
     [InlineData("Your code is soon.\n\n482913 other text")]              // the keyword is on another line
     [InlineData("")]
     public void AnythingDoubtfulCopiesNothing(string text) => Assert.Null(OneTimeCode.Find(text));
+
+    [Theory]
+    [InlineData("code ١٢٣٤٥٦")]                                           // Arabic-Indic digits
+    [InlineData("code １２３４５６")]                                      // full-width digits
+    [InlineData("code 12٣٤56")]                                           // mixed scripts
+    public void DigitsOfOtherScriptsCopyNothing(string text) => Assert.Null(OneTimeCode.Find(text));
+
+    [Theory]
+    [InlineData("Your password was changed on 23/11/2026")]                // a date
+    [InlineData("Your code expires 2026.11.23")]
+    [InlineData("Your card ending 4321 was charged. Not you? Verify now")] // the last digits of a card
+    [InlineData("Your card ends 4321. Verify it")]
+    [InlineData("Card *4321 charged, verify")]
+    [InlineData("Verification of payment €1500.00 complete")]              // an amount
+    [InlineData("Verify: you paid $1500 today")]
+    [InlineData("Verify the payment of 1500 EUR")]
+    [InlineData("Zip code 10557 is not served")]                           // a postcode
+    [InlineData("Your postal code 10557 is not served")]
+    [InlineData("Ο ταχυδρομικός κωδικός 10557 δεν εξυπηρετείται")]
+    [InlineData("Code valid for 10 minutes. Ref 123456")]                  // a reference number
+    [InlineData("Verify order #123456 now")]
+    [InlineData("Verify order 123456 now")]
+    [InlineData("Verify with tel 12345678")]                              // a phone number
+    [InlineData("Verify the time 12:34:56")]
+    public void NumbersThatAreNotCodesCopyNothing(string text) => Assert.Null(OneTimeCode.Find(text));
+
+    [Theory]
+    [InlineData("Your code is 482913.", "482913")]                         // a code at the end of a sentence
+    [InlineData("482913 is your code, valid for 10 minutes", "482913")]
+    [InlineData("Order 483920 shipped. Code: 123456", "123456")]            // the order number is excluded, so one code is left
+    [InlineData("Code: 482913 (do not share)", "482913")]
+    [InlineData("Your verification code is 482913. It expires in 10 minutes.", "482913")]
+    [InlineData("Το PIN σας 1234, ποσό 50,00 ευρώ", "1234")]
+    public void ARealCodeAmongOrdinaryPunctuationStillCopies(string text, string expected) =>
+        Assert.Equal(expected, OneTimeCode.Find(text));
+
+    [Fact]
+    public void SearchSaysWhenTheTextHadTwoCandidates()
+    {
+        var two = OneTimeCode.Search("Your PIN is 1234 and code 5678");
+        Assert.Null(two.Code);
+        Assert.True(two.Ambiguous);
+        var none = OneTimeCode.Search("Your balance is 123456 EUR");
+        Assert.Null(none.Code);
+        Assert.False(none.Ambiguous);
+        var one = OneTimeCode.Search("Your code is 482913");
+        Assert.Equal("482913", one.Code);
+        Assert.False(one.Ambiguous);
+    }
 
     [Fact]
     public void TheKeywordMustBeCloseToTheCode()
