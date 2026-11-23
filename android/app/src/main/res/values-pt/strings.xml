@@ -13,4 +13,19 @@
     <string name="pair_failed_certificate">O computador tem um certificado diferente do código QR. Inicie o emparelhamento novamente.</string>
     <string name="ok">OK</string>
     <string name="webview_failed">O painel não pode funcionar neste telemóvel: o Android não conseguiu iniciar o WebView. Alguns telemóveis com Android 5 não conseguem executar as versões do WebView de que o PhoneBox precisa.</string>
+    <string name="bridge_title">Ponte do telemóvel</string>
+    <string name="bridge_clipboard_switch">Partilhar a área de transferência com o Mac</string>
+    <string name="bridge_clipboard_help">O texto que copia no Mac aparece neste telemóvel. Para enviar texto para o Mac, selecione-o e toque em «Enviar para o Mac», use Partilhar › Enviar para o Mac ou o mosaico Enviar para o Mac nas Definições rápidas. O interruptor Ponte do telemóvel do Mac (nas definições do PhoneBox no computador) também tem de estar ativado.</string>
+    <string name="bridge_state_off">Desativado</string>
+    <string name="bridge_state_waiting">A aguardar o Mac…</string>
+    <string name="bridge_state_running">Ligado ao Mac</string>
+    <string name="bridge_state_mac_off">O interruptor da área de transferência do Mac está desativado (Definições › Ponte do telemóvel no computador)</string>
+    <string name="bridge_notification_channel">Partilha da área de transferência</string>
+    <string name="bridge_notification_title">O PhoneBox está a partilhar a área de transferência</string>
+    <string name="bridge_send_to_mac">Enviar para o Mac</string>
+    <string name="bridge_sent">Enviado para o Mac</string>
+    <string name="bridge_send_off">O interruptor da área de transferência do Mac está desativado</string>
+    <string name="bridge_send_unreachable">Não foi possível contactar o Mac</string>
+    <string name="bridge_send_nothing">Nada para enviar: a área de transferência está vazia ou é privada</string>
+    <string name="bridge_send_too_large">Demasiado longo para enviar (o limite é 64 KiB)</string>
 </resources>

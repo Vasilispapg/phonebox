@@ -92,10 +92,12 @@ private fun refusedDelayChecks() {
     val times = CopyOnWriteArrayList<Long>()
     val second = CountDownLatch(2)
     val link = AgentLink(code = { times.add(System.nanoTime()); second.countDown(); 403 }) { ByteArrayInputStream(byteArrayOf()) }
-    val stream = AgentStream(link, "/api/bridge/stream", refusedRetryMs = 400) { _, _ -> }
+    val refusals = java.util.concurrent.atomic.AtomicInteger()
+    val stream = AgentStream(link, "/api/bridge/stream", refusedRetryMs = 400, onRefused = { refusals.incrementAndGet() }) { _, _ -> }
     stream.start()
     check("two attempts were made while refused", second.await(5, TimeUnit.SECONDS))
     stream.stop()
+    check("onRefused was told each time (${refusals.get()})", refusals.get() >= 2)
     val gapMs = (times[1] - times[0]) / 1_000_000
     check("the retry after a 403 waited about refusedRetryMs ($gapMs ms)", gapMs in 350..1500)
     check("a refused stream delivered no open event", true)

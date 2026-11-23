@@ -13,4 +13,19 @@
     <string name="pair_failed_certificate">Il computer dispone di un certificato diverso da quello indicato dal codice QR.</string>
     <string name="ok">OK</string>
     <string name="webview_failed">Il pannello non può funzionare su questo telefono: Android non è riuscito ad avviare la sua WebView. Alcuni telefoni Android 5 non possono eseguire le versioni di WebView di cui PhoneBox ha bisogno.</string>
+    <string name="bridge_title">Ponte telefono</string>
+    <string name="bridge_clipboard_switch">Condividi gli appunti con il Mac</string>
+    <string name="bridge_clipboard_help">Il testo che copi sul Mac compare su questo telefono. Per inviare testo al Mac, selezionalo e tocca «Invia al Mac», usa Condividi › Invia al Mac oppure il riquadro Invia al Mac nelle Impostazioni rapide. Anche l\'interruttore Ponte telefono del Mac (nelle impostazioni di PhoneBox sul computer) deve essere attivo.</string>
+    <string name="bridge_state_off">Disattivato</string>
+    <string name="bridge_state_waiting">In attesa del Mac…</string>
+    <string name="bridge_state_running">Connesso al Mac</string>
+    <string name="bridge_state_mac_off">L\'interruttore degli appunti del Mac è disattivato (Impostazioni › Ponte telefono sul computer)</string>
+    <string name="bridge_notification_channel">Condivisione degli appunti</string>
+    <string name="bridge_notification_title">PhoneBox sta condividendo gli appunti</string>
+    <string name="bridge_send_to_mac">Invia al Mac</string>
+    <string name="bridge_sent">Inviato al Mac</string>
+    <string name="bridge_send_off">L\'interruttore degli appunti del Mac è disattivato</string>
+    <string name="bridge_send_unreachable">Impossibile raggiungere il Mac</string>
+    <string name="bridge_send_nothing">Niente da inviare: gli appunti sono vuoti o privati</string>
+    <string name="bridge_send_too_large">Troppo lungo da inviare (il limite è 64 KiB)</string>
 </resources>

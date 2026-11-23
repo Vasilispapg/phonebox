@@ -4,6 +4,12 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Phone bridge (clipboard sharing with the paired computer): a foreground service holds the connection, with a
+         visible notification (POST_NOTIFICATIONS is asked when the switch is turned on); the receiver restarts it after a reboot. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Wake button only: names the Wi-Fi network so that the Wake-on-LAN packet cannot leave through mobile data -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Dictation widget only: asked for the first time its microphone button is tapped -->
@@ -73,6 +79,32 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity-alias>
+
+        <!-- Phone bridge screen: the switches and status. Also what a long press on a PhoneBox Quick Settings tile opens. -->
+        <activity
+            android:name=".BridgeActivity"
+            android:exported="true"
+            android:label="@string/bridge_title"
+            android:theme="@android:style/Theme.Material.NoActionBar">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".ClipboardService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Shares the clipboard with the paired computer while the user has Phone bridge turned on" />
+        </service>
+
+        <receiver android:name=".BridgeBootReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
 
         <!-- Quick Settings tile (Edit tiles › PhoneBox): opens the panel. Tiles exist from Android 7.0; below that the
              service is disabled (values/bools.xml vs values-v24). -->
