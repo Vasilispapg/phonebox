@@ -282,8 +282,16 @@ Share what you copy between the Mac and the phone. It starts with the clipboard.
   has stayed the same for a moment, so a marker a password manager adds just after the text is still seen. Not every
   password manager marks what it copies (browser extensions often don't): copy passwords from those only while the
   bridge is off.
-- **Phone to Mac:** the phone sends text to the Mac, which puts it on the Mac's clipboard. Android does not let an app
-  read the clipboard in the background, so the phone's side is one tap (the Android app adds the ways to send).
+- **Phone to Mac:** Android does not let an app read the clipboard in the background, so sending from the phone is one
+  tap, in any of four places: **Send to Mac** in the text-selection menu (select text, it sits next to Copy, and the
+  text is sent without copying first), **Share › Send to Mac**, a **Send to Mac** tile (add it under Quick Settings
+  › Edit), or the **Send clipboard** button on the app's "sharing the clipboard" notification. A short message says
+  whether it arrived.
+- **On the phone:** open the app's **Phone bridge** screen (long-press a PhoneBox tile in Quick Settings, or tap the
+  notification) and turn on **Share the clipboard with the Mac**. Both switches, this one and the Mac's, must be on;
+  the screen says whether it is connected or the Mac's switch is off. Android 13 and later asks to show notifications.
+  On Samsung phones set PhoneBox's battery use to **Unrestricted** (Settings › Apps › PhoneBox › Battery), or the
+  system may stop the service.
 - The text goes only to your own paired phones over the PhoneBox link (USB or paired Wi-Fi / Tailscale), with the
   phone's key; nothing on the Mac itself can read it from the agent's local port. It is kept in memory and never stored
   or logged. A phone whose connection drops for a moment is sent what it missed when it reconnects (at most the last 20
