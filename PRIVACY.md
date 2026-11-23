@@ -80,6 +80,13 @@ Last updated: 2026-11-20 (PhoneBox 0.9.6).
   often draws from your first prompt. The agent reads only the title records at the end of the chat's file in
   `~/.claude/projects`, never the prompts, replies or tool arguments, and sends the title only to your phone, like the
   rest of this list. With the switch off the file is not opened and no title is sent.
+- **Clipboard sharing, the phone bridge** (macOS only, off by default; **Settings › Phone bridge**): while it is on,
+  the agent looks at the clipboard's change counter about every 400 ms and, when you copy plain text (up to 64 KiB),
+  sends it to your paired phones over the same USB / paired Wi-Fi link as other panel data. Text a phone sends is
+  put on this computer's clipboard. Copies marked concealed, transient or auto-generated, which password managers
+  use, are skipped. The text is held in memory only: it is never written to disk, `data.json` or the log (the log
+  records no clipboard text), and it goes nowhere except your own phones. Turning the setting off stops both
+  directions at once.
 - **Sound for the Spectrum bars widget** (Windows): while an enabled page with the widget is on the phone's screen,
   the agent captures what the default output device plays, analyzes it in memory and sends only 48 loudness levels
   per frame to the phone. Audio is never stored or sent; capture stops a few seconds after the widget leaves the

@@ -270,6 +270,20 @@ packet, it carries no password, so anyone on the same network who knows a MAC ad
 4. Waking from sleep or hibernate works most reliably. Waking from a full shutdown depends on the board, and
    Windows *Fast startup* can interfere: turn it off if a shut-down machine does not wake.
 
+## Phone bridge (macOS)
+
+Share what you copy between the Mac and the phone. It starts with the clipboard.
+
+- Turn on **Settings › Phone bridge › Share the clipboard with the phone**. It is off by default, and while it is off
+  the agent refuses everything the phone sends for it.
+- **Mac to phone:** copy plain text on the Mac and the paired phone's clipboard has it within about a second. Text over
+  64 KiB is not sent, and neither is anything a password manager marked concealed.
+- **Phone to Mac:** the phone sends text to the Mac, which puts it on the Mac's clipboard. Android does not let an app
+  read the clipboard in the background, so the phone's side is one tap (the Android app adds the ways to send).
+- The text goes only to your own paired phones over the PhoneBox link (USB or paired Wi-Fi / Tailscale), is kept in
+  memory and never stored or logged. See [PRIVACY.md](../PRIVACY.md).
+- Needs macOS: on Windows and Linux the card is hidden and the agent answers the phone with 501.
+
 ## AI agent permission prompts
 
 When Codex asks for permission (run a command, edit a file, use an MCP tool…), the phone shows the project, tool and
