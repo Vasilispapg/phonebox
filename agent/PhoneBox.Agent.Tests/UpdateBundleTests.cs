@@ -142,12 +142,20 @@ public class UpdateBundleSigningTests
     }
 
     [Theory]
-    [InlineData(Certificate, true)]
-    [InlineData("identifier \"x\" and anchor apple generic and certificate root = H\"abcdef\"", true)]
-    [InlineData("cdhash H\"9217e8b460b7d216df7b9665c1e608edacfe0319\"", false)] // ad hoc: only a hash, nothing to pin
-    [InlineData(null, false)]
-    public void OnlyACertificateRequirementCanPinTheUpdatesIdentity(string? requirement, bool pinned) =>
-        Assert.Equal(pinned, UpdateService.CertificatePinned(requirement));
+    [InlineData(Certificate, false)]
+    [InlineData("identifier \"x\" and anchor apple generic and certificate root = H\"abcdef\"", false)]
+    [InlineData("identifier \"x\" and info[CFBundleVersion] >= \"1\"", false)] // not a certificate form, still enforced
+    [InlineData("cdhash H\"9217e8b460b7d216df7b9665c1e608edacfe0319\"", true)] // ad hoc: only a hash, nothing to pin
+    [InlineData("cdhash H\"9217e8b460b7d216df7b9665c1e608edacfe0319\" and identifier \"x\"", false)]
+    public void OnlyARequirementThatIsJustACodeHashSkipsThePin(string requirement, bool codeHashOnly) =>
+        Assert.Equal(codeHashOnly, UpdateService.CodeHashOnly(requirement));
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void AnEmptyRequirementIsRefusedNotTreatedAsAdHoc(string? requirement) =>
+        Assert.Throws<InvalidOperationException>(() => UpdateService.CodeHashOnly(requirement));
 
     [Fact]
     public void TheRestartPathCanBeReadBeforeTheAppMoves()

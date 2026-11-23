@@ -331,14 +331,14 @@ public sealed class UpdateService(ConfigStore cfg, AdbReverse adb, IHostApplicat
             // certificate (SHA256SUMS comes from the same release as the image). A copy signed ad hoc (a build from source) has
             // only a hash as its requirement, which cannot be pinned.
             var running = await DesignatedRequirementAsync(app, ct);
-            if (CertificatePinned(running))
+            if (!CodeHashOnly(running))
             {
                 var pin = new ProcessStartInfo("/usr/bin/codesign");
                 foreach (var arg in new[] { "--verify", "-R=" + running, staging }) pin.ArgumentList.Add(arg);
                 var pinned = await ToolProcess.RunAsync(pin, TimeSpan.FromMinutes(1), ct);
                 if (pinned.ExitCode != 0) throw new InvalidOperationException("the new PhoneBox.app is not signed by the same identity as the running one; the update was not installed: " + (pinned.Output + pinned.Error).Trim());
             }
-            else log.LogWarning("the running PhoneBox.app is signed ad hoc, so the update's signing identity cannot be checked against it");
+            else log.LogWarning("the running PhoneBox.app is signed ad hoc (its requirement is only a code hash), so the update's signing identity cannot be checked against it");
             // The path is read now: once the running app is renamed, the OS no longer says where it lives.
             AppRestart.Executable = Environment.ProcessPath;
             SwapBundle(app, staging);
@@ -374,9 +374,15 @@ public sealed class UpdateService(ConfigStore cfg, AdbReverse adb, IHostApplicat
         return null;
     }
 
-    /// <summary>True for a requirement tied to a certificate (PhoneBox's own), false for an ad hoc one, which is just a code hash.</summary>
-    internal static bool CertificatePinned(string? requirement) =>
-        requirement is not null && (requirement.Contains("certificate leaf = H\"", StringComparison.Ordinal) || requirement.Contains("certificate root = H\"", StringComparison.Ordinal));
+    /// <summary>
+    /// True only for an ad hoc signature, whose whole requirement is the hash of that one build (cdhash H"..."): there is no
+    /// identity to pin. Any other requirement is enforced on the update, and an empty one is refused.
+    /// </summary>
+    internal static bool CodeHashOnly(string? requirement)
+    {
+        if (string.IsNullOrWhiteSpace(requirement)) throw new InvalidOperationException("the running PhoneBox.app has an empty signing requirement, so the update's signer cannot be checked and it was not installed");
+        return requirement.StartsWith("cdhash H\"", StringComparison.Ordinal) && !requirement.Contains(" and ", StringComparison.Ordinal);
+    }
 
     /// <summary>Copies PhoneBox.app out of a disk image into <paramref name="destination"/> (the image is mounted read-only and detached again).</summary>
     internal static async Task ExtractAppAsync(string dmg, string destination, CancellationToken ct)
