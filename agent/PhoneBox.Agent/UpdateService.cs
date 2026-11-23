@@ -319,7 +319,7 @@ public sealed class UpdateService(ConfigStore cfg, AdbReverse adb, IHostApplicat
         {
             throw new InvalidOperationException($"{parent} is not writable, so PhoneBox.app cannot update itself there; move it to ~/Applications or install the new version by hand");
         }
-        var dmg = await VerifiedDownloadAsync(_latest!.AgentDmg!, $"PhoneBox-{_latest.Version}-{AppPaths.Rid}.dmg", ct);
+        var dmg = await VerifiedDownloadAsync(_latest!.AgentDmg!, $"PhoneBox-{_latest.Version}-{AppPaths.Rid}.dmg", ct, requireSums: true);
         try
         {
             await ExtractAppAsync(dmg, staging, ct);
@@ -354,13 +354,16 @@ public sealed class UpdateService(ConfigStore cfg, AdbReverse adb, IHostApplicat
         life.StopApplication();
     }
 
-    /// <summary>The designated requirement codesign reports for a signed app or binary, or null.</summary>
-    internal static async Task<string?> DesignatedRequirementAsync(string path, CancellationToken ct)
+    /// <summary>The designated requirement codesign reports for a signed app or binary; throws when it cannot be read.</summary>
+    internal static async Task<string> DesignatedRequirementAsync(string path, CancellationToken ct)
     {
         var start = new ProcessStartInfo("/usr/bin/codesign");
         foreach (var arg in new[] { "-d", "-r-", path }) start.ArgumentList.Add(arg);
         var result = await ToolProcess.RunAsync(start, TimeSpan.FromMinutes(1), ct);
-        return ParseDesignatedRequirement(result.Output + "\n" + result.Error);
+        // A lookup that failed is not "ad hoc": it must not turn the identity check off
+        if (result.ExitCode != 0 || ParseDesignatedRequirement(result.Output + "\n" + result.Error) is not { } requirement)
+            throw new InvalidOperationException("could not read the running PhoneBox.app's signing requirement, so the update's signer cannot be checked and it was not installed: " + (result.Output + result.Error).Trim());
+        return requirement;
     }
 
     internal static string? ParseDesignatedRequirement(string codesignOutput)
@@ -700,9 +703,12 @@ public sealed class UpdateService(ConfigStore cfg, AdbReverse adb, IHostApplicat
     /// download, or an old partial file kept in the updates folder) is deleted and fetched once more, then refused. A
     /// release without a checksum file (none so far) is installed as before, with a warning.
     /// </summary>
-    private async Task<string> VerifiedDownloadAsync(string url, string localName, CancellationToken ct)
+    /// <param name="requireSums">Refuse an asset of a release without a checksum file instead of installing it unchecked (an app update replaces a signed app, so it never goes unchecked).</param>
+    private async Task<string> VerifiedDownloadAsync(string url, string localName, CancellationToken ct, bool requireSums = false)
     {
         var release = _latest!;
+        if (release.Sums is null && requireSums)
+            throw new InvalidOperationException($"release {release.Version} has no SHA256SUMS file, so {localName} cannot be checked and the update was not installed");
         if (release.Sums is null)
         {
             log.LogWarning("release {Version} has no SHA256SUMS file; {Name} is installed without a checksum check", release.Version, localName);

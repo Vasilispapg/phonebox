@@ -157,3 +157,21 @@ public class UpdateBundleSigningTests
         finally { AppRestart.Executable = null; }
     }
 }
+
+public class UpdateBundleStrictnessTests
+{
+    [Fact]
+    public async Task AnUnsignedAppHasNoRequirementToReadAndThatIsAnErrorNotAnAdHocCopy()
+    {
+        if (!OperatingSystem.IsMacOS()) return;
+        var dir = Path.Combine(Path.GetTempPath(), "phonebox-unsigned-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var file = Path.Combine(dir, "unsigned");
+            await File.WriteAllTextAsync(file, "#!/bin/sh\n");
+            await Assert.ThrowsAsync<InvalidOperationException>(() => UpdateService.DesignatedRequirementAsync(file, CancellationToken.None));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+}
