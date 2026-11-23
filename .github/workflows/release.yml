@@ -138,6 +138,25 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
           Compress-Archive -Path out/* -DestinationPath "dist/PhoneBoxAgent-${{ needs.version.outputs.version }}-${{ matrix.rid }}.zip"
+      # The same signed agent as in the zip, in PhoneBox.app inside a disk image. The app is signed with the same
+      # certificate and identifier, so its designated requirement equals the zip's (checked below) and macOS keeps the
+      # Accessibility permission. Not notarized: a downloaded copy needs right-click > Open the first time.
+      - name: Build the macOS app
+        if: startsWith(matrix.rid, 'osx-')
+        run: tools/make-macos-dmg.sh app out '${{ needs.version.outputs.version }}' "$RUNNER_TEMP/dmg/PhoneBox.app"
+      - name: Sign the macOS app
+        if: startsWith(matrix.rid, 'osx-')
+        uses: ./.github/actions/sign-macos-agent
+        with:
+          binary: ${{ runner.temp }}/dmg/PhoneBox.app
+          p12-base64: ${{ secrets.MACOS_SIGNING_P12_BASE64 }}
+          p12-password: ${{ secrets.MACOS_SIGNING_P12_PASSWORD }}
+      - name: Build and check the disk image
+        if: startsWith(matrix.rid, 'osx-')
+        run: |
+          dmg="dist/PhoneBox-${{ needs.version.outputs.version }}-${{ matrix.rid }}.dmg"
+          tools/make-macos-dmg.sh dmg "$RUNNER_TEMP/dmg/PhoneBox.app" '${{ needs.version.outputs.version }}' "$dmg"
+          tools/check-macos-dmg.sh "$dmg" out/PhoneBoxAgent '${{ needs.version.outputs.version }}'
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-agent-${{ matrix.rid }}
@@ -164,6 +183,7 @@ jobs:
           subject-path: |
             dist/*.apk
             dist/*.zip
+            dist/*.dmg
       - name: Save the provenance bundle
         env:
           BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
@@ -171,8 +191,9 @@ jobs:
       - name: Checksums
         working-directory: dist
         run: |
-          test "$(find . -maxdepth 1 -type f | wc -l)" -eq 7
+          test "$(find . -maxdepth 1 -type f | wc -l)" -eq 9
           test "$(find . -maxdepth 1 -type f -name '*.zip' | wc -l)" -eq 5
+          test "$(find . -maxdepth 1 -type f -name '*.dmg' | wc -l)" -eq 2
           test "$(find . -maxdepth 1 -type f -name '*.apk' | wc -l)" -eq 1
           sha256sum * > "SHA256SUMS-${{ needs.version.outputs.version }}.txt"
           cat "SHA256SUMS-${{ needs.version.outputs.version }}.txt"

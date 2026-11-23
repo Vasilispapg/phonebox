@@ -13,6 +13,12 @@ provenance attestations and SHA-256 checksums, and publishes the release notes f
 The reusable artifact contract also checks the real upload/download boundary with transfer fixtures: exact release
 filenames and hashes, exclusion of debug intermediates, and the actual demo's Pages tar format. It never publishes
 a release or deploys Pages. Changes to Pages deployment still need a successful Pages workflow on `main`.
+Each macOS leg also builds `PhoneBox-<version>-<rid>.dmg`: the same signed agent in `PhoneBox.app` (`tools/make-macos-dmg.sh`), signed
+with the same certificate and identifier, so its designated requirement equals the zip's. `tools/check-macos-dmg.sh` mounts the image,
+verifies the signature, compares the two requirements and smoke-runs the agent from the app; `build.yml` runs the same steps with its
+throwaway certificate on every change. The DMG is not notarized (that needs an Apple Developer ID), so a copy downloaded to another Mac
+needs right-click > Open the first time.
+
 Published releases update the Scoop bucket and generate winget manifests in a follow-up commit.
 Winget manifests are prepared for submission; generation alone does not mean the package is accepted into winget-pkgs.
 
