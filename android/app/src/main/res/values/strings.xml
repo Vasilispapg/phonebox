@@ -32,4 +32,6 @@
     <string name="bridge_send_unreachable">Couldn\'t reach the Mac</string>
     <string name="bridge_send_nothing">Nothing to send: the clipboard is empty or private</string>
     <string name="bridge_send_too_large">Too long to send (the limit is 64 KiB)</string>
+    <string name="bridge_state_unsupported">This computer can\'t share the clipboard: the phone bridge needs the PhoneBox agent on a Mac</string>
+    <string name="bridge_state_stopped">Stopped by Android. Open this screen again, or restart PhoneBox, to reconnect</string>
 </resources>

@@ -14,7 +14,7 @@ class SendToMacActivity : Activity() {
         super.onCreate(savedInstanceState)
         val text = when (intent?.action) {
             Intent.ACTION_PROCESS_TEXT -> if (Build.VERSION.SDK_INT >= 23) intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.toString() else null
-            Intent.ACTION_SEND -> intent.getStringExtra(Intent.EXTRA_TEXT)
+            Intent.ACTION_SEND -> intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString() // styled text is not a String
             else -> null
         }
         BridgeSend.send(this, text, sensitive = false) { finish() }

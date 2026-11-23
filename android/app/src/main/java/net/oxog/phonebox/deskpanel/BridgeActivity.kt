@@ -56,6 +56,8 @@ class BridgeActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        // Android may have stopped the service (the Task Manager, an update): opening the screen brings it back
+        if (BridgePrefs.clipboardEnabled(this) && BridgePrefs.clipboardState == ClipboardState.STOPPED) ClipboardService.sync(this)
         handler.post(refresh)
     }
 
@@ -65,12 +67,13 @@ class BridgeActivity : Activity() {
     }
 
     private fun statusText(): String {
-        val line = if (!BridgePrefs.clipboardEnabled(this)) getString(R.string.bridge_state_off)
-        else when (BridgePrefs.clipboardState) {
+        if (!BridgePrefs.clipboardEnabled(this)) return getString(R.string.bridge_state_off)
+        return when (BridgePrefs.clipboardState) {
             ClipboardState.RUNNING -> getString(R.string.bridge_state_running)
             ClipboardState.MAC_OFF -> getString(R.string.bridge_state_mac_off)
-            ClipboardState.WAITING, ClipboardState.STOPPED -> getString(R.string.bridge_state_waiting)
+            ClipboardState.UNSUPPORTED -> getString(R.string.bridge_state_unsupported)
+            ClipboardState.WAITING -> getString(R.string.bridge_state_waiting)
+            ClipboardState.STOPPED -> getString(R.string.bridge_state_stopped) + (BridgePrefs.lastError?.let { " ($it)" } ?: "")
         }
-        return BridgePrefs.lastError?.let { "$line ($it)" } ?: line
     }
 }

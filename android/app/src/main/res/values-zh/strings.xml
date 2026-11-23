@@ -28,4 +28,6 @@
     <string name="bridge_send_unreachable">无法连接到 Mac</string>
     <string name="bridge_send_nothing">没有可发送的内容：剪贴板为空或为私密内容</string>
     <string name="bridge_send_too_large">内容过长，无法发送（上限 64 KiB）</string>
+    <string name="bridge_state_unsupported">此电脑无法共享剪贴板：手机桥接需要在 Mac 上运行 PhoneBox 代理</string>
+    <string name="bridge_state_stopped">已被 Android 停止。请再次打开此屏幕，或重新启动 PhoneBox 以重新连接</string>
 </resources>

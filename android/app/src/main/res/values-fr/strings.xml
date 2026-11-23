@@ -28,4 +28,6 @@
     <string name="bridge_send_unreachable">Impossible de joindre le Mac</string>
     <string name="bridge_send_nothing">Rien à envoyer : le presse-papiers est vide ou privé</string>
     <string name="bridge_send_too_large">Trop long à envoyer (limite : 64 Kio)</string>
+    <string name="bridge_state_unsupported">Cet ordinateur ne peut pas partager le presse-papiers : la passerelle téléphone nécessite l\'agent PhoneBox sur un Mac</string>
+    <string name="bridge_state_stopped">Arrêté par Android. Rouvrez cet écran, ou redémarrez PhoneBox, pour vous reconnecter</string>
 </resources>

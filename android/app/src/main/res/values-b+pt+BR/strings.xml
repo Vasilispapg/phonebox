@@ -30,4 +30,6 @@
     <string name="bridge_send_unreachable">Não foi possível alcançar o Mac</string>
     <string name="bridge_send_nothing">Nada para enviar: a área de transferência está vazia ou é privada</string>
     <string name="bridge_send_too_large">Longo demais para enviar (o limite é 64 KiB)</string>
+    <string name="bridge_state_unsupported">Este computador não consegue compartilhar a área de transferência: a ponte do telefone precisa do agente PhoneBox em um Mac</string>
+    <string name="bridge_state_stopped">Parado pelo Android. Abra esta tela de novo, ou reinicie o PhoneBox, para reconectar</string>
 </resources>

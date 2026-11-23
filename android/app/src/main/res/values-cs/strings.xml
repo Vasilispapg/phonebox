@@ -28,4 +28,6 @@
     <string name="bridge_send_unreachable">Mac se nepodařilo zastihnout</string>
     <string name="bridge_send_nothing">Není co poslat: schránka je prázdná nebo soukromá</string>
     <string name="bridge_send_too_large">Příliš dlouhé k odeslání (limit je 64 KiB)</string>
+    <string name="bridge_state_unsupported">Tento počítač nemůže sdílet schránku: most k telefonu potřebuje agenta PhoneBox na Macu</string>
+    <string name="bridge_state_stopped">Zastaveno systémem Android. Otevřete tuto obrazovku znovu nebo restartujte PhoneBox a připojte se</string>
 </resources>

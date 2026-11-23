@@ -28,4 +28,6 @@
     <string name="bridge_send_unreachable">Mac\'e ulaşılamadı</string>
     <string name="bridge_send_nothing">Gönderilecek bir şey yok: pano boş veya özel</string>
     <string name="bridge_send_too_large">Göndermek için çok uzun (sınır 64 KiB)</string>
+    <string name="bridge_state_unsupported">Bu bilgisayar panoyu paylaşamıyor: telefon köprüsü için bir Mac\'te PhoneBox aracısı gerekir</string>
+    <string name="bridge_state_stopped">Android tarafından durduruldu. Yeniden bağlanmak için bu ekranı tekrar açın veya PhoneBox\'ı yeniden başlatın</string>
 </resources>

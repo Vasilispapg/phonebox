@@ -30,4 +30,6 @@
     <string name="bridge_send_unreachable">Không thể kết nối với Mac</string>
     <string name="bridge_send_nothing">Không có gì để gửi: bộ nhớ tạm trống hoặc riêng tư</string>
     <string name="bridge_send_too_large">Quá dài để gửi (giới hạn 64 KiB)</string>
+    <string name="bridge_state_unsupported">Máy tính này không thể chia sẻ bộ nhớ tạm: cầu nối điện thoại cần tác nhân PhoneBox trên máy Mac</string>
+    <string name="bridge_state_stopped">Android đã dừng. Hãy mở lại màn hình này, hoặc khởi động lại PhoneBox, để kết nối lại</string>
 </resources>

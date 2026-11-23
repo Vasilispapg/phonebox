@@ -2,6 +2,9 @@ package net.oxog.phonebox.deskpanel
 
 enum class SendResult { OK, OFF, TOO_LARGE, UNREACHABLE }
 
+/** Where the clipboard service is, for the Phone bridge screen. Kept in memory: it describes this process only. */
+enum class ClipboardState { STOPPED, WAITING, RUNNING, MAC_OFF, UNSUPPORTED }
+
 /**
  * The phone bridge's pure helpers. No Android types, so tools/test-bridge-checks.py runs them on a plain JVM. The small
  * JSON here covers only what the agent sends and takes: flat objects of strings and numbers.
@@ -43,6 +46,16 @@ object BridgeClip {
             else -> append(c)
         }
         append("\"}")
+    }
+
+    /**
+     * What a failed attempt to open the stream tells the screen: 403 is the Mac's switch, 404 or 501 an agent that has no
+     * bridge (an older one, or a Windows or Linux one), anything else (no route, 401, 5xx) just means waiting.
+     */
+    fun stateAfterFailure(code: Int?): ClipboardState = when (code) {
+        403 -> ClipboardState.MAC_OFF
+        404, 501 -> ClipboardState.UNSUPPORTED
+        else -> ClipboardState.WAITING
     }
 
     /** What the agent's answer to a send means. */

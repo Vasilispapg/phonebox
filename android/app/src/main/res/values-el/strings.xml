@@ -30,4 +30,6 @@
     <string name="bridge_send_unreachable">Δεν ήταν δυνατή η επικοινωνία με το Mac</string>
     <string name="bridge_send_nothing">Δεν υπάρχει τίποτα για αποστολή: το πρόχειρο είναι κενό ή ιδιωτικό</string>
     <string name="bridge_send_too_large">Πολύ μεγάλο για αποστολή (το όριο είναι 64 KiB)</string>
+    <string name="bridge_state_unsupported">Αυτός ο υπολογιστής δεν μπορεί να μοιραστεί το πρόχειρο: η γέφυρα τηλεφώνου χρειάζεται τον πράκτορα PhoneBox σε Mac</string>
+    <string name="bridge_state_stopped">Σταμάτησε από το Android. Άνοιξε ξανά αυτή την οθόνη ή επανεκκίνησε το PhoneBox για να συνδεθείς</string>
 </resources>

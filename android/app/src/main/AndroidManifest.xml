@@ -91,9 +91,11 @@
             </intent-filter>
         </activity>
 
-        <!-- "Send to Mac": the text-selection menu (Android 6+, next to Copy) and the Share sheet. See-through, sends and closes. -->
+        <!-- "Send to Mac": the text-selection menu (Android 6+, next to Copy) and the Share sheet. See-through, sends and closes.
+             Disabled until Phone bridge is turned on (BridgeEntryPoints), so it never clutters other apps' menus for anyone else. -->
         <activity
             android:name=".SendToMacActivity"
+            android:enabled="false"
             android:exported="true"
             android:excludeFromRecents="true"
             android:label="@string/bridge_send_to_mac"
@@ -119,10 +121,10 @@
             android:taskAffinity=""
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
-        <!-- Quick Settings tile "Send to Mac" (Edit tiles › Send to Mac). Same Android 7+ switch as the panel tile. -->
+        <!-- Quick Settings tile "Send to Mac" (Edit tiles › Send to Mac), Android 7+; disabled until Phone bridge is turned on. -->
         <service
             android:name=".SendClipboardTile"
-            android:enabled="@bool/quick_settings_tile"
+            android:enabled="false"
             android:exported="true"
             android:icon="@drawable/ic_tile"
             android:label="@string/bridge_send_to_mac"

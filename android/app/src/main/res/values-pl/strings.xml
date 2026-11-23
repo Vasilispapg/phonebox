@@ -28,4 +28,6 @@
     <string name="bridge_send_unreachable">Nie można połączyć się z Makiem</string>
     <string name="bridge_send_nothing">Nie ma nic do wysłania: schowek jest pusty lub prywatny</string>
     <string name="bridge_send_too_large">Za długie do wysłania (limit to 64 KiB)</string>
+    <string name="bridge_state_unsupported">Ten komputer nie może udostępniać schowka: most telefonu wymaga agenta PhoneBox na Macu</string>
+    <string name="bridge_state_stopped">Zatrzymane przez Androida. Otwórz ten ekran ponownie lub uruchom PhoneBox od nowa, aby się połączyć</string>
 </resources>

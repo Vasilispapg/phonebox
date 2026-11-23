@@ -99,20 +99,93 @@ private fun defaultPathCheck() {
     check("the default path is the panel's stream", link.paths.first() == "/api/stream")
 }
 
+private fun stateChecks() {
+    check("a refused (403) attempt means the Mac's switch is off", BridgeClip.stateAfterFailure(403) == ClipboardState.MAC_OFF)
+    check("501 means this computer has no bridge", BridgeClip.stateAfterFailure(501) == ClipboardState.UNSUPPORTED)
+    check("404 (an older agent) means this computer has no bridge", BridgeClip.stateAfterFailure(404) == ClipboardState.UNSUPPORTED)
+    check("no route means waiting for the Mac", BridgeClip.stateAfterFailure(null) == ClipboardState.WAITING)
+    check("401 (the pairing was forgotten) means waiting", BridgeClip.stateAfterFailure(401) == ClipboardState.WAITING)
+    check("503 means waiting", BridgeClip.stateAfterFailure(503) == ClipboardState.WAITING)
+    check("a later 'no route' replaces an earlier 403 (the state follows the latest failure)",
+        listOf(403, null).fold(ClipboardState.STOPPED) { _, code -> BridgeClip.stateAfterFailure(code) } == ClipboardState.WAITING)
+}
+
+private fun readTimeoutChecks() {
+    // the bridge stream carries only a ping every 15 s, so it must not be cut by the panel stream's 8 s read timeout
+    val bridgeLink = AgentLink { ByteArrayInputStream(byteArrayOf()) }
+    val closed = CountDownLatch(1)
+    val bridge = AgentStream(bridgeLink, "/api/bridge/stream", readTimeoutMs = 40_000) { event, _ -> if (event == "close") closed.countDown() }
+    bridge.start()
+    check("the bridge stream opens", closed.await(5, TimeUnit.SECONDS))
+    bridge.stop()
+    check("the bridge stream asked for a 40 s read timeout", bridgeLink.timeouts.first() == 40_000)
+
+    val panelLink = AgentLink { ByteArrayInputStream(byteArrayOf()) }
+    val panelClosed = CountDownLatch(1)
+    val panel = AgentStream(panelLink) { event, _ -> if (event == "close") panelClosed.countDown() }
+    panel.start()
+    check("the panel stream opens", panelClosed.await(5, TimeUnit.SECONDS))
+    panel.stop()
+    check("the panel stream keeps the 8 s read timeout", panelLink.timeouts.first() == AgentLink.STREAM_READ_TIMEOUT)
+}
+
 private fun refusedDelayChecks() {
     // while the Mac answers 403 the stream waits refusedRetryMs, not the 2 s of an ordinary failure
     val times = CopyOnWriteArrayList<Long>()
     val second = CountDownLatch(2)
     val link = AgentLink(code = { times.add(System.nanoTime()); second.countDown(); 403 }) { ByteArrayInputStream(byteArrayOf()) }
-    val refusals = java.util.concurrent.atomic.AtomicInteger()
-    val stream = AgentStream(link, "/api/bridge/stream", refusedRetryMs = 400, onRefused = { refusals.incrementAndGet() }) { _, _ -> }
+    val stream = AgentStream(link, "/api/bridge/stream", refusedRetryMs = 400) { _, _ -> }
     stream.start()
     check("two attempts were made while refused", second.await(5, TimeUnit.SECONDS))
     stream.stop()
-    check("onRefused was told each time (${refusals.get()})", refusals.get() >= 2)
     val gapMs = (times[1] - times[0]) / 1_000_000
     check("the retry after a 403 waited about refusedRetryMs ($gapMs ms)", gapMs in 350..1500)
-    check("a refused stream delivered no open event", true)
+}
+
+private fun onFailureChecks() {
+    // every failed attempt is reported with the status the agent answered, or null when it could not be reached
+    fun collect(code: () -> Int, offline: () -> Boolean): List<Int?> {
+        val seen = CopyOnWriteArrayList<Int?>()
+        val three = CountDownLatch(3)
+        val link = AgentLink(code = code, offline = offline) { ByteArrayInputStream(byteArrayOf()) }
+        val stream = AgentStream(link, "/api/bridge/stream", retryMinMs = 20, retryMaxMs = 20, refusedRetryMs = 20,
+            onFailure = { seen.add(it); three.countDown() }) { _, _ -> }
+        stream.start()
+        three.await(5, TimeUnit.SECONDS)
+        stream.stop()
+        return seen.take(3)
+    }
+    check("403 is reported as 403", collect({ 403 }, { false }) == listOf(403, 403, 403))
+    check("501 (not a Mac) is reported as 501", collect({ 501 }, { false }) == listOf(501, 501, 501))
+    check("no route is reported as null", collect({ 200 }, { true }) == listOf(null, null, null))
+}
+
+private fun backoffChecks() {
+    // failures wait 100, 200, 400, 400 ms (doubling to the cap), not a fixed delay
+    val times = CopyOnWriteArrayList<Long>()
+    val five = CountDownLatch(5)
+    val link = AgentLink(code = { times.add(System.nanoTime()); five.countDown(); 503 }) { ByteArrayInputStream(byteArrayOf()) }
+    val stream = AgentStream(link, "/api/bridge/stream", retryMinMs = 100, retryMaxMs = 400) { _, _ -> }
+    stream.start()
+    check("five attempts were made", five.await(10, TimeUnit.SECONDS))
+    stream.stop()
+    val gaps = (1..4).map { (times[it] - times[it - 1]) / 1_000_000 }
+    check("the second wait is longer than the first ($gaps)", gaps[1] >= gaps[0] + 60)
+    check("the waits stop growing at the cap ($gaps)", gaps[3] < gaps[2] + 250 && gaps[3] in 300..1500)
+}
+
+private fun backoffResetChecks() {
+    // an attempt that connects starts the waits over: after 503, 503, an open stream, the next failure waits the minimum again
+    val times = CopyOnWriteArrayList<Long>()
+    val sequence = listOf(503, 503, 200, 503, 503)
+    val five = CountDownLatch(5)
+    val link = AgentLink(code = { times.add(System.nanoTime()); five.countDown(); sequence.getOrElse(times.size - 1) { 503 } }) { ByteArrayInputStream(byteArrayOf()) }
+    val stream = AgentStream(link, "/api/bridge/stream", retryMinMs = 100, retryMaxMs = 800) { _, _ -> }
+    stream.start()
+    check("five attempts were made around an open stream", five.await(10, TimeUnit.SECONDS))
+    stream.stop()
+    val afterReset = (times[4] - times[3]) / 1_000_000
+    check("the wait after a good connection is the minimum again ($afterReset ms)", afterReset in 60..300)
 }
 
 private fun refusedDefaultDelayCheck() {
@@ -136,7 +209,12 @@ fun main() {
     resultChecks()
     streamPathChecks()
     defaultPathCheck()
+    stateChecks()
+    readTimeoutChecks()
     refusedDelayChecks()
+    onFailureChecks()
+    backoffChecks()
+    backoffResetChecks()
     refusedDefaultDelayCheck()
     println("ALL $passed CHECKS PASSED")
 }

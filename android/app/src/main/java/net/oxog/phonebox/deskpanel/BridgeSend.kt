@@ -26,13 +26,17 @@ object BridgeSend {
             BridgeClip.Skip.TOO_LARGE -> { finish(R.string.bridge_send_too_large); return }
             null -> {}
         }
+        val clip = text!!
         Thread {
-            finish(when (BridgeClient(AgentLink(app)).sendClipboard(text!!)) {
+            val outcome = when (BridgeClient(AgentLink(app)).sendClipboard(clip)) {
                 SendResult.OK -> R.string.bridge_sent
                 SendResult.OFF -> R.string.bridge_send_off
                 SendResult.TOO_LARGE -> R.string.bridge_send_too_large
                 SendResult.UNREACHABLE -> R.string.bridge_send_unreachable
-            })
+            }
+            main.post { Toast.makeText(app, outcome, Toast.LENGTH_SHORT).show() }
         }.start()
+        // the see-through window goes away now: a full-screen touchable window must not freeze the app below while the request runs
+        main.post { done() }
     }
 }

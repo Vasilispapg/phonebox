@@ -28,4 +28,6 @@
     <string name="bridge_send_unreachable">Не удалось связаться с Mac</string>
     <string name="bridge_send_nothing">Нечего отправлять: буфер обмена пуст или приватный</string>
     <string name="bridge_send_too_large">Слишком длинный текст (лимит — 64 КиБ)</string>
+    <string name="bridge_state_unsupported">Этот компьютер не может делиться буфером обмена: для моста с телефоном нужен агент PhoneBox на Mac</string>
+    <string name="bridge_state_stopped">Остановлено Android. Откройте этот экран снова или перезапустите PhoneBox, чтобы подключиться</string>
 </resources>
