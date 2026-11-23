@@ -4,6 +4,9 @@ package net.oxog.phonebox.deskpanel
  *  [PAIR_AGAIN]: the Mac refused this phone's key (401): it was paired again or got a new key. */
 enum class SendResult { OK, OFF, TOO_LARGE, UNREACHABLE, UNKNOWN, PAIR_AGAIN }
 
+/** How the last notification went, for the screen. */
+enum class NotificationOutcome { NONE, OK, MAC_OFF, UNREACHABLE }
+
 /** Where the clipboard service is, for the Phone bridge screen. Kept in memory: it describes this process only. */
 enum class ClipboardState { STOPPED, WAITING, RUNNING, MAC_OFF, UNSUPPORTED, PAIR_AGAIN }
 
@@ -166,13 +169,23 @@ object BridgeClip {
     }
 
     /**
-     * Whether the agent's /api/config says the computer shows phone notifications: true or false, or null when the text is
-     * not a JSON object (then the answer is unknown, not "off"). An agent without a bridge section is off.
+     * Whether the agent's /api/config says the computer shows phone notifications. The reply is {"version": "...", "config":
+     * { ... "bridge": {...} }}. True or false; null when the reply is not that shape (then the answer is unknown, not "off").
+     * An agent whose config has no bridge section (an older one) is off.
      */
-    fun notificationsOn(configJson: String): Boolean? {
-        val config = Json(configJson).parseObject() ?: return null
+    fun notificationsOn(replyJson: String): Boolean? {
+        val reply = Json(replyJson).parseObject() ?: return null
+        val config = reply["config"] as? Map<*, *> ?: return null
         val bridge = config["bridge"] as? Map<*, *> ?: return false
         return bridge["notifications"] == true
+    }
+
+    /** At most [max] characters: longer text is cut and ends with an ellipsis, never in the middle of an emoji. */
+    fun cut(text: String, max: Int): String {
+        if (text.length <= max) return text
+        var keep = max - 1
+        if (keep > 0 && text[keep - 1].isHighSurrogate()) keep--
+        return text.substring(0, keep) + "…"
     }
 
     /** A strict reader for one JSON object (strings, numbers, booleans, null, and nested objects and arrays); any problem makes [parseObject] return null. */

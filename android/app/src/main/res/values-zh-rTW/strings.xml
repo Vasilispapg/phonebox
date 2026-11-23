@@ -47,4 +47,5 @@
     <string name="bridge_last_ok">最近一則通知已送達 Mac</string>
     <string name="bridge_last_off">最近一則通知：Mac 的通知開關已關閉</string>
     <string name="bridge_last_failed">最近一則通知未能送達 Mac；它會保留兩分鐘</string>
+    <string name="bridge_access_idle">已允許通知存取權，但 Android 尚未啟動監聽服務。請再次開啟此畫面，或檢查 PhoneBox 的電池設定。</string>
 </resources>

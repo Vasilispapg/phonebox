@@ -49,4 +49,5 @@
     <string name="bridge_last_ok">A última notificação chegou ao Mac</string>
     <string name="bridge_last_off">Última notificação: o botão de notificações do Mac está desativado</string>
     <string name="bridge_last_failed">A última notificação não chegou ao Mac; ela é mantida por dois minutos</string>
+    <string name="bridge_access_idle">O acesso às notificações está permitido, mas o Android ainda não iniciou o receptor. Abra esta tela de novo ou confira a configuração de bateria do PhoneBox.</string>
 </resources>
