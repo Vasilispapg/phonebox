@@ -83,7 +83,7 @@ class ClipboardService : Service() {
                 "open" -> BridgePrefs.clipboardState = ClipboardState.RUNNING
                 "close" -> BridgePrefs.clipboardState = ClipboardState.WAITING
                 else -> BridgeClip.parseEvent(event, data)?.let { text ->
-                    main.post { if (mine == generation) clipboard.setPrimaryClip(ClipData.newPlainText("PhoneBox", text)) }
+                    main.post { if (mine == generation && BridgePrefs.clipboardEnabled(this)) clipboard.setPrimaryClip(ClipData.newPlainText("PhoneBox", text)) }
                 }
             }
         }.also { it.start() }
