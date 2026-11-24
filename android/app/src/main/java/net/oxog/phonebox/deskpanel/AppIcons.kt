@@ -22,12 +22,19 @@ object AppIcons {
 
     @Synchronized
     fun base64(context: Context, pkg: String): String? {
-        cache.get(pkg)?.let { return it }
+        // the listener lives for weeks: keyed by when the app was last installed or updated, so an update that changes the icon is
+        // drawn again instead of the old picture being sent until the phone restarts (the old entry simply ages out of the cache)
+        val key = "$pkg@${installedAt(context, pkg)}"
+        cache.get(key)?.let { return it }
         none[pkg]?.let { if (System.currentTimeMillis() - it < RETRY_MS) return null }
         val encoded = try { render(context, pkg, PIXELS) ?: render(context, pkg, SMALL_PIXELS) } catch (_: Exception) { null } catch (_: OutOfMemoryError) { null }
-        if (encoded == null) none[pkg] = System.currentTimeMillis() else { none.remove(pkg); cache.put(pkg, encoded) }
+        if (encoded == null) none[pkg] = System.currentTimeMillis() else { none.remove(pkg); cache.put(key, encoded) }
         return encoded
     }
+
+    @Suppress("DEPRECATION") // the flags overload of API 33 means the same; this one runs from API 21
+    private fun installedAt(context: Context, pkg: String): Long =
+        try { context.packageManager.getPackageInfo(pkg, 0).lastUpdateTime } catch (_: Exception) { 0L }
 
     private fun render(context: Context, pkg: String, pixels: Int): String? {
         val drawable = context.packageManager.getApplicationIcon(pkg)

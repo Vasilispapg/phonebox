@@ -49,7 +49,18 @@ object BridgeClip {
      * The body of POST /api/bridge/notification; [time] is when the phone posted it (milliseconds). [iconBase64] is the posting
      * app's icon as a small PNG in base64 (from [AppIcons]), shown by the Mac as the notification's picture; none is left out.
      */
-    fun notificationBody(key: String, app: String, pkg: String, title: String, text: String, category: String, time: Long, iconBase64: String? = null): String =
+    fun notificationBody(key: String, app: String, pkg: String, title: String, text: String, category: String, time: Long, iconBase64: String? = null): String {
+        val body = notificationJson(key, app, pkg, title, text, category, time, iconBase64)
+        // the agent refuses a notification request over 64 KiB (413) and the whole notification would be dropped: the icon (up to
+        // about 40 KB) is only a picture, so a body that grows past the limit with it is sent without it
+        if (iconBase64 == null || body.toByteArray(Charsets.UTF_8).size <= MAX_NOTIFICATION_BYTES) return body
+        return notificationJson(key, app, pkg, title, text, category, time, null)
+    }
+
+    /** The agent's limit for one POST /api/bridge/notification request (BridgeApi.MaxNotificationBytes). */
+    const val MAX_NOTIFICATION_BYTES = 64 * 1024
+
+    private fun notificationJson(key: String, app: String, pkg: String, title: String, text: String, category: String, time: Long, iconBase64: String?): String =
         buildString(title.length + text.length + 120 + (iconBase64?.length ?: 0)) {
             fun field(name: String, value: String, last: Boolean = false) {
                 append('"').append(name).append("\":\"")

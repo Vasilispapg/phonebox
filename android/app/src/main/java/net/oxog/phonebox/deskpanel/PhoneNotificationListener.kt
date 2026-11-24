@@ -210,7 +210,7 @@ class PhoneNotificationListener : NotificationListenerService() {
                 return NotificationDelivery(
                     queue,
                     phoneSwitchOn = { BridgePrefs.notificationsEnabled(app) },
-                    appAllowed = { BridgePrefs.allApps(app) || BridgePrefs.allowedApps(app).contains(it) },
+                    appAllowed = { appAllowed(BridgePrefs.allApps(app), BridgePrefs.allowedApps(app), it) },
                     macSwitchOn = { config.isOn() },
                     send = { body -> BridgeClient(link ?: AgentLink(app).also { link = it }).sendNotification(body) },
                     onOutcome = { BridgePrefs.notificationOutcome = it },

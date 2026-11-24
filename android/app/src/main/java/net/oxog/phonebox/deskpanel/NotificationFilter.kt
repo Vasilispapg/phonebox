@@ -45,7 +45,7 @@ class NotificationFilter(
         // on the list asked for calls. Only that in-call UI is let through on the dialer's say: any other app's CallStyle call
         // (WhatsApp, Signal, Meet) follows the list like every other notification.
         if (n.category == "call" && n.callStyle && n.pkg in IN_CALL_UIS && (allApps() || dialer()?.let { it in allowed() } == true)) return Decision.SEND
-        if (!allApps() && n.pkg !in allowed()) return Decision.SKIP
+        if (!appAllowed(allApps(), allowed(), n.pkg)) return Decision.SKIP
         return when (n.category) {
             "missed_call" -> Decision.SEND_AS_MISSED_CALL
             "call" -> if (n.callStyleIncoming || n.hasAnswerAction) Decision.SEND else Decision.SKIP
@@ -71,6 +71,13 @@ class CallKeys(private val max: Int = 50) {
  * one whose name and icon the Mac shows: for a call from the in-call UI that is the default dialer, which is what let the call
  * through (the in-call UI is not on the list, has no launcher icon and so no name the phone may look up); for anything else the app itself.
  */
+/**
+ * Whether an app's notifications may go to the Mac: "all apps", or the app is on the list. One rule for the filter and for the
+ * check at send time ([NotificationDelivery]'s appAllowed), so what waits in the queue when the owner turns "all apps" off is
+ * dropped exactly as the filter would now skip it.
+ */
+fun appAllowed(allApps: Boolean, allowed: Set<String>, pkg: String): Boolean = allApps || pkg in allowed
+
 fun gatePackage(defaultDialer: String?, postingPackage: String): String =
     if (postingPackage in NotificationFilter.IN_CALL_UIS) (defaultDialer ?: postingPackage) else postingPackage
 
