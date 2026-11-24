@@ -259,6 +259,7 @@ offer_extras() {
 # ---- agent ------------------------------------------------------------------------------------------------------
 unit="$HOME/.config/systemd/user/phonebox.service"   # where scripts/uninstall.sh looks
 plist="$HOME/Library/LaunchAgents/net.oxog.phonebox.agent.plist"
+app_login_plist="$HOME/Library/LaunchAgents/net.oxog.phonebox.app.plist"   # written by the menu bar item in PhoneBox.app
 
 systemd_user() { have systemctl && systemctl --user show-environment >/dev/null 2>&1; }
 
@@ -271,6 +272,11 @@ remove_autostart() {
   if [ "$os" = osx ] && [ -f "$plist" ]; then
     rm -f "$plist"
     info 'Removed the login item; PhoneBox no longer starts at login.'
+  fi
+  # PhoneBox.app's own "Start at Login" (menu bar): without autostart it must not start PhoneBox at login either
+  if [ "$os" = osx ] && [ -f "$app_login_plist" ]; then
+    rm -f "$app_login_plist"
+    info 'Removed the app'"'"'s "Start at Login"; PhoneBox no longer starts at login.'
   fi
 }
 
@@ -334,7 +340,7 @@ EOF
     ok "systemd user service: $unit"
   else
     mkdir -p "$(dirname "$plist")"
-    rm -f "$(dirname "$plist")/net.oxog.phonebox.app.plist"   # PhoneBox.app's "Start at Login": this agent replaces it, two would start two instances
+    rm -f "$app_login_plist"   # PhoneBox.app's "Start at Login": this agent replaces it, two would start two instances
     cat > "$plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
