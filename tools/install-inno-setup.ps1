@@ -19,4 +19,4 @@ $info = (Get-Item -LiteralPath $iscc).VersionInfo
 if ($info.ProductVersion -notlike "$Version*" -and $info.FileVersion -notlike "$Version*") {
     throw "Inno Setup $($info.ProductVersion) ($($info.FileVersion)) is installed, not the pinned $Version"
 }
-Write-Host "Inno Setup $Version: $iscc"
+Write-Host "Inno Setup ${Version}: $iscc"
