@@ -41,7 +41,6 @@
     <string name="bridge_access_button">Permitir o acesso às notificações</string>
     <string name="bridge_restricted_help">Se o interruptor estiver a cinzento (Android 13 e posterior): abra Informações da aplicação, toque em ⋮ no canto superior direito, escolha Permitir definições restritas e volte a tentar.</string>
     <string name="bridge_app_info_button">Abrir informações da aplicação</string>
-    <string name="bridge_apps_button">Escolher aplicações</string>
     <string name="bridge_apps_title">Aplicações mostradas no Mac</string>
     <string name="bridge_apps_all">Todos os apps</string>
     <string name="bridge_last_none">Ainda não foi enviada nenhuma notificação</string>

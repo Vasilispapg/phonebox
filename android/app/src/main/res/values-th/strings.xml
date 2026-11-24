@@ -41,7 +41,6 @@
     <string name="bridge_access_button">อนุญาตการเข้าถึงการแจ้งเตือน</string>
     <string name="bridge_restricted_help">หากสวิตช์เป็นสีเทา (Android 13 ขึ้นไป): เปิดข้อมูลแอป แตะ ⋮ ที่มุมขวาบน เลือกอนุญาตการตั้งค่าที่ถูกจำกัด แล้วกลับมาลองอีกครั้ง</string>
     <string name="bridge_app_info_button">เปิดข้อมูลแอป</string>
-    <string name="bridge_apps_button">เลือกแอป</string>
     <string name="bridge_apps_title">แอปที่แสดงบน Mac</string>
     <string name="bridge_apps_all">ทุกแอป</string>
     <string name="bridge_last_none">ยังไม่ได้ส่งการแจ้งเตือน</string>

@@ -43,7 +43,6 @@
     <string name="bridge_access_button">Να επιτρέπεται η πρόσβαση στις ειδοποιήσεις</string>
     <string name="bridge_restricted_help">Αν ο διακόπτης είναι γκριζαρισμένος (Android 13 και νεότερο): άνοιξε τις Πληροφορίες εφαρμογής, πάτησε ⋮ πάνω δεξιά, επίλεξε Να επιτρέπονται οι περιορισμένες ρυθμίσεις και ξαναδοκίμασε.</string>
     <string name="bridge_app_info_button">Άνοιγμα πληροφοριών εφαρμογής</string>
-    <string name="bridge_apps_button">Επιλογή εφαρμογών</string>
     <string name="bridge_apps_title">Εφαρμογές που εμφανίζονται στο Mac</string>
     <string name="bridge_apps_all">Όλες οι εφαρμογές</string>
     <string name="bridge_last_none">Δεν έχει σταλεί ακόμη ειδοποίηση</string>

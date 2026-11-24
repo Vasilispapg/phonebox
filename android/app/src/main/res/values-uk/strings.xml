@@ -41,7 +41,6 @@
     <string name="bridge_access_button">Дозволити доступ до сповіщень</string>
     <string name="bridge_restricted_help">Якщо перемикач неактивний (Android 13 і новіші): відкрийте «Про застосунок», торкніться ⋮ угорі праворуч, виберіть «Дозволити обмежені налаштування», потім поверніться й повторіть.</string>
     <string name="bridge_app_info_button">Відкрити «Про застосунок»</string>
-    <string name="bridge_apps_button">Вибрати застосунки</string>
     <string name="bridge_apps_title">Застосунки, що показуються на Mac</string>
     <string name="bridge_apps_all">Усі застосунки</string>
     <string name="bridge_last_none">Сповіщень ще не надсилалося</string>

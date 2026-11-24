@@ -41,7 +41,6 @@
     <string name="bridge_access_button">Zugriff auf Benachrichtigungen erlauben</string>
     <string name="bridge_restricted_help">Wenn der Schalter ausgegraut ist (Android 13 und neuer): App-Info öffnen, oben rechts auf ⋮ tippen, „Eingeschränkte Einstellungen zulassen“ wählen und es danach erneut versuchen.</string>
     <string name="bridge_app_info_button">App-Info öffnen</string>
-    <string name="bridge_apps_button">Apps auswählen</string>
     <string name="bridge_apps_title">Apps, die am Mac erscheinen</string>
     <string name="bridge_apps_all">Alle Apps</string>
     <string name="bridge_last_none">Noch keine Benachrichtigung gesendet</string>

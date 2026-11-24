@@ -41,7 +41,6 @@
     <string name="bridge_access_button">Autoriser l\'accès aux notifications</string>
     <string name="bridge_restricted_help">Si l\'interrupteur est grisé (Android 13 et versions ultérieures) : ouvrez Infos sur l\'appli, touchez ⋮ en haut à droite, choisissez Autoriser les paramètres restreints, puis revenez et réessayez.</string>
     <string name="bridge_app_info_button">Ouvrir Infos sur l\'appli</string>
-    <string name="bridge_apps_button">Choisir les applis</string>
     <string name="bridge_apps_title">Applis affichées sur le Mac</string>
     <string name="bridge_apps_all">Toutes les applis</string>
     <string name="bridge_last_none">Aucune notification envoyée pour l\'instant</string>

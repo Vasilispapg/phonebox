@@ -41,7 +41,6 @@
     <string name="bridge_access_button">Consenti l\'accesso alle notifiche</string>
     <string name="bridge_restricted_help">Se l\'interruttore è disattivato (Android 13 e successivi): apri Info app, tocca ⋮ in alto a destra, scegli Consenti impostazioni con limitazioni, poi torna qui e riprova.</string>
     <string name="bridge_app_info_button">Apri Info app</string>
-    <string name="bridge_apps_button">Scegli le app</string>
     <string name="bridge_apps_title">App mostrate sul Mac</string>
     <string name="bridge_apps_all">Tutte le app</string>
     <string name="bridge_last_none">Nessuna notifica ancora inviata</string>

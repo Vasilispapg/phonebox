@@ -41,7 +41,6 @@
     <string name="bridge_access_button">Povolit přístup k oznámením</string>
     <string name="bridge_restricted_help">Pokud je přepínač zašedlý (Android 13 a novější): otevřete Informace o aplikaci, klepněte na ⋮ vpravo nahoře, vyberte Povolit omezená nastavení a zkuste to znovu.</string>
     <string name="bridge_app_info_button">Otevřít informace o aplikaci</string>
-    <string name="bridge_apps_button">Vybrat aplikace</string>
     <string name="bridge_apps_title">Aplikace zobrazované v Macu</string>
     <string name="bridge_apps_all">Všechny aplikace</string>
     <string name="bridge_last_none">Zatím nebylo odesláno žádné oznámení</string>

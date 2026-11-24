@@ -41,7 +41,6 @@
     <string name="bridge_access_button">允許通知存取權</string>
     <string name="bridge_restricted_help">如果開關是灰色的（Android 13 以上）：開啟應用程式資訊，點一下右上角的 ⋮，選擇「允許受限制的設定」，然後返回再試一次。</string>
     <string name="bridge_app_info_button">開啟應用程式資訊</string>
-    <string name="bridge_apps_button">選擇 App</string>
     <string name="bridge_apps_title">在 Mac 上顯示的 App</string>
     <string name="bridge_apps_all">所有應用程式</string>
     <string name="bridge_last_none">尚未傳送任何通知</string>

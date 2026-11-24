@@ -41,7 +41,6 @@
     <string name="bridge_access_button">Bildirim erişimine izin ver</string>
     <string name="bridge_restricted_help">Anahtar soluksa (Android 13 ve sonrası): Uygulama bilgisi\'ni açın, sağ üstteki ⋮ simgesine dokunun, Kısıtlı ayarlara izin ver\'i seçin, sonra geri dönüp yeniden deneyin.</string>
     <string name="bridge_app_info_button">Uygulama bilgisini aç</string>
-    <string name="bridge_apps_button">Uygulamaları seç</string>
     <string name="bridge_apps_title">Mac\'te gösterilen uygulamalar</string>
     <string name="bridge_apps_all">Tüm uygulamalar</string>
     <string name="bridge_last_none">Henüz bildirim gönderilmedi</string>

@@ -41,7 +41,6 @@
     <string name="bridge_access_button">Разрешить доступ к уведомлениям</string>
     <string name="bridge_restricted_help">Если переключатель неактивен (Android 13 и новее): откройте «О приложении», нажмите ⋮ в правом верхнем углу, выберите «Разрешить ограниченные настройки», затем вернитесь и повторите.</string>
     <string name="bridge_app_info_button">Открыть «О приложении»</string>
-    <string name="bridge_apps_button">Выбрать приложения</string>
     <string name="bridge_apps_title">Приложения, показываемые на Mac</string>
     <string name="bridge_apps_all">Все приложения</string>
     <string name="bridge_last_none">Уведомления ещё не отправлялись</string>

@@ -41,7 +41,6 @@
     <string name="bridge_access_button">सूचना एक्सेस की अनुमति दें</string>
     <string name="bridge_restricted_help">अगर स्विच धुँधला है (Android 13 और बाद के): ऐप की जानकारी खोलें, ऊपर दाईं ओर ⋮ पर टैप करें, “प्रतिबंधित सेटिंग की अनुमति दें” चुनें, फिर वापस आकर दोबारा कोशिश करें।</string>
     <string name="bridge_app_info_button">ऐप की जानकारी खोलें</string>
-    <string name="bridge_apps_button">ऐप चुनें</string>
     <string name="bridge_apps_title">Mac पर दिखाए जाने वाले ऐप</string>
     <string name="bridge_apps_all">सभी ऐप्स</string>
     <string name="bridge_last_none">अभी तक कोई सूचना नहीं भेजी गई</string>

@@ -41,7 +41,6 @@
     <string name="bridge_access_button">Zezwól na dostęp do powiadomień</string>
     <string name="bridge_restricted_help">Jeśli przełącznik jest wyszarzony (Android 13 i nowszy): otwórz Informacje o aplikacji, dotknij ⋮ w prawym górnym rogu, wybierz Zezwól na ustawienia z ograniczeniami, a potem wróć i spróbuj ponownie.</string>
     <string name="bridge_app_info_button">Otwórz informacje o aplikacji</string>
-    <string name="bridge_apps_button">Wybierz aplikacje</string>
     <string name="bridge_apps_title">Aplikacje pokazywane na Macu</string>
     <string name="bridge_apps_all">Wszystkie aplikacje</string>
     <string name="bridge_last_none">Nie wysłano jeszcze żadnego powiadomienia</string>

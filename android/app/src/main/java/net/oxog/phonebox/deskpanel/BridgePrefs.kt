@@ -40,7 +40,7 @@ object BridgePrefs {
         prefs(context).edit().putBoolean("askedContacts", true).apply()
     }
 
-    /** "All apps" on the Apps screen: every app's notifications go to the Mac, whatever the list says. Off until the owner turns it on. */
+    /** "All apps" on the Phone bridge screen: every app's notifications go to the Mac, whatever the list says. Off until the owner turns it on. */
     fun allApps(context: Context): Boolean = prefs(context).getBoolean("allApps", false)
 
     fun setAllApps(context: Context, on: Boolean) {

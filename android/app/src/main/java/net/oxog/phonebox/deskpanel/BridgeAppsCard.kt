@@ -62,6 +62,7 @@ class BridgeAppsCard(private val activity: Activity, private val theme: BridgeTh
             setHintTextColor(theme.muted)
             background = theme.roundRect(theme.page, 10)
             setPadding(theme.dp(12), theme.dp(8), theme.dp(12), theme.dp(8))
+            minimumHeight = theme.dp(48) // a touch target of its own size, not just the line of text
             addTextChangedListener(object : TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
                 override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
@@ -70,6 +71,7 @@ class BridgeAppsCard(private val activity: Activity, private val theme: BridgeTh
         }
         view.addView(search, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = theme.dp(6); bottomMargin = theme.dp(6) })
         view.addView(list)
+        applyAllState() // with all apps on, the search box is hidden from the start, not only once the list has loaded
     }
 
     /** Reads the app list off the main thread (loading every label and icon takes a moment) and fills the card. */
@@ -80,26 +82,46 @@ class BridgeAppsCard(private val activity: Activity, private val theme: BridgeTh
             val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
             val found = pm.queryIntentActivities(launcher, 0)
                 .filter { it.activityInfo.packageName != activity.packageName }
-                .map { Triple(it.activityInfo.packageName, it.loadLabel(pm).toString(), it.loadIcon(pm)) }
-                .distinctBy { it.first }
+                .distinctBy { it.activityInfo.packageName }
+                .map { Triple(it.activityInfo.packageName, it.loadLabel(pm).toString(), small(it.loadIcon(pm))) }
                 .sortedWith(compareBy<Triple<String, String, android.graphics.drawable.Drawable>>({ it.first !in on }, { it.second.lowercase() }))
             activity.runOnUiThread {
                 if (activity.isDestroyed) return@runOnUiThread
                 allowed.clear(); allowed.addAll(on)
                 found.forEach { (pkg, label, icon) -> val row = buildRow(pkg, label, icon); rows.add(Row(pkg, label, row)); list.addView(row) }
                 applyAllState()
+                filter(search.text?.toString() ?: "") // what was typed while the list was loading applies to it too
             }
         }.start()
     }
+
+    /**
+     * Every row stays in memory (they are in a scroll view, not a recycling list): an app's full icon can hold bitmaps of 432 pixels
+     * a side, so a few hundred apps would take hundreds of megabytes. Each one is drawn once at the row's size instead.
+     */
+    private fun small(icon: android.graphics.drawable.Drawable): android.graphics.drawable.Drawable = try {
+        val size = theme.dp(36)
+        val bitmap = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
+        icon.setBounds(0, 0, size, size)
+        icon.draw(android.graphics.Canvas(bitmap))
+        android.graphics.drawable.BitmapDrawable(activity.resources, bitmap)
+    } catch (_: Exception) { icon } catch (_: OutOfMemoryError) { icon }
 
     private fun buildRow(pkg: String, label: String, icon: android.graphics.drawable.Drawable): View = LinearLayout(activity).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         setPadding(0, theme.dp(6), 0, theme.dp(6))
-        addView(ImageView(activity).apply { id = R.id.bridge_app_icon; setImageDrawable(icon) }, LinearLayout.LayoutParams(theme.dp(36), theme.dp(36)))
-        addView(TextView(activity).apply { id = R.id.bridge_app_label; text = label; textSize = 16f; setTextColor(theme.text); setPadding(theme.dp(14), 0, theme.dp(8), 0) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        addView(ImageView(activity).apply {
+            id = R.id.bridge_app_icon; setImageDrawable(icon)
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO // the name beside it says which app it is
+        }, LinearLayout.LayoutParams(theme.dp(36), theme.dp(36)))
+        // start and end, not left and right: the gap stays between the icon and the name in Arabic
+        addView(TextView(activity).apply { id = R.id.bridge_app_label; text = label; textSize = 16f; setTextColor(theme.text); setPaddingRelative(theme.dp(14), 0, theme.dp(8), 0) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         addView(Switch(activity).apply {
             id = R.id.bridge_app_switch
+            contentDescription = label // a screen reader would otherwise read hundreds of switches with no app name
+            // every row's switch has the same id: a saved state would be restored into all of them (and saved as the owner's list)
+            isSaveEnabled = false
             isChecked = pkg in allowed
             setOnCheckedChangeListener { _, on ->
                 if (on) allowed.add(pkg) else allowed.remove(pkg)

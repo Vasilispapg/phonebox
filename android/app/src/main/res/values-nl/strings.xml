@@ -41,7 +41,6 @@
     <string name="bridge_access_button">Toegang tot meldingen toestaan</string>
     <string name="bridge_restricted_help">Als de schakelaar grijs is (Android 13 en later): open App-info, tik rechtsboven op ⋮, kies Beperkte instellingen toestaan en probeer het daarna opnieuw.</string>
     <string name="bridge_app_info_button">App-info openen</string>
-    <string name="bridge_apps_button">Apps kiezen</string>
     <string name="bridge_apps_title">Apps die op de Mac worden getoond</string>
     <string name="bridge_apps_all">Alle apps</string>
     <string name="bridge_last_none">Nog geen melding verstuurd</string>

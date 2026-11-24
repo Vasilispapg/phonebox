@@ -41,7 +41,6 @@
     <string name="bridge_access_button">알림 접근 허용</string>
     <string name="bridge_restricted_help">스위치가 회색이면(Android 13 이상): 앱 정보를 열고 오른쪽 위 ⋮를 눌러 ‘제한된 설정 허용’을 선택한 다음 돌아와서 다시 시도하세요.</string>
     <string name="bridge_app_info_button">앱 정보 열기</string>
-    <string name="bridge_apps_button">앱 선택</string>
     <string name="bridge_apps_title">Mac에 표시할 앱</string>
     <string name="bridge_apps_all">모든 앱</string>
     <string name="bridge_last_none">아직 보낸 알림이 없습니다</string>

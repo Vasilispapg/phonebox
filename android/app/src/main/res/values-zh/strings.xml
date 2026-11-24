@@ -41,7 +41,6 @@
     <string name="bridge_access_button">允许通知访问</string>
     <string name="bridge_restricted_help">如果开关是灰色的（Android 13 及更高版本）：打开应用信息，点按右上角的 ⋮，选择“允许受限设置”，然后返回重试。</string>
     <string name="bridge_app_info_button">打开应用信息</string>
-    <string name="bridge_apps_button">选择应用</string>
     <string name="bridge_apps_title">在 Mac 上显示的应用</string>
     <string name="bridge_apps_all">所有应用</string>
     <string name="bridge_last_none">尚未发送任何通知</string>

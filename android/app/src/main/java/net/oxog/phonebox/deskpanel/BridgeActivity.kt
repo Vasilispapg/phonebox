@@ -100,7 +100,7 @@ class BridgeActivity : Activity() {
         gravity = Gravity.CENTER_VERTICAL
         val dot = View(context)
         dotOut(dot)
-        addView(dot, LinearLayout.LayoutParams(dp(10), dp(10)).apply { rightMargin = dp(10) })
+        addView(dot, LinearLayout.LayoutParams(dp(10), dp(10)).apply { marginEnd = dp(10) }) // end, not right: the gap stays by the text in Arabic
         addView(label("", 14f, textColor).also(textOut), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
     }
 
@@ -108,7 +108,7 @@ class BridgeActivity : Activity() {
         this.text = text
         isAllCaps = false
         setTextColor(0xFFFFFFFF.toInt())
-        background = roundRect(accent, 12)
+        background = theme.pressable(roundRect(accent, 12))
         stateListAnimator = null
         minimumHeight = dp(48)
         setOnClickListener { onClick() }
@@ -117,8 +117,8 @@ class BridgeActivity : Activity() {
     private fun secondaryButton(text: String, onClick: () -> Unit) = Button(this).apply {
         this.text = text
         isAllCaps = false
-        setTextColor(accent)
-        background = roundRect(0x00000000, 12, accent)
+        setTextColor(theme.accentText)
+        background = theme.pressable(roundRect(0x00000000, 12, theme.accentText))
         stateListAnimator = null
         minimumHeight = dp(48)
         setOnClickListener { onClick() }
@@ -135,6 +135,8 @@ class BridgeActivity : Activity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // the manifest's theme is the dark Material one; in light mode its switches (a white track) all but vanish on the white cards
+        if (!theme.dark) setTheme(android.R.style.Theme_Material_Light_NoActionBar)
         super.onCreate(savedInstanceState)
         if (isOtherTilesLongPress(intent)) {
             // Android sends the long press on any of the app's tiles here once the filter exists: the PhoneBox tile's goes to
@@ -186,8 +188,15 @@ class BridgeActivity : Activity() {
         val apps = BridgeAppsCard(this, theme)
         add(apps.view, 12)
         apps.load()
-        theme.keepClearOfSystemBars(column)
-        setContentView(ScrollView(this).apply { setBackgroundColor(theme.page); isFillViewport = true; addView(column) })
+        // the scroll view, not the column, keeps clear of the bars: with the padding on the column the cards scroll up under the clock
+        val scroll = ScrollView(this).apply { setBackgroundColor(theme.page); isFillViewport = true; addView(column) }
+        theme.keepClearOfSystemBars(scroll)
+        setContentView(scroll)
+        // Android 15 draws the bars see-through over the page: in light mode their icons must be dark, or the clock is white on white
+        if (Build.VERSION.SDK_INT >= 35 && !theme.dark) {
+            val light = android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+            window.insetsController?.setSystemBarsAppearance(light, light)
+        }
     }
 
     override fun onResume() {

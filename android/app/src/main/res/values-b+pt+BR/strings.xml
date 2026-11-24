@@ -43,7 +43,6 @@
     <string name="bridge_access_button">Permitir acesso às notificações</string>
     <string name="bridge_restricted_help">Se o botão estiver esmaecido (Android 13 e posterior): abra Informações do app, toque em ⋮ no canto superior direito, escolha Permitir configurações restritas e tente de novo.</string>
     <string name="bridge_app_info_button">Abrir informações do app</string>
-    <string name="bridge_apps_button">Escolher apps</string>
     <string name="bridge_apps_title">Apps mostrados no Mac</string>
     <string name="bridge_apps_all">Todos os apps</string>
     <string name="bridge_last_none">Nenhuma notificação enviada ainda</string>

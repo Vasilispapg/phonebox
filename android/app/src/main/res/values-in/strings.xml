@@ -41,7 +41,6 @@
     <string name="bridge_access_button">Izinkan akses notifikasi</string>
     <string name="bridge_restricted_help">Jika sakelar berwarna abu-abu (Android 13 ke atas): buka Info aplikasi, ketuk ⋮ di kanan atas, pilih Izinkan setelan terbatas, lalu kembali dan coba lagi.</string>
     <string name="bridge_app_info_button">Buka Info aplikasi</string>
-    <string name="bridge_apps_button">Pilih aplikasi</string>
     <string name="bridge_apps_title">Aplikasi yang ditampilkan di Mac</string>
     <string name="bridge_apps_all">Semua aplikasi</string>
     <string name="bridge_last_none">Belum ada notifikasi yang dikirim</string>

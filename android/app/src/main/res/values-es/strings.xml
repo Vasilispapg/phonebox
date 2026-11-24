@@ -41,7 +41,6 @@
     <string name="bridge_access_button">Permitir el acceso a las notificaciones</string>
     <string name="bridge_restricted_help">Si el interruptor aparece atenuado (Android 13 y posteriores): abre Información de la app, toca ⋮ arriba a la derecha, elige Permitir ajustes restringidos y vuelve a intentarlo.</string>
     <string name="bridge_app_info_button">Abrir información de la app</string>
-    <string name="bridge_apps_button">Elegir apps</string>
     <string name="bridge_apps_title">Apps que se muestran en el Mac</string>
     <string name="bridge_apps_all">Todas las apps</string>
     <string name="bridge_last_none">Aún no se ha enviado ninguna notificación</string>

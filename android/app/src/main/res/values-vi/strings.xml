@@ -43,7 +43,6 @@
     <string name="bridge_access_button">Cho phép truy cập thông báo</string>
     <string name="bridge_restricted_help">Nếu công tắc bị mờ (Android 13 trở lên): mở Thông tin ứng dụng, chạm ⋮ ở góc trên bên phải, chọn Cho phép cài đặt bị hạn chế, rồi quay lại thử lại.</string>
     <string name="bridge_app_info_button">Mở Thông tin ứng dụng</string>
-    <string name="bridge_apps_button">Chọn ứng dụng</string>
     <string name="bridge_apps_title">Ứng dụng hiện trên Mac</string>
     <string name="bridge_apps_all">Tất cả ứng dụng</string>
     <string name="bridge_last_none">Chưa gửi thông báo nào</string>

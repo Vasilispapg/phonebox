@@ -41,7 +41,6 @@
     <string name="bridge_access_button">السماح بالوصول إلى الإشعارات</string>
     <string name="bridge_restricted_help">إذا كان المفتاح باهتًا (Android 13 والأحدث): افتح معلومات التطبيق، واضغط على ⋮ في أعلى اليمين، واختر السماح بالإعدادات المقيّدة، ثم عد وحاول مرة أخرى.</string>
     <string name="bridge_app_info_button">فتح معلومات التطبيق</string>
-    <string name="bridge_apps_button">اختيار التطبيقات</string>
     <string name="bridge_apps_title">التطبيقات المعروضة على Mac</string>
     <string name="bridge_apps_all">كل التطبيقات</string>
     <string name="bridge_last_none">لم يُرسل أي إشعار بعد</string>
