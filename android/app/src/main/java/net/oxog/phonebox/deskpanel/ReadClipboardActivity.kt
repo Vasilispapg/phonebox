@@ -22,9 +22,11 @@ class ReadClipboardActivity : Activity() {
         if (!hasFocus || handled) return
         handled = true
         val clip = (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).primaryClip
-        val text = clip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(this)?.toString()
-        // Android 13+ marks what a password manager copies as sensitive; such a clip is never sent
-        val sensitive = Build.VERSION.SDK_INT >= 33 && clip?.description?.extras?.getBoolean("android.content.extra.IS_SENSITIVE") == true
+        // the item's own text only: coerceToText would read a content: URI's stream on this (main) thread, and a clip that is a file or an
+        // image is not something to send to the Mac's clipboard anyway
+        val text = clip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString()
+        // password managers mark what they copy as sensitive (Android 13 named the extra; some makers set it earlier): such a clip is never sent
+        val sensitive = Build.VERSION.SDK_INT >= 24 && clip?.description?.extras?.getBoolean("android.content.extra.IS_SENSITIVE") == true
         BridgeSend.send(this, text, sensitive) { finish() }
     }
 }

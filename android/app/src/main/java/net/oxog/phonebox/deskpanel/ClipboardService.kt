@@ -23,6 +23,8 @@ import android.os.Looper
 class ClipboardService : Service() {
     private var stream: AgentStream? = null
     private val main = Handler(Looper.getMainLooper())
+    /** Which stream is the current one: what an old stream still delivers, or has queued for the main thread, is dropped. */
+    @Volatile private var generation = 0
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -46,6 +48,7 @@ class ClipboardService : Service() {
     /** A new link and stream each time: the activity may have paired another computer since the last one was built. */
     private fun restartStream() {
         stream?.stop()
+        val mine = ++generation
         val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         BridgePrefs.clipboardState = ClipboardState.WAITING
         // the bridge stream only pings every 15 s, so a read timeout of 40 s (the panel's 8 s would cut it and reconnect, losing
@@ -53,13 +56,14 @@ class ClipboardService : Service() {
         stream = AgentStream(
             AgentLink(applicationContext), "/api/bridge/stream", readTimeoutMs = 40_000,
             retryMinMs = 2_000, retryMaxMs = 60_000, refusedRetryMs = 60_000,
-            onFailure = { code -> BridgePrefs.clipboardState = BridgeClip.stateAfterFailure(code) },
+            onFailure = { code -> if (mine == generation) BridgePrefs.clipboardState = BridgeClip.stateAfterFailure(code) },
         ) { event, data ->
+            if (mine != generation) return@AgentStream
             when (event) {
                 "open" -> BridgePrefs.clipboardState = ClipboardState.RUNNING
                 "close" -> BridgePrefs.clipboardState = ClipboardState.WAITING
                 else -> BridgeClip.parseEvent(event, data)?.let { text ->
-                    main.post { clipboard.setPrimaryClip(ClipData.newPlainText("PhoneBox", text)) }
+                    main.post { if (mine == generation) clipboard.setPrimaryClip(ClipData.newPlainText("PhoneBox", text)) }
                 }
             }
         }.also { it.start() }
@@ -93,6 +97,7 @@ class ClipboardService : Service() {
     }
 
     override fun onDestroy() {
+        generation++
         stream?.stop()
         stream = null
         BridgePrefs.clipboardState = ClipboardState.STOPPED
