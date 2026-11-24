@@ -2,11 +2,15 @@ package net.oxog.phonebox.deskpanel
 
 import android.Manifest
 import android.app.Activity
+import android.content.ComponentName
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -16,7 +20,7 @@ import android.widget.TextView
 /**
  * The phone's "Phone bridge" screen: the clipboard switch, a short how-to, and an honest status line (whether the
  * service is connected, or the computer's switch is off), so a feature that is switched on never looks like it works
- * when it is not. Opens from the clipboard service's notification and from a long press on a PhoneBox tile.
+ * when it is not. Opens from the panel, the clipboard service's notification and a long press on the Send to Mac tile.
  */
 class BridgeActivity : Activity() {
     private lateinit var status: TextView
@@ -30,6 +34,16 @@ class BridgeActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (isOtherTilesLongPress(intent)) {
+            // Android sends the long press on any of the app's tiles here once the filter exists: the PhoneBox tile's goes to
+            // App info, which is what Android opened for it before the bridge (and still does while the bridge is off)
+            try {
+                startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            } catch (_: RuntimeException) {}
+            finish()
+            return
+        }
         val pad = (16 * resources.displayMetrics.density).toInt()
         val column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -64,6 +78,18 @@ class BridgeActivity : Activity() {
     override fun onPause() {
         handler.removeCallbacks(refresh)
         super.onPause()
+    }
+
+    /** A tile long press (QS_TILE_PREFERENCES names the tile in EXTRA_COMPONENT_NAME) for a tile other than Send to Mac. */
+    private fun isOtherTilesLongPress(intent: Intent?): Boolean {
+        if (intent?.action != "android.service.quicksettings.action.QS_TILE_PREFERENCES") return false
+        // Intent.EXTRA_COMPONENT_NAME by value: public from Android 8, the tiles of Android 7 already send it under this name
+        val key = "android.intent.extra.COMPONENT_NAME"
+        val tile = try {
+            if (Build.VERSION.SDK_INT >= 33) intent.getParcelableExtra(key, ComponentName::class.java)
+            else @Suppress("DEPRECATION") intent.getParcelableExtra<ComponentName>(key)
+        } catch (_: RuntimeException) { null } // exported: an extra that cannot be read counts as another tile
+        return tile == null || tile.packageName != packageName || tile.className != "net.oxog.phonebox.deskpanel.SendClipboardTile"
     }
 
     private fun statusText(): String {
