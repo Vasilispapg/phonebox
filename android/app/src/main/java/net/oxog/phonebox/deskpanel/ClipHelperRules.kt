@@ -41,6 +41,9 @@ object ClipHelperRules {
     fun stateFor(serviceRunning: Boolean, phoneSwitchOn: Boolean, macOff: Boolean): String =
         if (serviceRunning && phoneSwitchOn && !macOff) "active" else "off"
 
+    /** The text a call hands on to the relay: only a "copy" with text, and only while the app wants copies; a ping hands on nothing. */
+    fun copyToRelay(state: String, method: String, arg: String?): String? = if (state == "active" && method == "copy") arg else null
+
     /** Only the shell user may feed the Mac's clipboard; the provider checks the binder caller, which an app cannot fake. */
     fun callerAllowed(callingUid: Int): Boolean = callingUid == SHELL_UID
 
@@ -78,6 +81,62 @@ object ClipHelperRules {
         fun hit(isBad: Boolean): Boolean {
             bad = if (isBad) bad + 1 else 0
             return bad >= limit
+        }
+    }
+
+    /**
+     * Runs [command] (no shell) and returns what it printed, stdout and stderr together; null when it cannot start or has not
+     * finished within [waitMs] (it is then killed). The output is read on a thread of its own because Process.waitFor with a
+     * timeout is Java 8 / Android 8, and the helper runs on Android 5 too.
+     */
+    fun run(command: List<String>, waitMs: Long): String? = try {
+        val process = ProcessBuilder(command).redirectErrorStream(true).start()
+        process.outputStream.close()
+        val output = StringBuilder()
+        val reader = Thread { try { process.inputStream.bufferedReader(Charsets.UTF_8).forEachLine { output.append(it).append('\n') } } catch (_: java.io.IOException) {} }
+        reader.isDaemon = true
+        reader.start()
+        reader.join(waitMs)
+        if (reader.isAlive) { process.destroy(); null } else { process.waitFor(); output.toString() }
+    } catch (_: Exception) {
+        null
+    }
+
+    /**
+     * The helper's loop without its Android parts, so when it leaves can be checked on a JVM. Each [step] is one look at the
+     * clipboard (through [ClipWatcher]) and, every [pingEvery] looks, a "still there?". It returns null to go on, or the exit code
+     * to leave with: 0 when the app says "off", gives no answer twice in a row or its APK is gone; 1 when the clipboard cannot be
+     * read [unreadableLimit] times in a row (the system restarted; the agent starts a fresh helper).
+     */
+    class Loop(
+        read: () -> ClipSample?,
+        private val deliver: (String?) -> Reply,
+        private val apkGone: () -> Boolean,
+        private val pingEvery: Int = 60,
+        unreadableLimit: Int = 40,
+    ) {
+        private val unreadable = Streak(unreadableLimit)
+        private val unanswered = Streak(2)
+        private var exitCode: Int? = null
+        private var looks = 0
+        private val watcher = ClipWatcher({ read().also { if (unreadable.hit(it == null)) exitCode = 1 } }) { text ->
+            // Checked before every copy, not only at the ping: once the app is removed its provider's name is free, and another app
+            // that took it would be handed copies until the next ping.
+            if (apkGone()) exitCode = 0 else answered(deliver(text))
+        }
+
+        private fun answered(reply: Reply) {
+            if (reply == Reply.OFF || unanswered.hit(reply == Reply.NONE)) exitCode = 0
+        }
+
+        fun step(): Int? {
+            watcher.poll()
+            exitCode?.let { return it }
+            if (++looks % pingEvery != 0) return null
+            // An update replaces the APK and an uninstall removes it: the running code is stale, and the agent starts the new one.
+            if (apkGone()) return 0
+            answered(deliver(null))
+            return exitCode
         }
     }
 }

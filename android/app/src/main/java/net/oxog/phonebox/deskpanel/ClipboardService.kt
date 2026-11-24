@@ -93,7 +93,7 @@ class ClipboardService : Service() {
                 "open" -> { ClipRelay.macOff = false; macSwitch?.markOn(); BridgePrefs.clipboardState = ClipboardState.RUNNING }
                 "close" -> BridgePrefs.clipboardState = ClipboardState.WAITING
                 else -> BridgeClip.parseEvent(event, data)?.let { text ->
-                    echo.wrote(text) // the helper will see this copy too: it must not go back to the Mac
+                    ClipRelay.wroteFromMac(text) // the helper will see this copy too: it must not go back to the Mac
                     main.post { if (mine == generation && BridgePrefs.clipboardEnabled(this)) clipboard.setPrimaryClip(ClipData.newPlainText("PhoneBox", text)) }
                 }
             }
@@ -130,7 +130,6 @@ class ClipboardService : Service() {
 
     /** A copy the helper saw on the phone (it runs only when the Mac's agent started it over adb): on to the Mac like Send to Mac, without a toast. */
     private fun handleCopied(app: Context, text: String) {
-        if (echo.consumeIfEcho(text)) return
         if (!BridgePrefs.clipboardEnabled(app)) return
         val mac = macCache(app)
         if (!mac.isOn()) { ClipRelay.macOff = true; return }
@@ -158,7 +157,6 @@ class ClipboardService : Service() {
         private const val CHANNEL = "bridge"
         private const val NOTIFICATION_ID = 7
         private const val EXTRA_REPOST = "repost"
-        private val echo = ClipEcho { System.currentTimeMillis() }
         @Volatile private var macSwitch: BridgeConfigCache? = null
 
         /** Whether the Mac's clipboard switch is on, asked at most once a minute (not knowing counts as on; a 403 turns it off). */

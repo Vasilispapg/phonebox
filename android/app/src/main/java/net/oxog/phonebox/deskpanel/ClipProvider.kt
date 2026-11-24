@@ -20,7 +20,7 @@ class ClipProvider : ContentProvider() {
         if (!ClipHelperRules.callerAllowed(Binder.getCallingUid())) return null
         val app = context?.applicationContext ?: return null
         val state = ClipHelperRules.stateFor(ClipRelay.sink != null, BridgePrefs.clipboardEnabled(app), ClipRelay.macOff)
-        if (state == "active" && method == "copy" && arg != null) ClipRelay.submit(arg)
+        ClipHelperRules.copyToRelay(state, method, arg)?.let(ClipRelay::submit)
         return Bundle().apply { putString("state", state) }
     }
 

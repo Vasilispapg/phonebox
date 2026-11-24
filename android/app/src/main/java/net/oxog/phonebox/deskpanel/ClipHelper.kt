@@ -27,39 +27,17 @@ object ClipHelper {
     fun main(args: Array<String>) {
         control = try { LocalServerSocket(CONTROL_SOCKET) } catch (_: IOException) { return }
         val reader = try { ClipboardReader() } catch (e: Exception) { System.err.println("cannot reach the clipboard: ${e.javaClass.simpleName}"); return }
-        // a clipboard service that keeps failing (the system restarted it) ends the helper; the agent starts a fresh one
-        val unreadable = ClipHelperRules.Streak(40)
-        // an app that gives no answer at all (not installed, not running) twice in a row ends the helper; an answer of "off" ends it at once
-        val unanswered = ClipHelperRules.Streak(2)
-        fun answered(reply: ClipHelperRules.Reply) {
-            if (reply == ClipHelperRules.Reply.OFF) exitProcess(0)
-            if (unanswered.hit(reply == ClipHelperRules.Reply.NONE)) exitProcess(0)
-        }
-        val watcher = ClipWatcher({ reader.sample().also { if (unreadable.hit(it == null)) exitProcess(1) } }) { text -> answered(deliver(text)) }
-        var polls = 0
+        // when it leaves (an "off", two non-answers, the APK gone, a clipboard that keeps failing) is decided by ClipHelperRules.Loop
+        val loop = ClipHelperRules.Loop(reader::sample, ::deliver, { ClipHelperRules.apkIsGone(System.getenv("CLASSPATH")) }, PING_EVERY_POLLS)
         while (true) {
-            watcher.poll()
+            loop.step()?.let { exitProcess(it) }
             Thread.sleep(POLL_MS)
-            if (++polls % PING_EVERY_POLLS != 0) continue
-            // An update replaces the APK and an uninstall removes it: the running code is stale, and the agent starts the new one.
-            if (ClipHelperRules.apkIsGone(System.getenv("CLASSPATH"))) exitProcess(0)
-            answered(deliver(null))
         }
     }
 
     /** Calls the app's provider as the shell user with a copy (or a "still there?" for null) and reads its answer. */
-    private fun deliver(text: String?): ClipHelperRules.Reply = try {
-        val process = ProcessBuilder(ClipHelperRules.callCommand(text)).redirectErrorStream(true).start()
-        process.outputStream.close()
-        val output = StringBuilder()
-        val readerThread = Thread { try { process.inputStream.bufferedReader(Charsets.UTF_8).forEachLine { output.append(it).append('\n') } } catch (_: IOException) {} }
-        readerThread.isDaemon = true
-        readerThread.start()
-        readerThread.join(CALL_WAIT_MS)
-        if (readerThread.isAlive) { process.destroy(); ClipHelperRules.Reply.NONE } else { process.waitFor(); ClipHelperRules.parseReply(output.toString()) }
-    } catch (_: Exception) {
-        ClipHelperRules.Reply.NONE
-    }
+    private fun deliver(text: String?): ClipHelperRules.Reply =
+        ClipHelperRules.run(ClipHelperRules.callCommand(text), CALL_WAIT_MS)?.let(ClipHelperRules::parseReply) ?: ClipHelperRules.Reply.NONE
 
     /** The system clipboard service, reached by reflection as the shell user. Never logs or prints what it reads. */
     private class ClipboardReader {
