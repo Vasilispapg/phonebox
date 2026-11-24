@@ -2,12 +2,13 @@
 import json,re,pathlib,xml.etree.ElementTree as ET
 root=pathlib.Path(__file__).resolve().parents[1]
 version=ET.parse(root/'agent/PhoneBox.Agent/PhoneBox.Agent.csproj').find('.//Version').text
-assert re.fullmatch(r'\d+\.\d+\.\d+',version),version
+assert re.fullmatch(r'\d+\.\d+\.\d+(\.\d+)?',version),version
+upstream='.'.join(version.split('.')[:3]) # a personal build adds a fourth part (0.9.29.1); its notes are the upstream release's
 gradle=(root/'android/app/build.gradle.kts').read_text()
 assert re.search(r'versionName = "'+re.escape(version)+'"',gradle),'Android version differs'
 assert int(re.search(r'versionCode = (\d+)',gradle)[1])>0
 changelog=(root/'CHANGELOG.md').read_text(encoding='utf-8')
-assert re.search(r'^## '+re.escape(version)+r' — \d{4}-\d{2}-\d{2}$',changelog,re.M),'Missing dated release notes'
+assert re.search(r'^## '+re.escape(upstream)+r' — \d{4}-\d{2}-\d{2}$',changelog,re.M),'Missing dated release notes'
 widgets=json.loads((root/'agent/PhoneBox.Agent/widgets.json').read_text(encoding='utf-8'))
 templates=json.loads((root/'agent/PhoneBox.Agent/templates.json').read_text(encoding='utf-8'))
 types={w['type'] for w in widgets}
