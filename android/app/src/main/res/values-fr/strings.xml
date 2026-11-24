@@ -43,6 +43,7 @@
     <string name="bridge_app_info_button">Ouvrir Infos sur l\'appli</string>
     <string name="bridge_apps_button">Choisir les applis</string>
     <string name="bridge_apps_title">Applis affichées sur le Mac</string>
+    <string name="bridge_apps_all">Toutes les applis</string>
     <string name="bridge_last_none">Aucune notification envoyée pour l\'instant</string>
     <string name="bridge_last_ok">La dernière notification a atteint le Mac</string>
     <string name="bridge_last_off">Dernière notification : l\'interrupteur des notifications du Mac est désactivé</string>

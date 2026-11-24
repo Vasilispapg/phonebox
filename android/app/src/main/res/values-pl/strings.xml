@@ -43,6 +43,7 @@
     <string name="bridge_app_info_button">Otwórz informacje o aplikacji</string>
     <string name="bridge_apps_button">Wybierz aplikacje</string>
     <string name="bridge_apps_title">Aplikacje pokazywane na Macu</string>
+    <string name="bridge_apps_all">Wszystkie aplikacje</string>
     <string name="bridge_last_none">Nie wysłano jeszcze żadnego powiadomienia</string>
     <string name="bridge_last_ok">Ostatnie powiadomienie dotarło na Maca</string>
     <string name="bridge_last_off">Ostatnie powiadomienie: przełącznik powiadomień na Macu jest wyłączony</string>

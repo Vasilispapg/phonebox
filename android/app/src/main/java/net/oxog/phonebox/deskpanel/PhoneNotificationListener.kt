@@ -20,7 +20,7 @@ import java.util.concurrent.atomic.AtomicInteger
  * The text is never logged or stored.
  */
 class PhoneNotificationListener : NotificationListenerService() {
-    private val filter by lazy { NotificationFilter({ BridgePrefs.allowedApps(applicationContext) }, packageName, { defaultDialer() }) }
+    private val filter by lazy { NotificationFilter({ BridgePrefs.allowedApps(applicationContext) }, packageName, { defaultDialer() }, { BridgePrefs.allApps(applicationContext) }) }
     private val callGeneration = AtomicInteger()
 
     override fun onListenerConnected() {
@@ -126,7 +126,7 @@ class PhoneNotificationListener : NotificationListenerService() {
     private fun enqueue(app: Context, info: NotificationInfo, sendKey: String, shown: String, category: String,
                         mark: Int, queuedAt: Long, generation: Int? = null) {
         // cut here, as the agent does: a long email in a BigText notification must arrive shortened, not be refused whole
-        val body = BridgeClip.notificationBody(sendKey, label(shown), shown, BridgeClip.cut(info.title, 200), BridgeClip.cut(info.text, 2000), category, info.time)
+        val body = BridgeClip.notificationBody(sendKey, label(shown), shown, BridgeClip.cut(info.title, 200), BridgeClip.cut(info.text, 2000), category, info.time, AppIcons.base64(applicationContext, shown))
         val queued = synchronized(queue) {
             (generation == null || callGeneration.get() == generation) &&
                 queue.addIfCurrent(NotificationDelivery.Pending(shown, body), mark, queuedAt)
@@ -236,7 +236,7 @@ class PhoneNotificationListener : NotificationListenerService() {
                 return NotificationDelivery(
                     queue,
                     phoneSwitchOn = { BridgePrefs.notificationsEnabled(app) },
-                    appAllowed = { BridgePrefs.allowedApps(app).contains(it) },
+                    appAllowed = { BridgePrefs.allApps(app) || BridgePrefs.allowedApps(app).contains(it) },
                     macSwitchOn = { config.notificationsOn { client.fetchConfig(target) } },
                     send = { body -> client.sendNotification(target, body) },
                     onOutcome = { BridgePrefs.notificationOutcome = it },

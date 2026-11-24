@@ -43,6 +43,7 @@
     <string name="bridge_app_info_button">ऐप की जानकारी खोलें</string>
     <string name="bridge_apps_button">ऐप चुनें</string>
     <string name="bridge_apps_title">Mac पर दिखाए जाने वाले ऐप</string>
+    <string name="bridge_apps_all">सभी ऐप्स</string>
     <string name="bridge_last_none">अभी तक कोई सूचना नहीं भेजी गई</string>
     <string name="bridge_last_ok">आखिरी सूचना Mac तक पहुँची</string>
     <string name="bridge_last_off">आखिरी सूचना: Mac का सूचना स्विच बंद है</string>

@@ -45,9 +45,12 @@ object BridgeClip {
         append("\"}")
     }
 
-    /** The body of POST /api/bridge/notification; [time] is when the phone posted it (milliseconds). */
-    fun notificationBody(key: String, app: String, pkg: String, title: String, text: String, category: String, time: Long): String =
-        buildString(title.length + text.length + 120) {
+    /**
+     * The body of POST /api/bridge/notification; [time] is when the phone posted it (milliseconds). [iconBase64] is the posting
+     * app's icon as a small PNG in base64 (from [AppIcons]), shown by the Mac as the notification's picture; none is left out.
+     */
+    fun notificationBody(key: String, app: String, pkg: String, title: String, text: String, category: String, time: Long, iconBase64: String? = null): String =
+        buildString(title.length + text.length + 120 + (iconBase64?.length ?: 0)) {
             fun field(name: String, value: String, last: Boolean = false) {
                 append('"').append(name).append("\":\"")
                 escapeInto(this, value)
@@ -55,6 +58,7 @@ object BridgeClip {
             }
             append('{')
             field("key", key); field("app", app); field("package", pkg); field("title", title); field("text", text); field("category", category)
+            if (iconBase64 != null) append("\"icon\":\"").append(iconBase64).append("\",") // base64 holds nothing that needs escaping
             append("\"time\":").append(time).append('}')
         }
 

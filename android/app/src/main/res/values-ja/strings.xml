@@ -43,6 +43,7 @@
     <string name="bridge_app_info_button">アプリ情報を開く</string>
     <string name="bridge_apps_button">アプリを選ぶ</string>
     <string name="bridge_apps_title">Mac に表示するアプリ</string>
+    <string name="bridge_apps_all">すべてのアプリ</string>
     <string name="bridge_last_none">まだ通知を送信していません</string>
     <string name="bridge_last_ok">直近の通知は Mac に届きました</string>
     <string name="bridge_last_off">直近の通知：Mac の通知スイッチがオフです</string>

@@ -45,6 +45,7 @@
     <string name="bridge_app_info_button">Άνοιγμα πληροφοριών εφαρμογής</string>
     <string name="bridge_apps_button">Επιλογή εφαρμογών</string>
     <string name="bridge_apps_title">Εφαρμογές που εμφανίζονται στο Mac</string>
+    <string name="bridge_apps_all">Όλες οι εφαρμογές</string>
     <string name="bridge_last_none">Δεν έχει σταλεί ακόμη ειδοποίηση</string>
     <string name="bridge_last_ok">Η τελευταία ειδοποίηση έφτασε στο Mac</string>
     <string name="bridge_last_off">Τελευταία ειδοποίηση: ο διακόπτης ειδοποιήσεων του Mac είναι ανενεργός</string>

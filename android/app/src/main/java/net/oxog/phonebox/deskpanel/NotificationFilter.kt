@@ -27,7 +27,11 @@ enum class Decision { SKIP, SEND, SEND_AS_MISSED_CALL }
  * Calls: an incoming one (CallStyle incoming, an answer action, or the Samsung in-call UI's CallStyle) is sent; see the checks.
  * Outgoing calls look the same on Samsung (same CallStyle, same "ongoing" type), so they are sent too.
  */
-class NotificationFilter(private val allowed: () -> Set<String>, private val ownPackage: String, private val dialer: () -> String? = { null }) {
+class NotificationFilter(
+    private val allowed: () -> Set<String>, private val ownPackage: String, private val dialer: () -> String? = { null },
+    /** The owner chose "all apps": the list is not consulted (PhoneBox's own, summaries, empty and ongoing ones are still left out). */
+    private val allApps: () -> Boolean = { false },
+) {
     companion object {
         /** In-call apps that post a call for the default dialer: the dialer's own package is not the one that rings. */
         val IN_CALL_UIS = setOf("com.samsung.android.incallui")
@@ -40,8 +44,8 @@ class NotificationFilter(private val allowed: () -> Set<String>, private val own
         // notification of type "ongoing" with only a Hang up button (recorded on a Galaxy S25 Ultra); whoever put the default dialer
         // on the list asked for calls. Only that in-call UI is let through on the dialer's say: any other app's CallStyle call
         // (WhatsApp, Signal, Meet) follows the list like every other notification.
-        if (n.category == "call" && n.callStyle && n.pkg in IN_CALL_UIS && dialer()?.let { it in allowed() } == true) return Decision.SEND
-        if (n.pkg !in allowed()) return Decision.SKIP
+        if (n.category == "call" && n.callStyle && n.pkg in IN_CALL_UIS && (allApps() || dialer()?.let { it in allowed() } == true)) return Decision.SEND
+        if (!allApps() && n.pkg !in allowed()) return Decision.SKIP
         return when (n.category) {
             "missed_call" -> Decision.SEND_AS_MISSED_CALL
             "call" -> if (n.callStyleIncoming || n.hasAnswerAction) Decision.SEND else Decision.SKIP

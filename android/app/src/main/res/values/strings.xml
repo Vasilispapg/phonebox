@@ -42,6 +42,7 @@
     <string name="bridge_app_info_button">Open App info</string>
     <string name="bridge_apps_button">Choose apps</string>
     <string name="bridge_apps_title">Apps shown on the Mac</string>
+    <string name="bridge_apps_all">All apps</string>
     <string name="bridge_last_none">No notification sent yet</string>
     <string name="bridge_last_ok">Last notification reached the Mac</string>
     <string name="bridge_last_off">Last notification: the Mac\'s notification switch is off</string>

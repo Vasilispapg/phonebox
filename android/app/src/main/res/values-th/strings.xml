@@ -43,6 +43,7 @@
     <string name="bridge_app_info_button">เปิดข้อมูลแอป</string>
     <string name="bridge_apps_button">เลือกแอป</string>
     <string name="bridge_apps_title">แอปที่แสดงบน Mac</string>
+    <string name="bridge_apps_all">ทุกแอป</string>
     <string name="bridge_last_none">ยังไม่ได้ส่งการแจ้งเตือน</string>
     <string name="bridge_last_ok">การแจ้งเตือนล่าสุดถึง Mac แล้ว</string>
     <string name="bridge_last_off">การแจ้งเตือนล่าสุด: สวิตช์การแจ้งเตือนของ Mac ปิดอยู่</string>

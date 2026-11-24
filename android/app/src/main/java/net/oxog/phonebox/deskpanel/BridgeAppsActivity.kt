@@ -35,7 +35,21 @@ class BridgeAppsActivity : Activity() {
         val pad = (16 * resources.displayMetrics.density).toInt()
         val column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, 0) }
         column.addView(TextView(this).apply { text = getString(R.string.bridge_apps_title); textSize = 24f })
-        column.addView(ListView(this).apply { adapter = Adapter() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        val adapter = Adapter()
+        val list = ListView(this).apply { this.adapter = adapter }
+        column.addView(Switch(this).apply {
+            text = getString(R.string.bridge_apps_all)
+            textSize = 16f
+            setPadding(0, pad / 2, 0, pad / 2)
+            isChecked = BridgePrefs.allApps(this@BridgeAppsActivity)
+            list.alpha = if (isChecked) 0.4f else 1f // the list is not used while "all apps" is on
+            setOnCheckedChangeListener { _, on ->
+                BridgePrefs.setAllApps(this@BridgeAppsActivity, on)
+                list.alpha = if (on) 0.4f else 1f
+                adapter.notifyDataSetChanged() // the rows' switches are disabled (and read so by a screen reader) while all apps is on
+            }
+        })
+        column.addView(list, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         setContentView(column)
     }
 
@@ -60,6 +74,7 @@ class BridgeAppsActivity : Activity() {
             line.findViewById<Switch>(R.id.bridge_app_switch).apply {
                 setOnCheckedChangeListener(null) // a recycled row must not fire for the app it showed before
                 isChecked = row.pkg in allowed
+                isEnabled = !BridgePrefs.allApps(this@BridgeAppsActivity)
                 setOnCheckedChangeListener { _, on ->
                     if (on) allowed.add(row.pkg) else allowed.remove(row.pkg)
                     BridgePrefs.setAllowedApps(this@BridgeAppsActivity, allowed)

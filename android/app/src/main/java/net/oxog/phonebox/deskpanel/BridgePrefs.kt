@@ -40,6 +40,13 @@ object BridgePrefs {
         prefs(context).edit().putBoolean("askedContacts", true).apply()
     }
 
+    /** "All apps" on the Apps screen: every app's notifications go to the Mac, whatever the list says. Off until the owner turns it on. */
+    fun allApps(context: Context): Boolean = prefs(context).getBoolean("allApps", false)
+
+    fun setAllApps(context: Context, on: Boolean) {
+        prefs(context).edit().putBoolean("allApps", on).apply()
+    }
+
     /** The apps whose notifications go to the Mac. */
     fun allowedApps(context: Context): Set<String> = prefs(context).getStringSet("apps", emptySet()) ?: emptySet()
 
