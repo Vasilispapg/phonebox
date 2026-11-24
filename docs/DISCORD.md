@@ -91,7 +91,9 @@ needs the **Control** option of a Discord widget on an enabled page, `discord.al
 to the widget. While you are in a voice channel:
 
 - **Choose on PC** asks Discord to share: it shows its own picker on the computer (screens and windows), or goes live
-  with the game it detects.
+  with the game it detects. Discord draws the picker inside its own window, so on Windows the agent then brings the
+  running Discord (stable, PTB or Canary) to the front; from the tray it starts that build's own
+  `%LOCALAPPDATA%\<build>\Update.exe --processStart`, which shows the running one.
 - The list below it holds the apps that have a window on this computer, **by name only** (no window titles), read only
   while the share view is open on the phone. Tapping one asks Discord to share that app. Discord shares directly only
   what it can (the games it detects); PhoneBox doesn't look games up anywhere, it watches whether the share starts and

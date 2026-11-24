@@ -22,6 +22,8 @@ public sealed partial class DiscordMonitor
 {
     /// <summary>The most apps listed.</summary>
     internal const int ShareAppsMax = 30;
+    /// <summary>Discord's builds on Windows: the process name and the folder under %LOCALAPPDATA% that holds its Update.exe.</summary>
+    internal static readonly (string Process, string Folder)[] DiscordBuilds = [("Discord", "Discord"), ("DiscordPTB", "DiscordPTB"), ("DiscordCanary", "DiscordCanary")];
     /// <summary>How long a direct share may take to start before the phone is told to use the picker.</summary>
     internal TimeSpan ShareStartWait = TimeSpan.FromSeconds(4); // internal: tests wait less
     internal int ShareAppsCacheMs = 10_000; // internal: tests make it old
@@ -226,6 +228,9 @@ public sealed partial class DiscordMonitor
             // Until Discord's next state event (about a third of a second later) a second stop would start the share
             // again. Not after "pick": a cancelled picker sends no event.
             if (action == "stop") lock (_lock) if (_sharing == true) _sharing = null;
+            // Discord draws its picker inside its own window: bring that window up, or the picker opens unseen behind
+            // other windows (or with Discord in the tray)
+            if (action == "pick") _ = Task.Run(ShowDiscord);
             if (action != "app") return null;
             // Discord starts a direct share only for what it can capture that way (games it detects); for anything else it
             // quietly does nothing. Watch for the share to start rather than guessing beforehand.
@@ -235,6 +240,36 @@ public sealed partial class DiscordMonitor
         }
         catch (Exception ex) { return new("failed", ex.Message); }
         finally { _shareAct.Release(); }
+
+        void ShowDiscord()
+        {
+#if WINDOWS
+            try
+            {
+                foreach (var (process, folder) in DiscordBuilds)
+                {
+                    var running = Process.GetProcessesByName(process);
+                    var any = running.Length > 0;
+                    foreach (var p in running) p.Dispose();
+                    if (!any) continue;
+                    if (WindowsDeckNative.Focus(process)) return;
+                    // In the tray it has no window to raise: starting it again from its own Update.exe shows the running
+                    // one (Discord stays single-instance). A fixed path; nothing from the request.
+                    var update = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), folder, "Update.exe");
+                    if (!File.Exists(update)) return;
+                    var start = new ProcessStartInfo(update) { UseShellExecute = false, CreateNoWindow = true };
+                    start.ArgumentList.Add("--processStart");
+                    start.ArgumentList.Add(process + ".exe");
+                    // it hands over to the running Discord and exits at once; one that hangs is not left behind
+                    using var updater = Process.Start(start);
+                    if (updater is not null && !updater.WaitForExit(TimeSpan.FromSeconds(15)))
+                        try { updater.Kill(); } catch { } // exited meanwhile
+                    return;
+                }
+            }
+            catch (Exception ex) { log.LogInformation("discord: could not bring Discord forward ({Msg})", ex.Message); }
+#endif
+        }
 
         DiscordShareError? Refusal()
         {
