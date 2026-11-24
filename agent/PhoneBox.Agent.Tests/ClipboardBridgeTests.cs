@@ -32,6 +32,16 @@ public sealed class ClipboardBridgeTests : IDisposable
         File.SetLastWriteTimeUtc(_config, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddSeconds(++_stamp));
     }
 
+    /// <summary>
+    /// A change is read one poll after it is seen, once the change counter has stayed put for that poll (a password manager
+    /// adds its marker after the text without a new count): so a copy needs two polls before it can go out.
+    /// </summary>
+    private void Settle()
+    {
+        _bridge.PollOnce();
+        _bridge.PollOnce();
+    }
+
     private static string Of(string unit, int count) => string.Concat(Enumerable.Repeat(unit, count));
 
     // ---- from the phone ----
@@ -111,7 +121,7 @@ public sealed class ClipboardBridgeTests : IDisposable
     {
         _bridge.PollOnce();
         _pb.Copy(null);
-        _bridge.PollOnce();
+        Settle();
         Assert.Equal(0, _stream.Seq);
     }
 
@@ -120,7 +130,7 @@ public sealed class ClipboardBridgeTests : IDisposable
     {
         _bridge.PollOnce();
         _pb.Copy(Of("a", ClipboardBridge.MaxBytes + 1));
-        _bridge.PollOnce();
+        Settle();
         Assert.Equal(0, _stream.Seq);
     }
 
@@ -131,7 +141,7 @@ public sealed class ClipboardBridgeTests : IDisposable
     {
         _bridge.PollOnce();
         _bridge.ReceiveFromPhone("B", "phoneA");   // our own write moves the change counter
-        _bridge.PollOnce();
+        Settle();
         Assert.DoesNotContain(_stream.Since(0, null), e => e.Origin is null);
         Assert.Single(_stream.Since(0, null));     // only the phone's own event
     }
@@ -141,11 +151,11 @@ public sealed class ClipboardBridgeTests : IDisposable
     {
         _bridge.PollOnce();
         _pb.Copy("A");
-        _bridge.PollOnce();
+        Settle();
         _bridge.ReceiveFromPhone("B", "phone1");
-        _bridge.PollOnce();                         // the echo of B: swallowed
+        Settle();                                   // the echo of B: swallowed
         _pb.Copy("A");
-        _bridge.PollOnce();                         // the owner copies A again on purpose
+        Settle();                                   // the owner copies A again on purpose
         Assert.Equal(["A", "B", "A"], _stream.Since(0, null).Select(e => e.Text));
         Assert.Equal([null, "phone1", null], _stream.Since(0, null).Select(e => e.Origin));
     }
@@ -155,11 +165,12 @@ public sealed class ClipboardBridgeTests : IDisposable
     {
         _bridge.PollOnce();
         _pb.Copy("first");
+        _bridge.PollOnce();                           // seen; read on the next pass
         _pb.AfterRead = () => _pb.Copy("second");   // a second copy lands between the two reads of one poll
         _bridge.PollOnce();
         _pb.AfterRead = null;
         Assert.Empty(_stream.Since(0, null));        // the mixed read shares nothing
-        _bridge.PollOnce();                           // the next pass sees the second copy and shares it, whole
+        Settle();                                     // the next passes see the second copy and share it, whole
         Assert.Equal(["second"], _stream.Since(0, null).Select(e => e.Text));
     }
 
@@ -169,7 +180,7 @@ public sealed class ClipboardBridgeTests : IDisposable
         _bridge.ReceiveFromPhone("B", "phone1");    // before the first look at the clipboard: that look only notes what is there
         _bridge.PollOnce();
         _pb.Copy("B");                              // the owner copies the same words on purpose
-        _bridge.PollOnce();
+        Settle();
         Assert.Equal([("B", "phone1"), ("B", null)], _stream.Since(0, null).Select(e => (e.Text, e.Origin)));
     }
 
@@ -192,9 +203,9 @@ public sealed class ClipboardBridgeTests : IDisposable
     {
         _bridge.PollOnce();
         _bridge.ReceiveFromPhone("B", "phone1");
-        _bridge.PollOnce();                         // echo swallowed, the guard is spent
+        Settle();                                   // echo swallowed, the guard is spent
         _pb.Copy("B");
-        _bridge.PollOnce();                         // a deliberate copy of the same words
+        Settle();                                   // a deliberate copy of the same words
         Assert.Equal([("B", "phone1"), ("B", null)], _stream.Since(0, null).Select(e => (e.Text, e.Origin)));
     }
 
@@ -204,9 +215,9 @@ public sealed class ClipboardBridgeTests : IDisposable
         _bridge.PollOnce();
         _bridge.ReceiveFromPhone("B", "phone1");
         _pb.Copy("Z");                              // the owner copies something else before the next poll
-        _bridge.PollOnce();                         // Z goes out, and B's guard must not survive it
+        Settle();                                   // Z goes out, and B's guard must not survive it
         _pb.Copy("B");
-        _bridge.PollOnce();                         // hours later: B copied on purpose
+        Settle();                                   // hours later: B copied on purpose
         Assert.Equal(["B", "Z", "B"], _stream.Since(0, null).Select(e => e.Text));
     }
 
@@ -216,9 +227,9 @@ public sealed class ClipboardBridgeTests : IDisposable
         _bridge.PollOnce();
         _bridge.ReceiveFromPhone("B", "phone1");
         _pb.Copy(null);                             // a password manager's item replaces it, unreadable to the bridge
-        _bridge.PollOnce();
+        Settle();
         _pb.Copy("B");
-        _bridge.PollOnce();
+        Settle();
         Assert.Equal(["B", "B"], _stream.Since(0, null).Select(e => e.Text));
         Assert.Equal(["phone1", null], _stream.Since(0, null).Select(e => e.Origin));
     }
@@ -231,7 +242,7 @@ public sealed class ClipboardBridgeTests : IDisposable
         _bridge.PollOnce();
         SetSwitch(false);
         _pb.Copy("copied while off");
-        _bridge.PollOnce();
+        Settle();
         Assert.Equal(0, _stream.Seq);
     }
 
@@ -243,9 +254,10 @@ public sealed class ClipboardBridgeTests : IDisposable
         _pb.Copy("copied while off");
         SetSwitch(true);
         _bridge.PollOnce();                         // the first poll after turning on only notes where the clipboard is
+        _bridge.PollOnce();
         Assert.Equal(0, _stream.Seq);
         _pb.Copy("copied while on");
-        _bridge.PollOnce();
+        Settle();
         Assert.Equal(["copied while on"], _stream.Since(0, null).Select(e => e.Text));
     }
 
@@ -258,7 +270,128 @@ public sealed class ClipboardBridgeTests : IDisposable
         _bridge.Tick();
         _pb.Copy("after the failure");
         _bridge.Tick();
+        _bridge.Tick();
         Assert.Equal(["after the failure"], _stream.Since(0, null).Select(e => e.Text));
+    }
+
+    // ---- password managers: the marker that comes after the text ----
+
+    [Fact]
+    public void APasswordManagerThatAddsItsConcealedMarkerAfterTheTextIsNeverShared()
+    {
+        // clearContents -> setString(password) -> setString("", concealed type): the count moves on the first call only
+        _bridge.PollOnce();
+        _pb.Copy("hunter2");                        // clearContents and the password: a new count, no marker yet
+        _bridge.PollOnce();                         // the change is seen here, between the manager's two calls
+        _pb.Mark();                                 // the concealed marker arrives, the count stays the same
+        _bridge.PollOnce();
+        _bridge.PollOnce();
+        Assert.Equal(0, _stream.Seq);
+    }
+
+    [Fact]
+    public void ACopyIsReadOnlyOnceTheCounterHasStayedPutForAPoll()
+    {
+        _bridge.PollOnce();
+        _pb.Copy("first");
+        _bridge.PollOnce();                         // seen
+        _pb.Copy("second");
+        _bridge.PollOnce();                         // the counter moved again: wait once more
+        Assert.Equal(0, _stream.Seq);
+        _bridge.PollOnce();
+        Assert.Equal(["second"], _stream.Since(0, null).Select(e => e.Text));
+    }
+
+    // ---- the switch, inside the lock ----
+
+    [Fact]
+    public void TurningTheSwitchOffForgetsTheKeptTexts()
+    {
+        _bridge.PollOnce();
+        _pb.Copy("copied on the Mac");
+        Settle();
+        _bridge.ReceiveFromPhone("from the phone", "phoneA");
+        Assert.Equal(2, _stream.Since(0, null).Count);
+        SetSwitch(false);
+        _bridge.PollOnce();
+        Assert.Empty(_stream.Since(0, null));       // nothing copied stays in memory once sharing is off
+    }
+
+    [Fact]
+    public void APhoneWriteRacingTheSwitchOffIsRefusedNotWrittenAfterIt()
+    {
+        _bridge.PollOnce();
+        _pb.Copy("x");
+        _bridge.PollOnce();                         // seen; the next poll reads it while holding the bridge's lock
+        ClipboardResult? phone = null;
+        Thread? writer = null;
+        _pb.AfterRead = () =>
+        {
+            // a phone's write arrives now, while the switch is still on, and waits for the lock; then the owner turns sharing off
+            writer = new Thread(() => phone = _bridge.ReceiveFromPhone("late", "phoneA"));
+            writer.Start();
+            for (var i = 0; i < 500 && (writer.ThreadState & ThreadState.WaitSleepJoin) == 0; i++) Thread.Sleep(5);
+            Thread.Sleep(50);
+            SetSwitch(false);
+        };
+        _bridge.PollOnce();
+        _pb.AfterRead = null;
+        Assert.True(writer!.Join(TimeSpan.FromSeconds(5)));
+        Assert.Equal(ClipboardResult.Off, phone);
+        Assert.Equal(0, _pb.Writes);
+    }
+
+    // ---- macOS refusing the clipboard ----
+
+    [Fact]
+    public void WhenMacOSGivesNoTextTheBridgeWarnsOnceWithoutTheTextAndSaysSo()
+    {
+        var log = new ListLogger<ClipboardBridge>();
+        var bridge = new ClipboardBridge(_pb, _store, _stream, log);
+        bridge.PollOnce();
+        _pb.Deny = true;
+        _pb.Copy("secret words");
+        bridge.PollOnce(); bridge.PollOnce();
+        _pb.Copy("more secret words");
+        bridge.PollOnce(); bridge.PollOnce();
+        Assert.True(bridge.Refused);
+        var warning = Assert.Single(log.Lines);
+        Assert.DoesNotContain("secret", warning);
+        Assert.Equal(0, _stream.Seq);
+        _pb.Deny = false;                           // the owner allows it in System Settings
+        _pb.Copy("allowed now");
+        bridge.PollOnce(); bridge.PollOnce();
+        Assert.False(bridge.Refused);
+        Assert.Equal(["allowed now"], _stream.Since(0, null).Select(e => e.Text));
+    }
+
+    [Fact]
+    public void ASettingThatDeniesTheClipboardIsReportedWhenSharingStarts()
+    {
+        var log = new ListLogger<ClipboardBridge>();
+        var bridge = new ClipboardBridge(_pb, _store, _stream, log);
+        _pb.AccessDenied = true;
+        bridge.PollOnce();
+        Assert.True(bridge.Refused);
+        Assert.Single(log.Lines);
+        SetSwitch(false);
+        bridge.PollOnce();
+        Assert.False(bridge.Refused);               // off: there is nothing to report
+    }
+
+    [Fact]
+    public void AnItemWithoutTextIsNotARefusal()
+    {
+        var log = new ListLogger<ClipboardBridge>();
+        var bridge = new ClipboardBridge(_pb, _store, _stream, log);
+        bridge.PollOnce();
+        _pb.Copy(null);                             // an image, say
+        bridge.PollOnce(); bridge.PollOnce();
+        _pb.Copy("pw");
+        _pb.Mark();                                 // a password manager's copy
+        bridge.PollOnce(); bridge.PollOnce();
+        Assert.False(bridge.Refused);
+        Assert.Empty(log.Lines);
     }
 
     // ---- the event list ----

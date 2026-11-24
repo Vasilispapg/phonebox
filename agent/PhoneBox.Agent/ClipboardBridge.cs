@@ -22,6 +22,8 @@ public sealed class ClipboardBridge : IHostedService, IDisposable
     private readonly Lock _gate = new();
     private System.Threading.Timer? _timer;
     private bool _primed;
+    private bool _settling; // a change was seen; it is read on the next pass if the counter has not moved again
+    private bool _warnedRefused;
     private long _lastCount;
     private byte[]? _lastReceived; // hash of the text just written for a phone, until its echo is seen once
     private volatile bool _stopped;
@@ -37,10 +39,12 @@ public sealed class ClipboardBridge : IHostedService, IDisposable
     /// <summary>Text from a phone: put it on this computer's clipboard and hand it to the other phones.</summary>
     public ClipboardResult ReceiveFromPhone(string text, string? deviceId)
     {
-        if (!_config.Get().Bridge.Clipboard) return ClipboardResult.Off;
         if (Encoding.UTF8.GetByteCount(text) > MaxBytes) return ClipboardResult.TooLarge;
         lock (_gate)
         {
+            // inside the lock, like the poll's look at it: a phone's write that races the switch being turned off either lands
+            // before the poll that sees it off (which then clears the kept events) or is refused, never after it
+            if (!_config.Get().Bridge.Clipboard) return ClipboardResult.Off;
             if (!_pasteboard.WriteText(text)) return ClipboardResult.Failed;
             _lastReceived = Hash(text);
             // inside the lock: two phones writing at once publish in the order their text reached the pasteboard, so a phone that applies
@@ -50,7 +54,12 @@ public sealed class ClipboardBridge : IHostedService, IDisposable
         return ClipboardResult.Stored;
     }
 
-    /// <summary>One look at the Mac's clipboard (the timer calls this every 400 ms).</summary>
+    /// <summary>
+    /// One look at the Mac's clipboard (the timer calls this every 400 ms). A change is read one poll after it is seen, once the
+    /// change counter has stayed put for that poll: the counter moves on clearContents, not on each setString:forType:, so a
+    /// password manager that writes the password first and its concealed marker a moment later would otherwise be read in
+    /// between. The pasteboard then checks the types again after reading the text (see MacPasteboard).
+    /// </summary>
     internal void PollOnce()
     {
         lock (_gate)
@@ -58,31 +67,65 @@ public sealed class ClipboardBridge : IHostedService, IDisposable
             if (!_config.Get().Bridge.Clipboard)
             {
                 _primed = false; // when it is turned on again, what is on the clipboard then must not be sent
+                _settling = false;
                 _lastReceived = null;
+                _warnedRefused = false; // a warning again after the next switch-on, if macOS still refuses
+                _refused = false;
+                _stream.Clear(); // nothing copied stays in memory once sharing is off
                 return;
             }
             var count = _pasteboard.ChangeCount;
             if (!_primed)
             {
                 // what is on the clipboard now is not sent, and no echo is expected for it: a later deliberate copy of the same words must go out
-                _primed = true; _lastCount = count; _lastReceived = null;
+                _primed = true; _lastCount = count; _lastReceived = null; _settling = false;
+                if (_pasteboard.AccessDenied) WarnRefused("macOS is set to deny PhoneBox the clipboard (Privacy & Security, Paste from Other Apps)");
                 return;
             }
-            if (count == _lastCount) return;
-            _lastCount = count;
+            if (count != _lastCount)
+            {
+                _lastCount = count;
+                _settling = true; // read on the next pass, if nothing else has been copied by then
+                return;
+            }
+            if (!_settling) return;
+            _settling = false;
             // Only the first change after our own write can be its echo, whatever that change turns out to be: the guard
             // never outlives it, so copying the same words again later still goes out.
             var echo = _lastReceived;
             _lastReceived = null;
             var text = _pasteboard.ReadShareableText();
-            // the types and the text are read in separate calls: a copy in between (say a password manager adding its concealed type)
-            // makes this read a mixture, so nothing is shared from it; the new change is looked at on the next pass
+            var refused = _pasteboard.LastReadRefused;
+            // a copy during the read (the types and the text are separate calls) makes it a mixture, so nothing is shared from it;
+            // the next pass sees the new count and reads that copy once it has settled
             if (_pasteboard.ChangeCount != count) return;
-            if (text is null || Encoding.UTF8.GetByteCount(text) > MaxBytes) return;
+            if (text is null)
+            {
+                if (refused) WarnRefused("the clipboard holds text but macOS gave PhoneBox none (Privacy & Security, Paste from Other Apps may deny it)");
+                return;
+            }
+            _refused = false;
+            if (Encoding.UTF8.GetByteCount(text) > MaxBytes) return;
             if (echo is not null && Hash(text).AsSpan().SequenceEqual(echo)) return;
             _stream.Publish("clipboard", text, null);
         }
     }
+
+    /// <summary>Once per switch-on: sharing nothing must not be silent. The log line carries no clipboard text.</summary>
+    private void WarnRefused(string why)
+    {
+        _refused = true;
+        if (_warnedRefused) return;
+        _warnedRefused = true;
+        _log.LogWarning("clipboard bridge: {Why}; nothing copied on this Mac reaches the phone", why);
+    }
+
+    /// <summary>
+    /// True while macOS refuses the agent the clipboard's text: from a refused read (or a setting that denies it) until a read
+    /// succeeds or the switch is turned off. The settings card shows it, so sharing nothing is never silent.
+    /// </summary>
+    public bool Refused => _refused;
+    private volatile bool _refused;
 
     internal void Tick()
     {

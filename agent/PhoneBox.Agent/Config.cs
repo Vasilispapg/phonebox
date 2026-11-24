@@ -21,7 +21,7 @@ public sealed class AgentConfig
     public ClaudeConfig Claude { get; set; } = new();
     /// <summary>Cursor agent-transcript sessions on the AI sessions widget (off by default).</summary>
     public CursorConfig Cursor { get; set; } = new();
-    /// <summary>Clipboard and notification sharing with the paired phone (macOS only; every switch is off by default).</summary>
+    /// <summary>Clipboard sharing with the paired phone (macOS only; off by default).</summary>
     public BridgeConfig Bridge { get; set; } = new();
     /// <summary>Antigravity chats on the AI sessions widget (off by default).</summary>
     public AntigravityConfig Antigravity { get; set; } = new();
@@ -350,8 +350,8 @@ public sealed class OpenCodeConfig
 }
 
 /// <summary>
-/// The phone bridge moves text from this computer to the phone and back, so every switch stays off until the owner turns
-/// it on. The agent enforces them (the bridge endpoints answer 403 while one is off); the phone reads them from the
+/// The phone bridge shares the clipboard's text between this computer and the phone, so its switch stays off until the
+/// owner turns it on. The agent enforces it (the bridge endpoints answer 403 while it is off); the phone reads it from the
 /// public config and stops sending.
 /// </summary>
 public sealed class BridgeConfig
