@@ -138,8 +138,10 @@ class BridgeActivity : Activity() {
         return tile == null || tile.packageName != packageName || tile.className != "net.oxog.phonebox.deskpanel.SendClipboardTile"
     }
 
+    // the setting is "pkg/Class:pkg/Class": compare whole package names, so another app whose name starts with ours does not count
     private fun notificationAccessAllowed(): Boolean =
-        Settings.Secure.getString(contentResolver, "enabled_notification_listeners")?.contains(packageName) == true
+        Settings.Secure.getString(contentResolver, "enabled_notification_listeners")?.split(':')
+            ?.any { ComponentName.unflattenFromString(it)?.packageName == packageName } == true
 
     private fun openNotificationAccess() {
         try { startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")) }
