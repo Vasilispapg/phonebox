@@ -40,7 +40,6 @@
     <string name="bridge_access_button">Allow notification access</string>
     <string name="bridge_restricted_help">If the switch is greyed out (Android 13 and later): open App info, tap ⋮ at the top right, choose Allow restricted settings, then come back and try again.</string>
     <string name="bridge_app_info_button">Open App info</string>
-    <string name="bridge_apps_button">Choose apps</string>
     <string name="bridge_apps_title">Apps shown on the Mac</string>
     <string name="bridge_apps_all">All apps</string>
     <string name="bridge_last_none">No notification sent yet</string>
