@@ -11,7 +11,7 @@ set -euo pipefail
 
 FORK_REPO="Vasilispapg/phonebox"
 FORK_REMOTE="fork"
-BRANCH="personal/phone-bridge"
+BRANCH="${PERSONAL_BRANCH:-personal/phone-bridge}"
 RID="osx-arm64"
 # The key of the app on the owner's phone: the phone only accepts an update signed with it.
 EXPECTED_SIGNER_SHA256="4e03ff8c216691ced1619e15b906c1f7fff2bfdbaf71405419e51676745ea61e"
@@ -77,6 +77,11 @@ dotnet publish agent/PhoneBox.Agent -c Release -f net10.0 -r "$RID" --self-conta
 # Ad hoc by default. macOS ties the Accessibility permission to the signature, and an ad hoc one changes with every build
 # (the permission has to be granted again after an update). PHONEBOX_MAC_SIGN_IDENTITY (a certificate of your own in the
 # login keychain, e.g. made with tools/make-macos-signing-cert.sh) keeps it: one certificate, one requirement.
+# Without the variable, the certificate "PhoneBox Agent (self-signed)" from tools/make-macos-signing-cert.sh is used when
+# the login keychain has it.
+if [ -z "${PHONEBOX_MAC_SIGN_IDENTITY:-}" ]; then
+  PHONEBOX_MAC_SIGN_IDENTITY="$(security find-identity -p codesigning 2>/dev/null | awk '/"PhoneBox Agent \(self-signed\)"/ {print $2; exit}')"
+fi
 if [ -n "${PHONEBOX_MAC_SIGN_IDENTITY:-}" ]; then
   codesign --force --sign "$PHONEBOX_MAC_SIGN_IDENTITY" --identifier net.oxog.phonebox.agent --timestamp=none out/PhoneBoxAgent
 else

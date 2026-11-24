@@ -13,6 +13,19 @@ the running version. A personal release uses upstream's version plus a fourth co
 `tools/check-release.py` accepts the four-part version and looks for the upstream release notes under its first three
 parts.
 
+## The short way: `scripts/personal-update.sh`
+
+```bash
+scripts/personal-update.sh               # fetch upstream, merge it, set the version, run the checks
+scripts/personal-update.sh --release     # ... and build the release into dist/ (a dry run)
+scripts/personal-update.sh --publish     # ... push the branch to the fork and publish the release there
+```
+
+The version lines are the only ones that conflict on every upstream release, so the script puts them back to upstream's
+values before the merge and sets them again after it (`<upstream version>.1`, or the fourth part raised when upstream has
+not moved). Any other conflict stops it and puts everything back (the tag `personal/before-update-<time>`); then merge by
+hand as described below. `--skip-tests` leaves out the slow checks. Without `--publish` nothing leaves this Mac.
+
 ## Keeping it up to date
 
 ```bash
