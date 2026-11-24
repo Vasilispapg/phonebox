@@ -403,7 +403,8 @@ def check_agent_link(compiler_cp: str, classpath: str, base_out: Path) -> None:
         check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
     deskpanel = ROOT / "android/app/src/main/java/net/oxog/phonebox/deskpanel"
     # WakePacket.kt holds what AgentLink's Wake-on-LAN code uses (packet, MAC parsing, LanLink)
-    src_files = [deskpanel / "AgentLink.kt", deskpanel / "WakePacket.kt"]
+    # FileTransferRules.kt (and the JSON reader in BridgeClip.kt it uses) is what AgentLink's streaming upload copies with
+    src_files = [deskpanel / "AgentLink.kt", deskpanel / "WakePacket.kt", deskpanel / "FileTransferRules.kt", deskpanel / "BridgeClip.kt"]
     for name, content in LINK_STUBS.items():
         path = src_dir / name
         path.write_text(content, encoding="utf-8")
