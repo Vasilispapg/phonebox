@@ -293,7 +293,9 @@ app.MapPost("/api/pair/start", (ConfigStore cfg, PairingCodes codes) =>
     var hosts = Lan.Addresses();
     var fingerprint = Lan.Fingerprint(lanCert);
     var link = PairingCodes.Link(Environment.MachineName, fingerprint, lanCfg.Port, hosts, code);
-    var apk = $"https://github.com/ersinkoc/phonebox/releases/download/v{AppPaths.Version}/PhoneBox-{AppPaths.Version}.apk";
+    // the release of the repository the updater follows (a personal build has its own releases and version)
+    var repo = System.Text.RegularExpressions.Regex.IsMatch(cfg.Get().Updates.Repo, @"^[\w.-]+/[\w.-]+$") ? cfg.Get().Updates.Repo : "ersinkoc/phonebox";
+    var apk = $"https://github.com/{repo}/releases/download/v{AppPaths.Version}/PhoneBox-{AppPaths.Version}.apk";
     return Results.Json(new
     {
         enabled = true,
