@@ -32,7 +32,8 @@ Last updated: 2026-11-20 (PhoneBox 0.9.6).
   the first time. For the phone bridge's clipboard sharing (off until you turn it on in the app's Phone bridge screen)
   it also holds `FOREGROUND_SERVICE` and `FOREGROUND_SERVICE_SPECIAL_USE` (a service with a visible notification keeps
   the connection to your computer), `POST_NOTIFICATIONS` (so that notification can show, asked when you turn the
-  switch on) and `RECEIVE_BOOT_COMPLETED` X
+  switch on) and `RECEIVE_BOOT_COMPLETED` (to start that service again after a restart; the receiver is switched off,
+  and the app does not start at boot, while both bridge switches are off).
   For notification forwarding (off until you turn it on) it uses Android's **Notification access**, a special permission you grant
   yourself in Settings; it asks for no SMS, call-log, contacts or phone-state permission, and lists launchable apps only to let you
   choose which ones to send.
