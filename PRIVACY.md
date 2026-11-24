@@ -132,7 +132,7 @@ Last updated: 2026-11-20 (PhoneBox 0.9.6).
   notifications on the Mac, plus Android's Notification access): the app reads the notifications of the apps you switched
   on (their name, title, text and kind; for a call, who is calling) and sends them only to your paired computer over the
   same USB / paired Wi-Fi link, together with the posting app's icon (a small PNG, so the computer can show it as the
-  notification's picture). The **All apps** switch on the Apps screen (off until you turn it on) sends every app's
+  notification's picture). The **All apps** switch on the Phone bridge screen (off until you turn it on) sends every app's
   notifications instead of the list, which includes banking, security and other private ones. If you allow **Contacts** (Android asks once), a call that rings with only a number is looked
   up once, by that number, and only the matching name goes to the computer in that call's notification; the contacts are
   never read in bulk, kept or sent. Nothing else is read or sent: not PhoneBox's own notifications, ongoing ones such as music, or a

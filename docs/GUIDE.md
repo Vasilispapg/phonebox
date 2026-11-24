@@ -349,10 +349,10 @@ Share what you copy between the Mac and the phone. It starts with the clipboard.
   test notification** shows one right away; save the settings first.
 - **Notifications from the phone:** on the Phone bridge screen turn on **Show notifications on the Mac**, then tap **Allow
   notification access** and switch PhoneBox on in the list (on Android 13 and later the switch is greyed out until you
-  open **App info**, tap ⋮ and choose **Allow restricted settings**; the screen says so). **Choose apps** lists your apps
-  with a switch each: only the ones you turn on are sent. At first only the phone's own dialer and messaging app are on.
-  **All apps** at the top sends every app instead (banking and other private notifications too), so it is off until you
-  turn it on. The Mac shows each app's icon as the notification's picture.
+  open **App info**, tap ⋮ and choose **Allow restricted settings**; the screen says so). The **Apps shown on the Mac** card below lists
+  your apps with a switch each and a search box: only the ones you turn on are sent. At first only the phone's own dialer and messaging app are on.
+  **All apps** sends every app instead (banking and other private notifications too), so it is off until you turn it
+  on; the list is hidden while it is on. The Mac shows each app's icon as the notification's picture.
   The Mac's switch (Settings › Phone bridge › Show phone notifications) must be on too; the screen shows whether the
   last notification reached the Mac.
 - **Login codes:** with **Copy one-time codes from messages** on as well, a code in a message ("Your verification code is
