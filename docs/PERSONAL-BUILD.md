@@ -73,3 +73,13 @@ macOS keeps the Accessibility permission. An ad hoc signature changes with every
 and after each one, the permission (shortcuts that press keys) has to be granted again. To avoid it after the first time,
 make a certificate of your own once (`tools/make-macos-signing-cert.sh`, import the `.p12` into the login keychain) and
 run the script with `PHONEBOX_MAC_SIGN_IDENTITY` set to its name or SHA-1; keep using the same certificate.
+
+## The daily check
+
+A launchd job (`~/Library/LaunchAgents/net.oxog.phonebox.upstream-check.plist`, every day at 12:30, or when the Mac wakes
+up after that) runs `scripts/personal-auto-check.sh`. When upstream has a release it has not looked at, it tries
+`scripts/personal-update.sh` on a throwaway copy of the branch and shows a notification: ready (merges cleanly, all checks
+pass), needs a hand-merge (the files are named) or failed a check. It never touches the working tree, never pushes and never
+publishes. Log: `~/Library/Logs/PhoneBox-upstream-check.log`; the last trial: `~/Library/Application Support/PhoneBox-auto/`.
+Run it by hand with `scripts/personal-auto-check.sh --force`; stop it with
+`launchctl bootout gui/$(id -u)/net.oxog.phonebox.upstream-check`. The worktree must be on `personal/phone-bridge` and its disk mounted.
