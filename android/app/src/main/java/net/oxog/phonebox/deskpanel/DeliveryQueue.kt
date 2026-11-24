@@ -23,6 +23,9 @@ class DeliveryQueue<T>(private val max: Int = 20, private val ttlMs: Long = 120_
     @Synchronized
     fun clear() = items.clear()
 
+    /** Whether an entry taken earlier is still inside its time limit (a slow send can make later ones of a batch too old). */
+    fun isFresh(entry: Entry<T>): Boolean = clock() - entry.at < ttlMs
+
     /** Empties the queue and returns what is still fresh, oldest first. */
     @Synchronized
     fun take(): List<Entry<T>> {

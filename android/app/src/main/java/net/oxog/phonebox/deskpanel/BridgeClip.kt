@@ -124,6 +124,7 @@ object BridgeClip {
 
     /** At most [max] characters: longer text is cut and ends with an ellipsis, never in the middle of an emoji. */
     fun cut(text: String, max: Int): String {
+        if (max <= 0) return ""
         if (text.length <= max) return text
         var keep = max - 1
         if (keep > 0 && text[keep - 1].isHighSurrogate()) keep--
