@@ -120,6 +120,14 @@ public sealed class NotificationBridgeTests : IDisposable
     }
 
     [Fact]
+    public async Task ANulInTheTextDoesNotEndIt()
+    {
+        // osascript receives C strings: a NUL would end the shown text there
+        await Send(N("k1", "Messages", "An\0na", "before\0after"));
+        Assert.Equal([("An na", "Messages", "before after")], _notifier.Posts);
+    }
+
+    [Fact]
     public async Task TextAtTheLimitIsNotCut()
     {
         await Send(N("k1", "Messages", new string('t', 200), new string('x', 2000)));
@@ -300,6 +308,25 @@ public sealed class NotificationBridgeTests : IDisposable
         SetBridge(notifications: true, copyCodes: true);
         await Send(N("k1", "Messages", "OTP 118822", "Your PIN is 1234 and code 5678"));
         Assert.Null(_pb.Text);
+    }
+
+    [Fact]
+    public async Task ACodeThatTheCutWouldShortenIsCopiedWhole()
+    {
+        // the shown text ends in "code 1234…"; the code is searched for in what the phone sent
+        SetBridge(notifications: true, copyCodes: true);
+        await Send(N("k1", "Messages", "Bank", new string('x', 1989) + " code 12345678"));
+        Assert.Equal("12345678", _pb.Text);
+        Assert.EndsWith("code 1234…", _notifier.Posts.Single().Body);
+    }
+
+    [Fact]
+    public async Task ASecondCodeAfterTheCutStillMakesTheTextAmbiguous()
+    {
+        SetBridge(notifications: true, copyCodes: true);
+        await Send(N("k1", "Messages", "OTP 118822", "Your code is 482913. " + new string('x', 2000) + " Your new code is 654321"));
+        Assert.Null(_pb.Text);                                  // neither the first code nor the one in the title
+        Assert.Equal("Messages", _notifier.Posts.Single().Subtitle);
     }
 
     [Fact]

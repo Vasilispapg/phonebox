@@ -308,7 +308,8 @@ Share what you copy between the Mac and the phone. It starts with the clipboard.
 - **Login codes:** with **Copy one-time codes from messages** on as well, a code in a message ("Your verification code is
   482913", also in Greek) is put on the Mac's clipboard when the notification arrives, and the notification says "Code
   copied", so you can paste it into the site at once. It copies only when it finds exactly one code next to a word like
-  code, OTP, PIN or κωδικός; with two numbers, or none, it copies nothing. It does not send the code on to your phones.
+  code, OTP, PIN or κωδικός; with two numbers, or none, it copies nothing. It knows English and Greek words only, so a
+  code in a message in another language is shown but not copied. It does not send the code on to your phones.
 - Calls show who is calling; the voice stays on the phone. Answer there.
 - Notifications are kept in memory only, never stored or logged by PhoneBox (macOS itself keeps a notification in Notification
   Center until you clear it), and they go only to this Mac over the PhoneBox link. See [PRIVACY.md](../PRIVACY.md).
