@@ -535,10 +535,6 @@ class MainActivity : Activity(), SensorEventListener {
             .put("proximity", sensors?.getDefaultSensor(Sensor.TYPE_PROXIMITY) != null)
             .toString()
 
-        /**
-         * Screen pinning (lock task without a device owner): Home and Recents stay on the panel until it is unpinned
-         * (Back + Overview held together, or turning the setting off). Android asks once to confirm.
-         */
         /** The panel's overview button: opens the phone's own Phone bridge screen. */
         @JavascriptInterface
         fun openBridge(key: String) {
@@ -546,6 +542,10 @@ class MainActivity : Activity(), SensorEventListener {
             runOnUiThread { startActivity(Intent(this@MainActivity, BridgeActivity::class.java)) }
         }
 
+        /**
+         * Screen pinning (lock task without a device owner): Home and Recents stay on the panel until it is unpinned
+         * (Back + Overview held together, or turning the setting off). Android asks once to confirm.
+         */
         @JavascriptInterface
         fun setPinned(key: String, on: Boolean) {
             if (!ok(key)) return

@@ -160,6 +160,25 @@ private fun onFailureChecks() {
     check("no route is reported as null", collect({ 200 }, { true }) == listOf(null, null, null))
 }
 
+private fun onFailureStopChecks() {
+    // stop() must wait for a failure report already running, so none lands after it returns (the clipboard service sets
+    // its state to STOPPED right after stop(): a late report would put a stale "waiting" or "Mac off" over it)
+    val entered = CountDownLatch(1)
+    val finished = java.util.concurrent.atomic.AtomicBoolean(false)
+    val reports = java.util.concurrent.atomic.AtomicInteger()
+    val link = AgentLink(code = { 503 }) { ByteArrayInputStream(byteArrayOf()) }
+    val stream = AgentStream(link, "/api/bridge/stream", retryMinMs = 20, retryMaxMs = 20, onFailure = {
+        if (reports.getAndIncrement() == 0) { entered.countDown(); Thread.sleep(300); finished.set(true) }
+    }) { _, _ -> }
+    stream.start()
+    check("a failure is reported", entered.await(5, TimeUnit.SECONDS))
+    stream.stop()
+    check("stop() returned only after the report in flight had finished", finished.get())
+    val after = reports.get()
+    Thread.sleep(200)
+    check("no failure is reported after stop() returned", reports.get() == after)
+}
+
 private fun backoffChecks() {
     // failures wait 100, 200, 400, 400 ms (doubling to the cap), not a fixed delay
     val times = CopyOnWriteArrayList<Long>()
@@ -213,6 +232,7 @@ fun main() {
     readTimeoutChecks()
     refusedDelayChecks()
     onFailureChecks()
+    onFailureStopChecks()
     backoffChecks()
     backoffResetChecks()
     refusedDefaultDelayCheck()

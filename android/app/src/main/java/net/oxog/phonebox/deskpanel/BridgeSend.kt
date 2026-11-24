@@ -28,11 +28,18 @@ object BridgeSend {
         }
         val clip = text!!
         Thread {
-            val outcome = when (BridgeClient(AgentLink(app)).sendClipboard(clip)) {
-                SendResult.OK -> R.string.bridge_sent
-                SendResult.OFF -> R.string.bridge_send_off
-                SendResult.TOO_LARGE -> R.string.bridge_send_too_large
-                SendResult.UNREACHABLE -> R.string.bridge_send_unreachable
+            val link = AgentLink(app)
+            val outcome = try {
+                when (BridgeClient(link).sendClipboard(clip)) {
+                    SendResult.OK -> R.string.bridge_sent
+                    SendResult.OFF -> R.string.bridge_send_off
+                    SendResult.TOO_LARGE -> R.string.bridge_send_too_large
+                    SendResult.UNREACHABLE -> R.string.bridge_send_unreachable
+                }
+            } finally {
+                // a request also queues a pairing / MAC refresh on the link's own thread, which saves this link's copy of the
+                // computer list: a computer forgotten in the panel meanwhile would come back. close() cancels it and frees the thread.
+                link.close()
             }
             main.post { Toast.makeText(app, outcome, Toast.LENGTH_SHORT).show() }
         }.start()

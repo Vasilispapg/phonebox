@@ -120,7 +120,9 @@ class AgentStream(
             }
             if (opened) dispatch(gen, "close", "{}")
             if (opened) failures = 0
-            else if (failed && alive()) onFailure?.invoke(failedWith)
+            // under the gate, like dispatch: stop() then waits for a report in flight, and none is made after it returns (a late
+            // one would overwrite the state of a stopped or replacement stream). [onFailure] must not block either.
+            else if (failed) synchronized(gate) { if (alive()) onFailure?.invoke(failedWith) }
             val wait = when {
                 opened -> 300L
                 failedWith == 403 -> refusedRetryMs

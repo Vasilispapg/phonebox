@@ -9,6 +9,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.Handler
@@ -26,7 +27,23 @@ class ClipboardService : Service() {
     /** Which stream is the current one: what an old stream still delivers, or has queued for the main thread, is dropped. */
     @Volatile private var generation = 0
 
+    /**
+     * The stream's AgentLink read the paired computers once, when it was built. Choosing or forgetting a computer in the
+     * panel (or a new pairing) changes them without the panel pausing, and the stream would go on sharing with the old
+     * computer, a forgotten one included. Android calls this on the main thread, only for a value that really changed.
+     * Held in a field: SharedPreferences keeps its listeners weakly. Posted, never run inside the change: building the new
+     * AgentLink can itself save (moving an old pairing), and a restart nested in restartStream would leave two streams.
+     */
+    private val pairingChanged = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+        main.post { if (stream != null && BridgePrefs.clipboardEnabled(this)) restartStream() }
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onCreate() {
+        super.onCreate()
+        getSharedPreferences(AgentLink.PAIRING_PREFS, Context.MODE_PRIVATE).registerOnSharedPreferenceChangeListener(pairingChanged)
+    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // Android wants startForeground soon after startForegroundService, even when we are about to stop again
@@ -41,11 +58,14 @@ class ClipboardService : Service() {
             return START_NOT_STICKY
         }
         BridgePrefs.lastError = null
-        restartStream()
+        // the panel calls this on every resume: a connected stream is kept (cutting it would lose what is copied meanwhile and cost
+        // a new TLS handshake each time); one that is not connected starts over at once instead of finishing a long back-off.
+        // Pairing changes restart it through [pairingChanged].
+        if (stream == null || BridgePrefs.clipboardState != ClipboardState.RUNNING) restartStream()
         return START_STICKY
     }
 
-    /** A new link and stream each time: the activity may have paired another computer since the last one was built. */
+    /** A new link and stream each time, so they use the computers paired now. */
     private fun restartStream() {
         stream?.stop()
         val mine = ++generation
@@ -97,6 +117,7 @@ class ClipboardService : Service() {
     }
 
     override fun onDestroy() {
+        getSharedPreferences(AgentLink.PAIRING_PREFS, Context.MODE_PRIVATE).unregisterOnSharedPreferenceChangeListener(pairingChanged)
         generation++
         stream?.stop()
         stream = null
@@ -108,7 +129,7 @@ class ClipboardService : Service() {
         private const val CHANNEL = "bridge"
         private const val NOTIFICATION_ID = 7
 
-        /** Starts or stops the service to match the phone's switch. Safe to call often; a start restarts the stream. */
+        /** Starts or stops the service to match the phone's switch. Safe to call often; a start reconnects a stream that is not connected. */
         fun sync(context: Context) {
             val app = context.applicationContext
             val intent = Intent(app, ClipboardService::class.java)
