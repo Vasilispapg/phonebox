@@ -35,6 +35,8 @@ class ClipboardService : Service() {
     @Volatile private var generation = 0
     /** The active computer the last stream was built for: the event ids of one Mac mean nothing to another. */
     private var activePc: String? = null
+    /** Takes the files the Mac offers (Receive files from the Mac). */
+    private lateinit var incoming: IncomingFiles
 
     /**
      * The stream's AgentLink read the paired computers once, when it was built. Choosing or forgetting a computer in the
@@ -44,13 +46,14 @@ class ClipboardService : Service() {
      * AgentLink can itself save (moving an old pairing), and a restart nested in restartStream would leave two streams.
      */
     private val pairingChanged = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
-        main.post { if (wanted && BridgePrefs.clipboardEnabled(this)) restartStream() }
+        main.post { if (wanted && BridgePrefs.streamWanted(this)) restartStream() }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
+        incoming = IncomingFiles(this)
         getSharedPreferences(AgentLink.PAIRING_PREFS, Context.MODE_PRIVATE).registerOnSharedPreferenceChangeListener(pairingChanged)
     }
 
@@ -63,7 +66,7 @@ class ClipboardService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        if (!BridgePrefs.clipboardEnabled(this)) {
+        if (!BridgePrefs.streamWanted(this)) {
             stopSelf()
             return START_NOT_STICKY
         }
@@ -126,11 +129,18 @@ class ClipboardService : Service() {
         ) { event, data ->
             if (mine != generation) return@AgentStream
             when (event) {
-                "open" -> { ClipRelay.macOff = false; macSwitch?.markOn(); BridgePrefs.clipboardState = ClipboardState.RUNNING }
+                "open" -> { ClipRelay.macOff = false; macSwitch?.markOn(); BridgePrefs.clipboardState = ClipboardState.RUNNING; incoming.onStreamOpen() }
                 "close" -> BridgePrefs.clipboardState = ClipboardState.WAITING
-                else -> BridgeClip.parseEvent(event, data)?.let { text ->
-                    ClipRelay.wroteFromMac(text) // the helper will see this copy too: it must not go back to the Mac
-                    main.post { if (mine == generation && BridgePrefs.clipboardEnabled(this)) clipboard.setPrimaryClip(ClipData.newPlainText("PhoneBox", text)) }
+                else -> {
+                    val file = FileTransferRules.parseFileEvent(event, data)
+                    if (file != null) incoming.onEvent(file)
+                    else BridgeClip.parseEvent(event, data)?.let { text ->
+                        // a phone that is here only for files has its clipboard switch off: a copy that reaches it anyway is dropped
+                        if (BridgePrefs.clipboardEnabled(applicationContext)) {
+                            ClipRelay.wroteFromMac(text) // the helper will see this copy too: it must not go back to the Mac
+                            main.post { if (mine == generation && BridgePrefs.clipboardEnabled(this)) clipboard.setPrimaryClip(ClipData.newPlainText("PhoneBox", text)) }
+                        }
+                    }
                 }
             }
         }.also { it.start() }
@@ -167,12 +177,15 @@ class ClipboardService : Service() {
             @Suppress("DEPRECATION")
             Notification.Builder(this).setPriority(Notification.PRIORITY_MIN)
         }
-        val send = PendingIntent.getActivity(this, 1, Intent(this, ReadClipboardActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), immutable or PendingIntent.FLAG_UPDATE_CURRENT)
-        @Suppress("DEPRECATION") // the Icon-based Action builder is API 23, the app installs on 21
-        builder.addAction(R.drawable.ic_tile, getString(R.string.bridge_send_to_mac), send)
+        val clipboardOn = BridgePrefs.clipboardEnabled(this)
+        if (clipboardOn) {
+            val send = PendingIntent.getActivity(this, 1, Intent(this, ReadClipboardActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), immutable or PendingIntent.FLAG_UPDATE_CURRENT)
+            @Suppress("DEPRECATION") // the Icon-based Action builder is API 23, the app installs on 21
+            builder.addAction(R.drawable.ic_tile, getString(R.string.bridge_send_to_mac), send)
+        }
         if (Build.VERSION.SDK_INT >= 31) builder.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE) // not deferred by ten seconds
         return builder.setSmallIcon(R.drawable.ic_tile)
-            .setContentTitle(getString(R.string.bridge_notification_title))
+            .setContentTitle(getString(if (clipboardOn) R.string.bridge_notification_title else R.string.bridge_notification_title_files))
             .setContentIntent(open)
             .setOngoing(true)
             .build()
@@ -202,6 +215,7 @@ class ClipboardService : Service() {
         stopStream()
         // a new start hears only new events: a replay could bring back what was copied on the Mac while the phone's switch was off
         eventIds.last = null
+        incoming.shutdown()
         builder.shutdown() // a link still being built is closed by its post, which sees !wanted
         BridgePrefs.clipboardState = ClipboardState.STOPPED
         super.onDestroy()
@@ -221,7 +235,7 @@ class ClipboardService : Service() {
         /** Shows the service's notification again if it was dismissed; does nothing else (the connection is not restarted). */
         fun repostNotification(context: Context) {
             val app = context.applicationContext
-            if (!BridgePrefs.clipboardEnabled(app)) return
+            if (!BridgePrefs.streamWanted(app)) return
             try {
                 val intent = Intent(app, ClipboardService::class.java).putExtra(EXTRA_REPOST, true)
                 if (Build.VERSION.SDK_INT >= 26) app.startForegroundService(intent) else app.startService(intent)
@@ -244,7 +258,7 @@ class ClipboardService : Service() {
             val intent = Intent(app, ClipboardService::class.java)
             // "Send to Mac" and the notification-access entry show only while their switches are on (a no-op when nothing changes)
             BridgeEntryPoints.update(app)
-            if (!BridgePrefs.clipboardEnabled(app)) {
+            if (!BridgePrefs.streamWanted(app)) {
                 app.stopService(intent) // nothing happens when it is not running
                 return
             }

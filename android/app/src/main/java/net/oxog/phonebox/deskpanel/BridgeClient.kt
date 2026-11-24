@@ -40,4 +40,22 @@ class BridgeClient(private val link: AgentLink) {
     } catch (_: Exception) {
         SendResult.UNREACHABLE
     }
+
+    /** The files the Mac offers (GET /api/bridge/files/out), or null when it cannot be reached or refuses (its switch is off). */
+    fun listOutbox(): List<FileTransferRules.IncomingFile>? = try {
+        val reply = link.request("GET", "/api/bridge/files/out")
+        if (reply.code != 200) { reply.body.close(); null }
+        else reply.body.bufferedReader(Charsets.UTF_8).use { FileTransferRules.parseOutboxList(it.readText()) }
+    } catch (_: Exception) {
+        null
+    }
+
+    /** Tells the Mac this phone has the whole file, so it deletes its copy. Never throws. */
+    fun markDone(id: String): SendResult = try {
+        val reply = link.request("POST", FileTransferRules.donePath(id))
+        try { reply.body.close() } catch (_: Exception) {}
+        BridgeClip.resultFor(reply.code)
+    } catch (_: Exception) {
+        SendResult.UNREACHABLE
+    }
 }

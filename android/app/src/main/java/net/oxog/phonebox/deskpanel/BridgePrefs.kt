@@ -22,6 +22,16 @@ object BridgePrefs {
         prefs(context).edit().putBoolean("filesFromPhone", on).apply()
     }
 
+    /** "Receive files from the Mac": whether files the Mac offers are downloaded. The Mac's own switch is enforced by the agent. */
+    fun filesToPhoneEnabled(context: Context): Boolean = prefs(context).getBoolean("filesToPhone", false)
+
+    fun setFilesToPhoneEnabled(context: Context, on: Boolean) {
+        prefs(context).edit().putBoolean("filesToPhone", on).apply()
+    }
+
+    /** The connection to the Mac's bridge stream is wanted while the clipboard or the files-from-the-Mac switch is on. */
+    fun streamWanted(context: Context): Boolean = clipboardEnabled(context) || filesToPhoneEnabled(context)
+
     fun notificationsEnabled(context: Context): Boolean = prefs(context).getBoolean("notifications", false)
 
     /** Turning it on for the first time also lists the default dialer and SMS app (and nothing else) as the apps to show. */

@@ -144,6 +144,38 @@ object FileTransferRules {
         return fromMap(BridgeClip.parseObject(inner))
     }
 
+    /** The answer of GET /api/bridge/files/out: {"files":[{id,name,size,mime},...]}; entries that do not fit are left out. */
+    fun parseOutboxList(json: String): List<IncomingFile> {
+        val files = BridgeClip.parseObject(json)?.get("files") as? List<*> ?: return emptyList()
+        @Suppress("UNCHECKED_CAST")
+        return files.mapNotNull { fromMap(it as? Map<String, Any?>) }
+    }
+
+    /**
+     * Which files this run has taken up, so the "file" event and the list fetched when the stream opens never download one twice.
+     * A failed download may be offered again twice (the next list fetch or a short retry); the third failure gives up until the
+     * app restarts. Only the newest [max] finished ids are remembered.
+     */
+    class IncomingQueue(private val max: Int = 200) {
+        private val taken = LinkedHashSet<String>() // queued, in progress or finished, oldest first
+        private val failures = HashMap<String, Int>()
+
+        @Synchronized fun offer(id: String): Boolean = taken.add(id)
+
+        @Synchronized fun finished(id: String) {
+            failures.remove(id)
+            taken.add(id)
+            while (taken.size > max) taken.remove(taken.first())
+        }
+
+        /** True when [id] may be offered again; false after the third failure. */
+        @Synchronized fun failed(id: String): Boolean {
+            val count = (failures[id] ?: 0) + 1
+            failures[id] = count
+            return if (count < 3) { taken.remove(id); true } else false
+        }
+    }
+
     internal fun fromMap(map: Map<String, Any?>?): IncomingFile? {
         map ?: return null
         val id = map["id"] as? String ?: return null

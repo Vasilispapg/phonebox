@@ -138,7 +138,46 @@ private fun confirmChecks() {
     check("no files show nothing", FileTransferRules.confirmLines(emptyList(), emptyList(), 3).lines.isEmpty())
 }
 
+private fun incomingChecks() {
+    val list = FileTransferRules.parseOutboxList(
+        """{"files":[{"id":"$ID","name":"a.jpg","size":3,"mime":"image/jpeg"},{"id":"bad","name":"x","size":1,"mime":"a/b"},{"id":"${"f".repeat(32)}","name":"b.pdf","size":9,"mime":"application/pdf"}]}""")
+    check("the list keeps the good entries and drops a bad id", list.map { it.name } == listOf("a.jpg", "b.pdf"))
+    check("a list that is not an object is empty", FileTransferRules.parseOutboxList("[1,2]").isEmpty())
+    check("a body that is not JSON gives an empty list", FileTransferRules.parseOutboxList("nope").isEmpty())
+    check("a list without files is empty", FileTransferRules.parseOutboxList("""{"x":1}""").isEmpty())
+    val q = FileTransferRules.IncomingQueue()
+    check("a new id is taken", q.offer("a"))
+    check("an id already queued is not taken twice", !q.offer("a"))
+    q.failed("a")
+    check("a failed id can be offered again", q.offer("a"))
+    q.finished("a")
+    check("a finished id is not downloaded again", !q.offer("a"))
+    val small = FileTransferRules.IncomingQueue(max = 3)
+    for (i in 1..5) { small.offer("id$i"); small.finished("id$i") }
+    check("the finished ids kept are only the newest few", small.offer("id1") && !small.offer("id5"))
+    val retry = FileTransferRules.IncomingQueue()
+    retry.offer("z")
+    check("the first two failures may be retried", retry.failed("z") && retry.offer("z") && retry.failed("z") && retry.offer("z"))
+    check("the third failure gives up for this run", !retry.failed("z") && !retry.offer("z"))
+}
+
+private fun listClientChecks() {
+    val link = AgentLink { java.io.ByteArrayInputStream(ByteArray(0)) }
+    link.requestReply = { AgentLink.Reply(200, """{"files":[{"id":"$ID","name":"a.jpg","size":3,"mime":"image/jpeg"}]}""".byteInputStream()) }
+    check("the client lists what the Mac offers", BridgeClient(link).listOutbox()?.single()?.id == ID)
+    link.requestReply = { AgentLink.Reply(403, "{}".byteInputStream()) }
+    check("a Mac with the switch off gives no list", BridgeClient(link).listOutbox() == null)
+    link.requestReply = { throw java.io.IOException("reset") }
+    check("a link that throws gives no list", BridgeClient(link).listOutbox() == null)
+    link.requestReply = { AgentLink.Reply(200, "{}".byteInputStream()) }
+    check("done is ok on 200", BridgeClient(link).markDone(ID) == SendResult.OK)
+    link.requestReply = { throw java.io.IOException("reset") }
+    check("done never throws", BridgeClient(link).markDone(ID) == SendResult.UNREACHABLE)
+}
+
 fun main() {
+    incomingChecks()
+    listClientChecks()
     confirmChecks()
     copyChecks()
     clientChecks()

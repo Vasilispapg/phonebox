@@ -198,7 +198,7 @@
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Shares the clipboard with the paired computer while the user has Phone bridge turned on" />
+                android:value="Shares the clipboard and files with the paired computer while the user has Phone bridge turned on" />
         </service>
 
         <!-- Phone bridge notifications: sees the phone's notifications to show them on the Mac. Disabled until the notification
