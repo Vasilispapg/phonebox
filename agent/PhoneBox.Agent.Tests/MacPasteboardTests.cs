@@ -5,10 +5,34 @@ using Xunit;
 /// The macOS pasteboard behind the clipboard bridge. Every test uses a uniquely named private pasteboard, so the
 /// owner's real clipboard is never read or changed by a test run. They do nothing off macOS.
 /// </summary>
-public sealed class MacPasteboardTests
+public sealed class MacPasteboardTests : IDisposable
 {
-    private static MacPasteboard? Fresh() =>
-        OperatingSystem.IsMacOS() ? new MacPasteboard("phonebox-test-" + Guid.NewGuid().ToString("N")) : null;
+    // named pasteboards live in the pasteboard server until logout unless released, so each test run would leave its own behind
+    private readonly List<MacPasteboard> _made = [];
+
+    private MacPasteboard? Fresh()
+    {
+        if (!OperatingSystem.IsMacOS()) return null;
+        var pb = new MacPasteboard("phonebox-test-" + Guid.NewGuid().ToString("N"));
+        _made.Add(pb);
+        return pb;
+    }
+
+    public void Dispose()
+    {
+        foreach (var pb in _made) pb.ReleaseGlobally();
+    }
+
+    [Fact]
+    public void ATextAtTheBridgeLimitIsReadAndOneFarOverItIsNotConverted()
+    {
+        if (Fresh() is not { } pb) return;
+        var atLimit = new string('a', ClipboardBridge.MaxBytes);
+        Assert.True(pb.WriteText(atLimit));
+        Assert.Equal(atLimit, pb.ReadShareableText());
+        Assert.True(pb.WriteText(new string('a', ClipboardBridge.MaxBytes + 1)));
+        Assert.Null(pb.ReadShareableText());   // a huge copy is dropped before it is turned into a managed string
+    }
 
     [Fact]
     public void WriteThenReadRoundTripsUnicodeText()
@@ -71,7 +95,7 @@ public sealed class MacPasteboardTests
         if (!OperatingSystem.IsMacOS()) return;
         var general = new MacPasteboard();
         var before = general.ChangeCount;
-        var named = new MacPasteboard("phonebox-test-" + Guid.NewGuid().ToString("N"));
+        var named = Fresh()!;
         named.WriteText("not on the real clipboard");
         Assert.Equal(before, general.ChangeCount);
     }

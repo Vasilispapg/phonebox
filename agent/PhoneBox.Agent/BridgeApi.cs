@@ -52,6 +52,9 @@ internal static class BridgeApi
                 : (null, null);
         }
         catch (JsonException) { return (null, "invalid JSON"); }
+        // JSON whose text is not valid Unicode (a lone surrogate escape such as "\ud800", or bytes that are not UTF-8): GetString
+        // throws this for it, and uncaught it would become a 500 instead of a request error
+        catch (InvalidOperationException) { return (null, "invalid text"); }
     }
 
     public static IResult BodyError(string error) =>
@@ -63,6 +66,62 @@ internal static class BridgeApi
 
     /// <summary>The bridge stream follows the clipboard switch: when it is off a new connection is refused and an open one ends.</summary>
     public static bool StreamAllowed(ConfigStore config) => config.Get().Bridge.Clipboard;
+
+    /// <summary>How often an open stream looks at the switch on its own, apart from every pass of its loop.</summary>
+    private const int SwitchCheckMs = 500;
+    private const int PingMs = 15_000;
+
+    /// <summary>
+    /// GET /api/bridge/stream once the endpoint has checked the switch: the events other devices caused, from now on, until the
+    /// phone goes away, the agent begins to stop, or the switch is turned off.
+    /// </summary>
+    public static async Task StreamAsync(HttpContext ctx, ConfigStore cfg, BridgeStream bridge, CancellationToken stopping)
+    {
+        // The agent stopping ends it too: the server otherwise waits up to 30 s for this never-ending response before a restart,
+        // an update or Quit can finish (as /api/stream does). The switch cancels it as well, so a write that is stuck on a phone
+        // that stopped reading ends when sharing is turned off instead of when the connection finally times out.
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ctx.RequestAborted, stopping);
+        var ct = cts.Token;
+        using var watch = new System.Threading.Timer(_ =>
+        {
+            // a timer callback that throws ends the process, so nothing may escape
+            try { if (!StreamAllowed(cfg)) cts.Cancel(); }
+            catch (Exception) { /* disposed after the stream ended, or the config could not be read: the loop checks again */ }
+        }, null, SwitchCheckMs, SwitchCheckMs);
+        var device = DeviceId(ctx.Request.Headers["X-PhoneBox-Device"]);
+        ctx.Response.ContentType = "text/event-stream";
+        ctx.Response.Headers["X-Accel-Buffering"] = "no";
+        using var wake = new SemaphoreSlim(0);
+        void OnEmit() { try { wake.Release(); } catch (ObjectDisposedException) { } }
+        bridge.Emitted += OnEmit;
+        try
+        {
+            var seq = bridge.Seq; // a new connection hears only what is copied from now on
+            var nextPing = Environment.TickCount64 + PingMs;
+            await ctx.Response.WriteAsync(PingFrame, ct); // lets the phone see the connection is up
+            await ctx.Response.Body.FlushAsync(ct);
+            // the switch is checked every pass (at least once a second), so turning it off ends the stream
+            while (!ct.IsCancellationRequested && StreamAllowed(cfg))
+            {
+                foreach (var e in bridge.Since(seq, device))
+                {
+                    if (!StreamAllowed(cfg)) return; // the switch was turned off during this batch: nothing more is written
+                    await ctx.Response.WriteAsync(EventFrame(e), ct);
+                    seq = e.Seq;
+                }
+                if (Environment.TickCount64 >= nextPing)
+                {
+                    await ctx.Response.WriteAsync(PingFrame, ct);
+                    nextPing = Environment.TickCount64 + PingMs;
+                }
+                await ctx.Response.Body.FlushAsync(ct);
+                await wake.WaitAsync(TimeSpan.FromSeconds(1), ct);
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (IOException) { } // the phone went away in the middle of a write
+        finally { bridge.Emitted -= OnEmit; }
+    }
 
     /// <summary>One server-sent event. The text travels as a JSON string, so a newline inside it cannot end the frame.</summary>
     public static string EventFrame(BridgeEvent e) =>

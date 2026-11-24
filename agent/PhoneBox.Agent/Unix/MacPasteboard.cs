@@ -81,7 +81,12 @@ internal sealed class MacPasteboard : ITextPasteboard
                     if (Managed(SendAt(types, Sel("objectAtIndex:"), (nuint)i)) is { } type && Array.IndexOf(Withheld, type) >= 0)
                         return null;
             }
-            var text = Managed(Send(_pasteboard, Sel("stringForType:"), NSString(PlainText)));
+            var item = Send(_pasteboard, Sel("stringForType:"), NSString(PlainText));
+            // A copy far over the bridge's limit (a whole log file) is not converted: the bridge would drop it anyway, after the UTF-8
+            // and managed copies (hundreds of MB) had been made while it holds its lock. Its UTF-16 length alone is enough to tell,
+            // since UTF-8 never takes fewer bytes than the text has UTF-16 units.
+            if (item != 0 && SendLong(item, Sel("length")) > ClipboardBridge.MaxBytes) return null;
+            var text = Managed(item);
             return string.IsNullOrEmpty(text) ? null : text;
         }
         finally { objc_autoreleasePoolPop(pool); }
@@ -103,6 +108,14 @@ internal sealed class MacPasteboard : ITextPasteboard
     {
         var pool = objc_autoreleasePoolPush();
         try { SendBool(_pasteboard, Sel("setString:forType:"), NSString(""), NSString(uti)); }
+        finally { objc_autoreleasePoolPop(pool); }
+    }
+
+    /// <summary>For tests: removes a named pasteboard from the pasteboard server, which otherwise keeps it until logout.</summary>
+    internal void ReleaseGlobally()
+    {
+        var pool = objc_autoreleasePoolPush();
+        try { Send(_pasteboard, Sel("releaseGlobally")); }
         finally { objc_autoreleasePoolPop(pool); }
     }
 

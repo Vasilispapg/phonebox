@@ -128,6 +128,27 @@ public sealed class BridgeApiTests : IDisposable
     }
 
     [Theory]
+    [InlineData("{\"text\":\"\\ud800\"}")]          // a high surrogate with no low one
+    [InlineData("{\"text\":\"a\\udc00b\"}")]        // a low surrogate on its own
+    public async Task ATextThatIsNotValidUnicodeIsARequestErrorNotAServerError(string body)
+    {
+        var (text, error) = await BridgeApi.ReadClipboardBody(Request(body));
+        Assert.Null(text);
+        Assert.NotNull(error);
+        Assert.Equal(400, Status(BridgeApi.BodyError(error!)));
+    }
+
+    [Fact]
+    public async Task BytesThatAreNotUtf8AreARequestErrorNotAServerError()
+    {
+        var ctx = new DefaultHttpContext();
+        ctx.Request.Body = new MemoryStream([.. "{\"text\":\""u8, 0xff, 0xfe, .. "\"}"u8]);
+        var (text, error) = await BridgeApi.ReadClipboardBody(ctx.Request);
+        Assert.Null(text);
+        Assert.Equal(400, Status(BridgeApi.BodyError(error!)));
+    }
+
+    [Theory]
     [InlineData("{}")]
     [InlineData("{\"text\":5}")]
     [InlineData("[\"text\"]")]
@@ -162,6 +183,86 @@ public sealed class BridgeApiTests : IDisposable
 
     [Fact]
     public void ThePingIsAnSseComment() => Assert.Equal(": ping\n\n", BridgeApi.PingFrame);
+
+    /// <summary>A response body that records what is written; after <paramref name="blockAfter"/> writes it stops taking
+    /// more, like a phone that stopped reading, until the write is cancelled.</summary>
+    private sealed class PhoneBody(int blockAfter = int.MaxValue) : Stream
+    {
+        private readonly StringBuilder _text = new();
+        private int _writes;
+        public string Text { get { lock (_text) return _text.ToString(); } }
+        public int Writes => Volatile.Read(ref _writes);
+        public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken ct = default)
+        {
+            if (Interlocked.Increment(ref _writes) > blockAfter) await Task.Delay(Timeout.Infinite, ct);
+            lock (_text) _text.Append(Encoding.UTF8.GetString(buffer.Span));
+        }
+        public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken ct) => WriteAsync(buffer.AsMemory(offset, count), ct).AsTask();
+        public override void Write(byte[] buffer, int offset, int count) => WriteAsync(buffer, offset, count, default).GetAwaiter().GetResult();
+        public override Task FlushAsync(CancellationToken ct) => Task.CompletedTask;
+        public override void Flush() { }
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+    }
+
+    private static DefaultHttpContext StreamContext(PhoneBody body, string? device)
+    {
+        var ctx = new DefaultHttpContext();
+        ctx.Response.Body = body;
+        if (device is not null) ctx.Request.Headers["X-PhoneBox-Device"] = device;
+        return ctx;
+    }
+
+    private static async Task Until(Func<bool> condition)
+    {
+        for (var i = 0; i < 500 && !condition(); i++) await Task.Delay(10);
+        Assert.True(condition());
+    }
+
+    [Fact]
+    public async Task TheStreamSendsWhatOthersCausedSkipsThePhonesOwnAndEndsWhenTheSwitchIsTurnedOff()
+    {
+        var body = new PhoneBody();
+        var run = BridgeApi.StreamAsync(StreamContext(body, "phoneA"), _store, _stream, CancellationToken.None);
+        await Until(() => body.Text.StartsWith(BridgeApi.PingFrame, StringComparison.Ordinal));
+        _stream.Publish("clipboard", "sent by phoneA", "phoneA");
+        _stream.Publish("clipboard", "copied on the Mac", null);
+        await Until(() => body.Text.Contains("copied on the Mac"));
+        SetSwitch(false);
+        await run.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.DoesNotContain("sent by phoneA", body.Text);
+    }
+
+    [Fact]
+    public async Task TheStreamEndsWhenTheAgentBeginsToStop()
+    {
+        // otherwise a restart, an update or Quit waits for the server's shutdown timeout while a phone has the stream open
+        using var stopping = new CancellationTokenSource();
+        var body = new PhoneBody();
+        var run = BridgeApi.StreamAsync(StreamContext(body, "phoneA"), _store, _stream, stopping.Token);
+        await Until(() => body.Writes > 0);
+        stopping.Cancel();
+        await run.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task AWriteStuckOnAPhoneThatStoppedReadingEndsWhenTheSwitchIsTurnedOff()
+    {
+        var body = new PhoneBody(blockAfter: 1);    // the first ping goes through, then the phone takes nothing more
+        var run = BridgeApi.StreamAsync(StreamContext(body, "phoneA"), _store, _stream, CancellationToken.None);
+        await Until(() => body.Writes == 1);
+        _stream.Publish("clipboard", "copied on the Mac", null);
+        await Until(() => body.Writes == 2);        // that write is now stuck
+        SetSwitch(false);
+        await run.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.DoesNotContain("copied on the Mac", body.Text);
+    }
 
     [Theory]
     [InlineData("a1B2c3", "a1B2c3")]

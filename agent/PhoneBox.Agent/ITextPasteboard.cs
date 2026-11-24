@@ -9,7 +9,8 @@ internal interface ITextPasteboard
     /// <summary>
     /// The plain text of the current item. Null when the clipboard is empty, holds no text, or the item is marked
     /// concealed, transient or auto-generated (password managers mark what they copy that way), because the bridge
-    /// must not share those.
+    /// must not share those. May also be null for a text longer than <see cref="ClipboardBridge.MaxBytes"/> could hold,
+    /// which the bridge would not send anyway.
     /// </summary>
     string? ReadShareableText();
 

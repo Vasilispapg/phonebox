@@ -843,43 +843,11 @@ app.MapPost("/api/bridge/clipboard", async (HttpRequest req) =>
     if (error is not null) return BridgeApi.BodyError(error);
     return BridgeApi.PostClipboard(req.HttpContext.RequestServices.GetService<ClipboardBridge>(), text, BridgeApi.DeviceId(req.Headers["X-PhoneBox-Device"]));
 });
-app.MapGet("/api/bridge/stream", async (HttpContext ctx, ConfigStore cfg, BridgeStream bridge) =>
+app.MapGet("/api/bridge/stream", async (HttpContext ctx, ConfigStore cfg, BridgeStream bridge, IHostApplicationLifetime life) =>
 {
     if (ctx.RequestServices.GetService<ClipboardBridge>() is null) return Results.Json(new { error = "not supported on this system" }, statusCode: 501);
     if (!BridgeApi.StreamAllowed(cfg)) return Results.Json(new { error = "off" }, statusCode: 403);
-    var ct = ctx.RequestAborted;
-    var device = BridgeApi.DeviceId(ctx.Request.Headers["X-PhoneBox-Device"]);
-    ctx.Response.ContentType = "text/event-stream";
-    ctx.Response.Headers["X-Accel-Buffering"] = "no";
-    using var wake = new SemaphoreSlim(0);
-    void OnEmit() { try { wake.Release(); } catch (ObjectDisposedException) { } }
-    bridge.Emitted += OnEmit;
-    try
-    {
-        var seq = bridge.Seq; // a new connection hears only what is copied from now on
-        var nextPing = Environment.TickCount64 + 15_000;
-        await ctx.Response.WriteAsync(BridgeApi.PingFrame, ct); // lets the phone see the connection is up
-        await ctx.Response.Body.FlushAsync(ct);
-        // the switch is checked every pass (at least once a second), so turning it off ends the stream
-        while (!ct.IsCancellationRequested && BridgeApi.StreamAllowed(cfg))
-        {
-            foreach (var e in bridge.Since(seq, device))
-            {
-                if (!BridgeApi.StreamAllowed(cfg)) break; // the switch was turned off during this batch: nothing more is written
-                await ctx.Response.WriteAsync(BridgeApi.EventFrame(e), ct);
-                seq = e.Seq;
-            }
-            if (Environment.TickCount64 >= nextPing)
-            {
-                await ctx.Response.WriteAsync(BridgeApi.PingFrame, ct);
-                nextPing = Environment.TickCount64 + 15_000;
-            }
-            await ctx.Response.Body.FlushAsync(ct);
-            await wake.WaitAsync(TimeSpan.FromSeconds(1), ct);
-        }
-    }
-    catch (OperationCanceledException) { }
-    finally { bridge.Emitted -= OnEmit; }
+    await BridgeApi.StreamAsync(ctx, cfg, bridge, life.ApplicationStopping);
     return Results.Empty;
 });
 
