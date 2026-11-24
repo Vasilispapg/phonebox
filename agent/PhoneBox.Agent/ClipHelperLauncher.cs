@@ -5,7 +5,7 @@ namespace PhoneBox.Agent;
 /// it is started over adb (it then runs as the shell user, which Android treats as a system caller). This starts it, once for
 /// each phone and again whenever it is not running: every 30 seconds a phone is asked whether the helper's named socket exists,
 /// and only if not is the helper started (a second helper would exit at once anyway). The helper is a class in the phone app's
-/// own APK, so nothing is pushed to the phone. Stopping is the app's job: it tells the helper when a switch goes off.
+/// own APK, so nothing is pushed to the phone. Stopping is the app's job: its answer to the helper's broadcasts tells the helper to leave when a switch goes off.
 /// </summary>
 internal sealed class ClipHelperLauncher(Func<IReadOnlyList<string>, CancellationToken, Task<string>> adb, Func<long> clock, ILogger log)
 {
@@ -17,12 +17,11 @@ internal sealed class ClipHelperLauncher(Func<IReadOnlyList<string>, Cancellatio
     public const string CheckCommand = "grep -c net.oxog.phonebox.cliphelper /proc/net/unix; true";
 
     /// <summary>
-    /// Runs on the phone's shell: the class path is the app's own APK (wherever Android put it), the argument is the app's uid
-    /// (only that uid may stop the helper), and the helper is detached so adb returns at once and the helper outlives it.
+    /// Runs on the phone's shell: the class path is the app's own APK (wherever Android put it), and the helper is detached so adb
+    /// returns at once and the helper outlives it. It hands copies to the app with a broadcast, so it needs nothing else.
     /// </summary>
     public static readonly string StartCommand =
-        $"CLASSPATH=$(pm path {Package} | head -1 | cut -d: -f2) setsid nohup app_process /system/bin {HelperClass} " +
-        $"$(pm list packages -U {Package} | head -1 | sed 's/.*uid://; s/[^0-9].*//') >/dev/null 2>&1 &";
+        $"CLASSPATH=$(pm path {Package} | head -1 | cut -d: -f2) setsid nohup app_process /system/bin {HelperClass} >/dev/null 2>&1 &";
 
     private const long SlowCheckEveryMs = 600_000;
     private const int FailuresBeforeSlow = 3;
@@ -59,7 +58,7 @@ internal sealed class ClipHelperLauncher(Func<IReadOnlyList<string>, Cancellatio
                     _startedAtLastLook.Remove(device);
                     continue;
                 }
-                // started at the last look and gone again: it does not stay up (an app too old to have the class, a bad uid)
+                // started at the last look and gone again: it does not stay up (an app too old to have the class)
                 if (_startedAtLastLook.Contains(device))
                 {
                     _failures[device] = ++failures;
