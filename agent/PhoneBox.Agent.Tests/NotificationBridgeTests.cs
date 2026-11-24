@@ -520,8 +520,10 @@ public sealed class NotificationBridgeTests : IDisposable
         await Send(N("k1", "Messages", "Bank", "Your code is 482913"));
         Assert.Equal("482913", _pb.Text);
         _clipboard.PollOnce();                                          // sees the change our own write made
+        _clipboard.PollOnce();                                          // and reads it once it has settled (one poll later)
         Assert.Equal(0, _stream.Seq);                                   // and does not send the code to any phone
         _pb.Copy("482913");                                             // the owner copying the same digits later is still sent
+        _clipboard.PollOnce();
         _clipboard.PollOnce();
         Assert.Equal(["482913"], _stream.Since(0, null).Select(e => e.Text));
     }
