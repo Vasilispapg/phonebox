@@ -96,7 +96,10 @@ if (OperatingSystem.IsMacOS())
     builder.Services.AddSingleton(sp => new ClipboardBridge(sp.GetRequiredService<ITextPasteboard>(), sp.GetRequiredService<ConfigStore>(),
         sp.GetRequiredService<BridgeStream>(), sp.GetRequiredService<ILogger<ClipboardBridge>>()));
     builder.Services.AddHostedService(sp => sp.GetRequiredService<ClipboardBridge>());
-    builder.Services.AddSingleton<IMacNotifier>(_ => new OsaScriptNotifier());
+    // the PhoneBox icon and the phone app's icon when the small notifier program can be built here, osascript's plain one otherwise
+    builder.Services.AddSingleton<IMacNotifier>(sp => new FallbackNotifier(
+        MacAppNotifier.Create(Path.Combine(configDir, "notifier"), sp.GetRequiredService<ILoggerFactory>().CreateLogger("PhoneBox.Agent.MacAppNotifier")),
+        new OsaScriptNotifier()));
     builder.Services.AddSingleton(sp => new NotificationBridge(sp.GetRequiredService<IMacNotifier>(), sp.GetRequiredService<ConfigStore>(),
         sp.GetService<ClipboardBridge>(), () => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), sp.GetRequiredService<ILogger<NotificationBridge>>()));
     builder.Services.AddHostedService(sp => sp.GetRequiredService<NotificationBridge>());

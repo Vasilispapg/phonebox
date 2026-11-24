@@ -342,8 +342,10 @@ Share what you copy between the Mac and the phone. It starts with the clipboard.
   **Unrestricted** (Settings › Apps › PhoneBox › Battery), or the system may stop the service.
 - **Notifications on the Mac:** turn on **Settings › Phone bridge › Show phone notifications on this Mac**. Calls (who is
   calling), messages and the apps you allow on the phone then appear as macOS notifications, with the text of the
-  message. They carry Script Editor's icon, which is how macOS labels a notification from a program that has no app of
-  its own. A banner stays for about five seconds and then waits in **Notification Center** (click the clock). **Send a
+  message. They carry the PhoneBox icon, with the phone app's own icon (Facebook, Messages) as the picture. The first time, the agent builds
+  a small program for that on your Mac (about 20 seconds, needs Xcode or the command line tools, nothing is downloaded) and
+  macOS asks whether PhoneBox may show notifications: allow it. Until then, or if it cannot be built, the notifications carry
+  Script Editor's icon, which is how macOS labels a notification from a program that has no app of its own. A banner stays for about five seconds and then waits in **Notification Center** (click the clock). **Send a
   test notification** shows one right away; save the settings first.
 - **Login codes:** with **Copy one-time codes from messages** on as well, a code in a message ("Your verification code is
   482913", also in Greek) is put on the Mac's clipboard when the notification arrives, and the notification says "Code

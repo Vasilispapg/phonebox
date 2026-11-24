@@ -113,8 +113,12 @@ Last updated: 2026-11-20 (PhoneBox 0.9.6).
 - **Phone notifications on the computer, the phone bridge** (macOS only, off by default; **Settings › Phone bridge ›
   Show phone notifications on this Mac**): while it is on, the agent shows the call, message and app notifications your
   phone sends it, as ordinary macOS notifications: the app's name, the title (who is calling or who wrote) and the text. Only the apps you allow on the phone are sent, and only to this computer over the same USB / paired Wi-Fi
-  link as other panel data. macOS shows them under Script Editor's name, because that is how a program without its own
-  app shows a notification, and keeps them in Notification Center like any other. The agent does not store them or
+  link as other panel data. macOS shows them with the PhoneBox icon and the phone app's icon as the picture
+  when the agent can build its small notifier program (PhoneBox.app, in the agent's folder: built on this Mac from source
+  inside the agent with Apple's Swift compiler when Xcode or the command line tools are installed, nothing is downloaded,
+  and macOS asks once whether PhoneBox may show notifications); the icon is kept in memory only. Otherwise they appear
+  under Script Editor's name, which is how a program without its own app shows a notification. macOS keeps them in
+  Notification Center like any other. The agent does not store them or
   write their text to its log (the log never holds their words). With **Copy one-time codes from
   messages** also on, a login code the agent finds in a message is put on this computer's clipboard, and is not sent on
   to your phones. Turning the setting off stops all of it at once, also
