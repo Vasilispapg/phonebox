@@ -105,6 +105,27 @@ object FileTransferRules {
         }
     }
 
+    /** The lines of the confirmation: up to [maxLines] of "name — size" (just the name when the size is unknown), and how many more there are. */
+    data class ConfirmLines(val lines: List<String>, val more: Int)
+
+    fun confirmLines(names: List<String>, sizes: List<Long?>, maxLines: Int): ConfirmLines {
+        val shown = names.take(maxLines).mapIndexed { i, name ->
+            val size = sizes.getOrNull(i)
+            if (size == null) name else "$name — ${formatSize(size)}"
+        }
+        return ConfirmLines(shown, maxOf(0, names.size - maxLines))
+    }
+
+    /** Decimal units with one decimal ("1.2 MB"); units are not translated. */
+    fun formatSize(bytes: Long): String {
+        if (bytes < 1000) return "$bytes B"
+        val units = arrayOf("KB", "MB", "GB", "TB")
+        var value = bytes / 1000.0
+        var unit = 0
+        while (value >= 1000 && unit < units.size - 1) { value /= 1000; unit++ }
+        return String.format(java.util.Locale.ROOT, "%.1f %s", value, units[unit])
+    }
+
     private fun encode(text: String): String {
         val sb = StringBuilder()
         for (b in text.toByteArray(Charsets.UTF_8)) {

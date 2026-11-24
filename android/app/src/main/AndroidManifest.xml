@@ -8,6 +8,8 @@
          visible notification (POST_NOTIFICATIONS is asked when the switch is turned on); the receiver restarts it after a reboot. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- files sent to the computer from the Share sheet: a short foreground service keeps a big upload going -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- one lookup of the number of a call that rings, to show the contact's name on the Mac (asked only when notifications are on) -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
@@ -137,6 +139,35 @@
                 <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
+
+        <!-- "Send file to Mac" in the Share sheet: a file, a photo or several. See-through: lists the first names and sizes and sends
+             only when the owner taps Send to Mac (any app can start it with any intent; only content URIs are taken, never this
+             app's own). Disabled until Send files to the Mac is turned on (BridgeEntryPoints). -->
+        <activity
+            android:name=".SendFilesToMacActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:label="@string/bridge_send_files_to_mac"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+        </activity>
+
+        <!-- Uploads the confirmed files, one after another, while a progress notification shows. -->
+        <service
+            android:name=".FileUploadService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
         <!-- Opened by the tile and the service's notification button: reads the clipboard while it has focus, sends, closes. -->
         <activity

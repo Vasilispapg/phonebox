@@ -124,7 +124,22 @@ private fun clientChecks() {
     check("a file that cannot be opened is UNREACHABLE", BridgeClient(failing).uploadFile("a", 1L, { throw java.io.FileNotFoundException() }, {}, { false }) == SendResult.UNREACHABLE)
 }
 
+private fun confirmChecks() {
+    check("a size under 1000 is in bytes", FileTransferRules.formatSize(999) == "999 B")
+    check("kilobytes have one decimal", FileTransferRules.formatSize(1_500) == "1.5 KB")
+    check("megabytes have one decimal", FileTransferRules.formatSize(1_200_000) == "1.2 MB")
+    check("gigabytes have one decimal", FileTransferRules.formatSize(2_000_000_000) == "2.0 GB")
+    val one = FileTransferRules.confirmLines(listOf("a.jpg"), listOf(1_200_000L), 3)
+    check("one file is one line with its size", one.lines == listOf("a.jpg — 1.2 MB") && one.more == 0)
+    val many = FileTransferRules.confirmLines(List(5) { "f$it.txt" }, List(5) { 10L }, 3)
+    check("five files show three and count the rest", many.lines.size == 3 && many.more == 2)
+    val unknown = FileTransferRules.confirmLines(listOf("a.bin"), listOf(null), 3)
+    check("an unknown size shows the name alone", unknown.lines == listOf("a.bin"))
+    check("no files show nothing", FileTransferRules.confirmLines(emptyList(), emptyList(), 3).lines.isEmpty())
+}
+
 fun main() {
+    confirmChecks()
     copyChecks()
     clientChecks()
     uriChecks()

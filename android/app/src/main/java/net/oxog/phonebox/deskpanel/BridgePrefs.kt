@@ -15,6 +15,13 @@ object BridgePrefs {
         prefs(context).edit().putBoolean("clipboard", on).apply()
     }
 
+    /** "Send files to the Mac": whether the Share sheet entry and the upload are on. The Mac's own switch is enforced by the agent. */
+    fun filesFromPhoneEnabled(context: Context): Boolean = prefs(context).getBoolean("filesFromPhone", false)
+
+    fun setFilesFromPhoneEnabled(context: Context, on: Boolean) {
+        prefs(context).edit().putBoolean("filesFromPhone", on).apply()
+    }
+
     fun notificationsEnabled(context: Context): Boolean = prefs(context).getBoolean("notifications", false)
 
     /** Turning it on for the first time also lists the default dialer and SMS app (and nothing else) as the apps to show. */
