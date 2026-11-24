@@ -174,7 +174,7 @@ public sealed class BridgeApiTests : IDisposable
     {
         // text with blank lines and a fake "event:" line must not be able to end the frame early or start another one
         var frame = BridgeApi.EventFrame(new BridgeEvent(7, "clipboard", "a\n\nevent: evil\r\ndata: x", null));
-        Assert.StartsWith("event: clipboard\ndata: ", frame);
+        Assert.StartsWith("id: 7\nevent: clipboard\ndata: ", frame);
         Assert.Equal(frame.Length - 2, frame.IndexOf("\n\n", StringComparison.Ordinal));
         Assert.DoesNotContain("\r", frame);
         Assert.Contains("\"seq\":7", frame);
@@ -211,11 +211,12 @@ public sealed class BridgeApiTests : IDisposable
         public override void SetLength(long value) => throw new NotSupportedException();
     }
 
-    private static DefaultHttpContext StreamContext(PhoneBody body, string? device)
+    private static DefaultHttpContext StreamContext(PhoneBody body, string? device, string? lastEventId = null)
     {
         var ctx = new DefaultHttpContext();
         ctx.Response.Body = body;
         if (device is not null) ctx.Request.Headers["X-PhoneBox-Device"] = device;
+        if (lastEventId is not null) ctx.Request.Headers["Last-Event-ID"] = lastEventId;
         return ctx;
     }
 
@@ -229,7 +230,7 @@ public sealed class BridgeApiTests : IDisposable
     public async Task TheStreamSendsWhatOthersCausedSkipsThePhonesOwnAndEndsWhenTheSwitchIsTurnedOff()
     {
         var body = new PhoneBody();
-        var run = BridgeApi.StreamAsync(StreamContext(body, "phoneA"), _store, _stream, CancellationToken.None);
+        var run = BridgeApi.StreamAsync(StreamContext(body, "phoneA"), _store, _stream, () => true, CancellationToken.None);
         await Until(() => body.Text.StartsWith(BridgeApi.PingFrame, StringComparison.Ordinal));
         _stream.Publish("clipboard", "sent by phoneA", "phoneA");
         _stream.Publish("clipboard", "copied on the Mac", null);
@@ -245,7 +246,7 @@ public sealed class BridgeApiTests : IDisposable
         // otherwise a restart, an update or Quit waits for the server's shutdown timeout while a phone has the stream open
         using var stopping = new CancellationTokenSource();
         var body = new PhoneBody();
-        var run = BridgeApi.StreamAsync(StreamContext(body, "phoneA"), _store, _stream, stopping.Token);
+        var run = BridgeApi.StreamAsync(StreamContext(body, "phoneA"), _store, _stream, () => true, stopping.Token);
         await Until(() => body.Writes > 0);
         stopping.Cancel();
         await run.WaitAsync(TimeSpan.FromSeconds(5));
@@ -255,13 +256,176 @@ public sealed class BridgeApiTests : IDisposable
     public async Task AWriteStuckOnAPhoneThatStoppedReadingEndsWhenTheSwitchIsTurnedOff()
     {
         var body = new PhoneBody(blockAfter: 1);    // the first ping goes through, then the phone takes nothing more
-        var run = BridgeApi.StreamAsync(StreamContext(body, "phoneA"), _store, _stream, CancellationToken.None);
+        var run = BridgeApi.StreamAsync(StreamContext(body, "phoneA"), _store, _stream, () => true, CancellationToken.None);
         await Until(() => body.Writes == 1);
         _stream.Publish("clipboard", "copied on the Mac", null);
         await Until(() => body.Writes == 2);        // that write is now stuck
         SetSwitch(false);
         await run.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.DoesNotContain("copied on the Mac", body.Text);
+    }
+
+    [Fact]
+    public void AnEventFrameIsIdThenEventThenData()
+    {
+        // the wire format the phone parses: the id line it sends back as Last-Event-ID, then the event, then the JSON
+        Assert.Equal("id: 12\nevent: clipboard\ndata: {\"seq\":12,\"text\":\"hi\"}\n\n",
+            BridgeApi.EventFrame(new BridgeEvent(12, "clipboard", "hi", null)));
+    }
+
+    [Fact]
+    public async Task AnOpenStreamEndsWhenThePhonesKeyIsNoLongerValid()
+    {
+        // a lost phone keeps its stream alive with the pings: a new Wi-Fi key, Wi-Fi turned off or an unplugged USB phone must end it
+        var valid = true;
+        var body = new PhoneBody();
+        var run = BridgeApi.StreamAsync(StreamContext(body, "phoneA"), _store, _stream, () => Volatile.Read(ref valid), CancellationToken.None);
+        await Until(() => body.Writes > 0);
+        _stream.Publish("clipboard", "before", null);
+        await Until(() => body.Text.Contains("before"));
+        Volatile.Write(ref valid, false);
+        await run.WaitAsync(TimeSpan.FromSeconds(5));
+        _stream.Publish("clipboard", "after", null);
+        Assert.DoesNotContain("after", body.Text);
+    }
+
+    [Fact]
+    public async Task AWriteStuckOnAPhoneEndsWhenItsKeyIsRevoked()
+    {
+        var valid = true;
+        var body = new PhoneBody(blockAfter: 1);
+        var run = BridgeApi.StreamAsync(StreamContext(body, "phoneA"), _store, _stream, () => Volatile.Read(ref valid), CancellationToken.None);
+        await Until(() => body.Writes == 1);
+        _stream.Publish("clipboard", "copied on the Mac", null);
+        await Until(() => body.Writes == 2);        // that write is now stuck: only the timer can end it
+        Volatile.Write(ref valid, false);
+        await run.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    // ---- reconnecting with Last-Event-ID ----
+
+    [Fact]
+    public async Task AReconnectingPhoneIsSentWhatItMissedAfterItsLastEventId()
+    {
+        _stream.Publish("clipboard", "heard before the drop", null);   // id 1, the phone has it
+        _stream.Publish("clipboard", "copied while it reconnected", null); // id 2, missed
+        _stream.Publish("clipboard", "its own", "phoneA");               // id 3, sent by this phone: never back to it
+        var body = new PhoneBody();
+        using var stop = new CancellationTokenSource();
+        var run = BridgeApi.StreamAsync(StreamContext(body, "phoneA", "1"), _store, _stream, () => true, stop.Token);
+        await Until(() => body.Text.Contains("copied while it reconnected"));
+        _stream.Publish("clipboard", "live", null);
+        await Until(() => body.Text.Contains("live"));
+        stop.Cancel();
+        await run.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.DoesNotContain("heard before the drop", body.Text);
+        Assert.DoesNotContain("its own", body.Text);
+        Assert.Contains("id: 2\nevent: clipboard\n", body.Text);
+        Assert.Contains("id: 4\nevent: clipboard\n", body.Text);
+        Assert.Equal(1, Count(body.Text, "copied while it reconnected")); // replayed once, not again by the live loop
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("garbage")]
+    [InlineData("-1")]
+    public async Task WithoutAUsableLastEventIdANewStreamHearsOnlyWhatIsCopiedFromNowOn(string? header)
+    {
+        _stream.Publish("clipboard", "earlier", null);
+        var body = new PhoneBody();
+        using var stop = new CancellationTokenSource();
+        var run = BridgeApi.StreamAsync(StreamContext(body, "phoneA", header), _store, _stream, () => true, stop.Token);
+        await Until(() => body.Writes > 0);
+        _stream.Publish("clipboard", "now", null);
+        await Until(() => body.Text.Contains("now"));
+        stop.Cancel();
+        await run.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.DoesNotContain("earlier", body.Text);
+    }
+
+    private static int Count(string text, string part)
+    {
+        var n = 0;
+        for (var i = text.IndexOf(part, StringComparison.Ordinal); i >= 0; i = text.IndexOf(part, i + part.Length, StringComparison.Ordinal)) n++;
+        return n;
+    }
+
+    [Theory]
+    [InlineData("0", 0L)]
+    [InlineData("42", 42L)]
+    [InlineData("9223372036854775807", long.MaxValue)]
+    [InlineData("", null)]
+    [InlineData("abc", null)]
+    [InlineData("-1", null)]
+    [InlineData("+1", null)]
+    [InlineData(" 1", null)]
+    [InlineData("1 ", null)]
+    [InlineData("1.0", null)]
+    [InlineData("0x10", null)]
+    [InlineData("9223372036854775808", null)]       // one over long.MaxValue
+    [InlineData("99999999999999999999999", null)]
+    [InlineData("١٢", null)]                          // digits, but not ASCII ones
+    public void TheLastEventIdIsAPlainDecimalOrNothing(string header, long? expected) =>
+        Assert.Equal(expected, BridgeApi.LastEventId(new Microsoft.Extensions.Primitives.StringValues(header)));
+
+    [Fact]
+    public void TwoLastEventIdHeadersCountAsNone() =>
+        Assert.Null(BridgeApi.LastEventId(new Microsoft.Extensions.Primitives.StringValues(["1", "2"])));
+
+    // ---- the order of the clipboard endpoint's checks ----
+
+    /// <summary>A body that fails the test if anything reads it.</summary>
+    private sealed class UnreadableBody : Stream
+    {
+        public override int Read(byte[] buffer, int offset, int count) => throw new InvalidOperationException("the body was read");
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default) => throw new InvalidOperationException("the body was read");
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken ct) => throw new InvalidOperationException("the body was read");
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    private static HttpContext Unread()
+    {
+        var ctx = new DefaultHttpContext();
+        ctx.Request.Body = new UnreadableBody();
+        ctx.Request.ContentLength = 400_000;
+        return ctx;
+    }
+
+    [Fact]
+    public async Task WhileTheSwitchIsOffTheBodyIsNotRead()
+    {
+        SetSwitch(false);
+        Assert.Equal(403, Status(await BridgeApi.PostClipboardAsync(Unread(), _bridge, _store, () => true)));
+    }
+
+    [Fact]
+    public async Task OffMacOSTheBodyIsNotRead() =>
+        Assert.Equal(501, Status(await BridgeApi.PostClipboardAsync(Unread(), null, _store, () => true)));
+
+    [Fact]
+    public async Task ARequestThatIsNotFromAPhoneIsRefusedBeforeAnythingElse()
+    {
+        Assert.Equal(403, Status(await BridgeApi.PostClipboardAsync(Unread(), null, _store, () => false)));
+        Assert.Equal(0, _pb.Writes);
+    }
+
+    [Fact]
+    public async Task ABodyWithContentLengthIsReadWhole()
+    {
+        var json = "{\"text\":\"" + new string('b', 60_000) + "\"}";
+        var req = Request(json);
+        req.ContentLength = Encoding.UTF8.GetByteCount(json);
+        var (text, error) = await BridgeApi.ReadClipboardBody(req);
+        Assert.Null(error);
+        Assert.Equal(new string('b', 60_000), text);
     }
 
     [Theory]
