@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace PhoneBox.Agent;
 
 /// <summary>
@@ -20,7 +22,21 @@ internal sealed class OsaScriptNotifier : IMacNotifier
 
     /// <param name="run">Runs osascript with these arguments (tests pass a fake); the default starts the real one.</param>
     public OsaScriptNotifier(Func<IReadOnlyList<string>, CancellationToken, Task<bool>>? run = null) =>
-        _run = run ?? ((args, ct) => Task.Run(() => Sh.RunWithTimeout(TimeoutMs, "osascript", [.. args]) is not null, ct));
+        _run = run ?? ((args, ct) => Run("osascript", args, TimeoutMs, ct));
+
+    /// <summary>
+    /// Runs a tool and says whether it succeeded. Cancelling (the agent stopping) kills it at once, and one that hangs is killed
+    /// at the timeout; Sh.RunWithTimeout takes no token, so a run in progress would outlive the agent's shutdown.
+    /// </summary>
+    internal static async Task<bool> Run(string tool, IReadOnlyList<string> args, int timeoutMs, CancellationToken ct)
+    {
+        if (Sh.Which(tool) is not { } path) return false;
+        var start = new ProcessStartInfo(path);
+        foreach (var a in args) start.ArgumentList.Add(a);
+        try { return (await ToolProcess.RunAsync(start, TimeSpan.FromMilliseconds(timeoutMs), ct)).ExitCode == 0; }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception) { return false; } // could not start, or timed out (and was killed)
+    }
 
     public static IReadOnlyList<string> BuildArguments(string title, string subtitle, string body) =>
         ScriptArguments(NotificationScript, [body, title, subtitle]);

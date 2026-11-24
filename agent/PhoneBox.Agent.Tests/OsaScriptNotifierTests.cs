@@ -47,6 +47,35 @@ public sealed class OsaScriptNotifierTests
         Assert.Equal($"{a}|{b}|{c}|{d}", output.TrimEnd('\n'));
     }
 
+    // the default runner: kill on cancel (the agent stopping), kill at the timeout, the exit code as the answer
+    [Fact]
+    public async Task TheRunnerKillsTheProcessWhenCancelled()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        using var cts = new CancellationTokenSource(200);
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => OsaScriptNotifier.Run("sleep", ["30"], 20_000, cts.Token));
+        Assert.True(watch.ElapsedMilliseconds < 10_000, $"took {watch.ElapsedMilliseconds} ms"); // not the 20 s timeout
+    }
+
+    [Fact]
+    public async Task TheRunnerGivesUpAtTheTimeout()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        Assert.False(await OsaScriptNotifier.Run("sleep", ["30"], 300, CancellationToken.None));
+        Assert.True(watch.ElapsedMilliseconds < 10_000, $"took {watch.ElapsedMilliseconds} ms");
+    }
+
+    [Fact]
+    public async Task TheRunnerAnswersWithTheExitCode()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        Assert.True(await OsaScriptNotifier.Run("true", [], 5000, CancellationToken.None));
+        Assert.False(await OsaScriptNotifier.Run("false", [], 5000, CancellationToken.None));
+        Assert.False(await OsaScriptNotifier.Run("pb-no-such-tool-" + Guid.NewGuid().ToString("N"), [], 5000, CancellationToken.None));
+    }
+
     [Fact]
     public async Task PostAsyncHandsTheBuiltArgumentsToTheRunner()
     {

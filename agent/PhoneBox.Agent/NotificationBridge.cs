@@ -79,9 +79,11 @@ public sealed class NotificationBridge : IHostedService, IDisposable
         string? copied = null;
         if (!isCall && bridge.CodesActive && _clipboard is not null)
         {
-            // the title is searched only when the text had no candidate at all: two codes in the text are ambiguous, not a reason to try the title
-            var fromText = OneTimeCode.Search(text);
-            var code = fromText.Code ?? (fromText.Ambiguous ? null : OneTimeCode.Find(title));
+            // the title is searched only when the text had no candidate at all: two codes in the text are ambiguous, not a reason to try the title.
+            // The whole text is searched, not the part that is shown: a cut can take away the end of a code or a second code
+            // that makes the first one doubtful (the request limit, 64 KiB, bounds it).
+            var fromText = OneTimeCode.Search(n.Text ?? "");
+            var code = fromText.Code ?? (fromText.Ambiguous ? null : OneTimeCode.Find(n.Title ?? ""));
             if (code is not null && _clipboard.WriteLocalOnly(code)) copied = code;
         }
 
@@ -188,6 +190,8 @@ public sealed class NotificationBridge : IHostedService, IDisposable
 
     private static string Cut(string s, int max)
     {
+        // osascript gets its arguments as C strings, so a NUL would silently end the text there
+        s = s.Replace('\0', ' ');
         if (s.Length <= max) return s;
         var keep = max - 1;
         if (char.IsHighSurrogate(s[keep - 1])) keep--; // never leave half an emoji

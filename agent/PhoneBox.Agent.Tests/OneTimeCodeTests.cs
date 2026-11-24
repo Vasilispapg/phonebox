@@ -107,6 +107,51 @@ public sealed class OneTimeCodeTests
     [InlineData("Your verification code is 1234…")]
     public void AnAmountWithASpaceAfterItsSignAndACutOffCodeAreNotCodes(string text) => Assert.Null(OneTimeCode.Find(text));
 
+    // a security message names a date or an amount, often without any code: none of these may overwrite the clipboard
+    [Theory]
+    [InlineData("Your password was changed on 24 Nov 2026 at 10:31")]
+    [InlineData("Your verification code expired on November 24, 2026.")]
+    [InlineData("Your verification code expired on Nov 24th, 2026.")]
+    [InlineData("Ο κωδικός σας άλλαξε στις 24 Νοεμβρίου 2026")]
+    [InlineData("© 2026 Example. Your password was changed")]
+    [InlineData("Code USD 4821 charged")]
+    [InlineData("Rs 1500 debited. OTP requested for this payment")]
+    [InlineData("Rs.1500 debited, OTP requested")]
+    [InlineData("INR 1500 OTP requested")]
+    [InlineData("OTP requested for 1500 INR")]
+    [InlineData("Code used on the card ending in 4321")]
+    [InlineData("Votre code postal 75001 n'est pas desservi")]
+    public void DatesAmountsAndOtherLabelledNumbersCopyNothing(string text) => Assert.Null(OneTimeCode.Find(text));
+
+    [Theory]
+    [InlineData("Your code is 482913, sent on 24 Nov 2026", "482913")]  // the year is not a second candidate
+    [InlineData("Rs 1500 debited. OTP 482913", "482913")]
+    [InlineData("Your codes: 1234, 5678", null)]                          // two codes in a list are still two
+    [InlineData("May 2026: your code is 482913", "482913")]
+    public void ACodeNextToADateOrAnAmountIsStillTheOnlyCandidate(string text, string? expected) =>
+        Assert.Equal(expected, OneTimeCode.Find(text));
+
+    // The macOS and Linux agent runs with InvariantGlobalization, where string.Normalize leaves accents alone: a fold that relied
+    // on it took no accent off on the Mac ("Επαλήθευση" was no keyword there, and a "ταχυδρομικός κωδικός" was copied), while
+    // these tests, which run with ICU, passed. Run with DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 to see the difference.
+    [Fact]
+    public void GreekAccentsAreTakenOffWithoutUnicodeNormalization()
+    {
+        Assert.Equal("αεηιουω αεηιουω ιυιυ σ κωδικοσ", OneTimeCode.Fold("ΆΈΉΊΌΎΏ άέήίόύώ ϊϋΐΰ ς ΚΩΔΙΚΌΣ"));
+        Assert.Equal("482913", OneTimeCode.Find("Επαλήθευση: 482913"));
+        Assert.Null(OneTimeCode.Find("Ο ταχυδρομικός κωδικός 10557 δεν εξυπηρετείται"));
+    }
+
+    [Fact]
+    public void ALongTextWithManyKeywordsIsSearchedQuickly()
+    {
+        // 64 KiB, the request limit, of keywords and candidates: each candidate looks only at its nearest keywords
+        var text = string.Concat(Enumerable.Repeat("code 1234 ", 6500));
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        Assert.Equal("1234", OneTimeCode.Find(text));
+        Assert.True(watch.ElapsedMilliseconds < 2000, $"took {watch.ElapsedMilliseconds} ms");
+    }
+
     [Fact]
     public void ACodeStillCountsWhenADollarSignIsFarAway() => Assert.Equal("482913", OneTimeCode.Find("Paid $ 5. Your code is 482913"));
 }
