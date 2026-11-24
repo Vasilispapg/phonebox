@@ -75,6 +75,9 @@ public sealed class ClipboardBridge : IHostedService, IDisposable
             var echo = _lastReceived;
             _lastReceived = null;
             var text = _pasteboard.ReadShareableText();
+            // the types and the text are read in separate calls: a copy in between (say a password manager adding its concealed type)
+            // makes this read a mixture, so nothing is shared from it; the new change is looked at on the next pass
+            if (_pasteboard.ChangeCount != count) return;
             if (text is null || Encoding.UTF8.GetByteCount(text) > MaxBytes) return;
             if (echo is not null && Hash(text).AsSpan().SequenceEqual(echo)) return;
             _stream.Publish("clipboard", text, null);

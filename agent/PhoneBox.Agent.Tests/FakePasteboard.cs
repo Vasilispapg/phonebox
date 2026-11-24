@@ -9,7 +9,9 @@ internal sealed class FakePasteboard : ITextPasteboard
     public bool Fail;
     public bool ThrowOnCount;
     public long ChangeCount => ThrowOnCount ? throw new InvalidOperationException("boom") : Count;
-    public string? ReadShareableText() => Text;
+    /// <summary>Runs once the text has been read, to put a copy between the two reads of one poll.</summary>
+    public Action? AfterRead;
+    public string? ReadShareableText() { var text = Text; AfterRead?.Invoke(); return text; }
     public bool WriteText(string text)
     {
         if (Fail) return false;

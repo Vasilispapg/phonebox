@@ -151,6 +151,19 @@ public sealed class ClipboardBridgeTests : IDisposable
     }
 
     [Fact]
+    public void ACopyThatArrivesWhileTheClipboardIsBeingReadIsNotSharedFromAMixedRead()
+    {
+        _bridge.PollOnce();
+        _pb.Copy("first");
+        _pb.AfterRead = () => _pb.Copy("second");   // a second copy lands between the two reads of one poll
+        _bridge.PollOnce();
+        _pb.AfterRead = null;
+        Assert.Empty(_stream.Since(0, null));        // the mixed read shares nothing
+        _bridge.PollOnce();                           // the next pass sees the second copy and shares it, whole
+        Assert.Equal(["second"], _stream.Since(0, null).Select(e => e.Text));
+    }
+
+    [Fact]
     public void AWordThePhoneWroteBeforeTheFirstPollIsStillSentWhenTheOwnerCopiesItLater()
     {
         _bridge.ReceiveFromPhone("B", "phone1");    // before the first look at the clipboard: that look only notes what is there
