@@ -844,6 +844,7 @@ nav a.on::before { color: var(--accent); }
         <h3 data-i18n="s.bridge.title">Phone bridge</h3>
         <p class="hint" style="margin:0 0 12px" data-i18n="s.bridge.hint">Share what you copy between this Mac and the paired phone (off by default). The text goes only to your own phone over the PhoneBox link and is not stored. The PhoneBox app has its own Phone bridge switch, and both must be on.</p>
         <div class="row" style="margin-bottom:8px"><label class="switch"><input type="checkbox" data-bind="bridge.clipboard" aria-labelledby="bridgeClipboardLabel"><span></span></label> <span id="bridgeClipboardLabel" data-i18n="s.bridge.clipboard">Share the clipboard with the phone (plain text, both ways)</span></div>
+        <p id="bridgeRefused" hidden style="margin:4px 0 0;font-size:13px;color:var(--warn)" data-i18n="s.bridge.refused">macOS gave PhoneBox no text from the clipboard, so what you copy is not reaching the phone. Allow PhoneBox to paste in System Settings › Privacy &amp; Security.</p>
       </div>
 
       <div class="card">
@@ -3772,6 +3773,7 @@ async function loadInfo() {
     if ($('phoneMicCard')) { $('phoneMicCard').hidden = osName !== 'windows'; if (osName === 'windows') renderPhoneMicState(); }
     $('followComputerLockOption').style.display = osName === 'macos' ? '' : 'none';
     $('bridgeCard').style.display = osName === 'macos' ? '' : 'none';
+    $('bridgeRefused').hidden = !(osName === 'macos' && i.bridgeRefused);
     $('adbFound').textContent = i.adb ? t('s.conn.adbFound', { path: i.adb }) : t('s.conn.adbNotFound') + ' — ' + ({ linux: 'sudo apt install adb', macos: 'brew install android-platform-tools' }[osName] || 'winget install Google.PlatformTools');
     $('appMissing').hidden = !(i.appMissing && i.appMissing.length);
     $('usbProblem').hidden = !i.usbProblem;

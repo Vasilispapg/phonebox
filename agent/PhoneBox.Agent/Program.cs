@@ -488,6 +488,8 @@ app.MapGet("/api/info", (AdbReverse adb, ConfigStore cfg) => Results.Json(new
     appMissing = adb.MissingApp,
     usbProblem = adb.UsbProblem,
     webviewProblem = WebViewDoctor.DiagnoseRecent(PhoneRegistry.All(), DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()),
+    // the clipboard bridge is on but macOS gives the agent no text (its paste privacy setting): the card says so
+    bridgeRefused = app.Services.GetService<ClipboardBridge>()?.Refused ?? false,
 }));
 
 // Phone mic status for the settings page and scripts (local port only: not a phone path, see Lan.AllowedOverLan).

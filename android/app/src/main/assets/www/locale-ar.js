@@ -873,6 +873,7 @@ window.PhoneBoxLocaleData = Object.assign(window.PhoneBoxLocaleData || {}, {
       "s.bridge.title": "جسر الهاتف",
       "s.bridge.hint": "شارك ما تنسخه بين هذا الـ Mac والهاتف المقترن (متوقف افتراضيًا). يذهب النص إلى هاتفك أنت فقط عبر اتصال PhoneBox ولا يُخزَّن. لتطبيق PhoneBox مفتاح جسر الهاتف الخاص به، ويجب تشغيل الاثنين.",
       "s.bridge.clipboard": "مشاركة الحافظة مع الهاتف (نص عادي، في الاتجاهين)",
+      "s.bridge.refused": "لم يمنح macOS تطبيق PhoneBox أي نص من الحافظة، لذا لا يصل ما تنسخه إلى الهاتف. اسمح لـ PhoneBox باللصق في إعدادات النظام › الخصوصية والأمن.",
       "s.claude.onlyWhenAway": "فقط عندما أكون بعيداً عن الحاسوب (لا لوحة مفاتيح أو فأرة لمدة دقيقة)",
       "s.claude.shareSessionTitles": "عرض Claude Code عناوين المحادثة على الهاتف (Claude Code غالبا ما يستخرجها من أول طلب لك)",
       "s.battery.keepBetween": "أبقِ مستوى الشحن بين",

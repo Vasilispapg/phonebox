@@ -873,6 +873,7 @@ window.PhoneBoxLocaleData = Object.assign(window.PhoneBoxLocaleData || {}, {
       "s.bridge.title": "手機橋接",
       "s.bridge.hint": "在這台 Mac 與已配對的手機之間共享你複製的內容（預設關閉）。文字只會透過 PhoneBox 連線傳送到你自己的手機，且不會被儲存。PhoneBox 應用程式有自己的「手機橋接」開關，兩邊都必須開啟。",
       "s.bridge.clipboard": "與手機共享剪貼簿（純文字，雙向）",
+      "s.bridge.refused": "macOS 沒有把剪貼簿中的文字提供給 PhoneBox，因此你拷貝的內容不會送到手機。請在「系統設定 › 隱私權與安全性」中允許 PhoneBox 貼上。",
       "s.claude.onlyWhenAway": "只有當我離開電腦時 (一分鐘不用鍵盤或滑鼠)",
       "s.claude.shareSessionTitles": "顯示電話上的 Claude Code 聊天標題 (Claude Code 通常從您的第一個提示中取得)",
       "s.battery.keepBetween": "電池在",
