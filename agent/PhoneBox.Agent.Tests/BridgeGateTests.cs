@@ -28,6 +28,9 @@ public sealed class BridgeGateTests : IAsyncLifetime
     private readonly ConfigStore _store;
     private readonly FakePasteboard _pb = new();
     private readonly BridgeStream _stream = new();
+    private readonly List<(string Title, string Subtitle, string Body)> _shown = [];
+    private NotificationBridge? _notifications;
+    private long _now = 1_000_000;
     private int _stamp;
     private WebApplication? _app;
     private X509Certificate2? _cert;
@@ -43,11 +46,20 @@ public sealed class BridgeGateTests : IAsyncLifetime
         WriteConfig(wifiOn: true, wifiKey: WifiKey, clipboard: true);
     }
 
-    private void WriteConfig(bool wifiOn, string wifiKey, bool clipboard)
+    private sealed class RecordingNotifier(List<(string, string, string)> shown) : IMacNotifier
+    {
+        public Task<bool> PostAsync(string title, string subtitle, string body, byte[]? iconPng, string? replaceId, CancellationToken ct)
+        {
+            lock (shown) shown.Add((title, subtitle, body));
+            return Task.FromResult(true);
+        }
+    }
+
+    private void WriteConfig(bool wifiOn, string wifiKey, bool clipboard, bool notifications = true)
     {
         static string Bool(bool b) => b ? "true" : "false";
         File.WriteAllText(_config, "{\"lan\":{\"enabled\":" + Bool(wifiOn) + ",\"token\":\"" + wifiKey + "\",\"webhookToken\":\"" + WebhookKey
-            + "\"},\"bridge\":{\"clipboard\":" + Bool(clipboard) + "}}");
+            + "\"},\"bridge\":{\"clipboard\":" + Bool(clipboard) + ",\"notifications\":" + Bool(notifications) + "}}");
         File.SetLastWriteTimeUtc(_config, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddSeconds(++_stamp));
     }
 
@@ -83,6 +95,9 @@ public sealed class BridgeGateTests : IAsyncLifetime
         builder.Services.AddSingleton(_store);
         builder.Services.AddSingleton(_stream);
         builder.Services.AddSingleton(_ => new ClipboardBridge(_pb, _store, _stream, NullLogger<ClipboardBridge>.Instance));
+        _notifications = new NotificationBridge(new RecordingNotifier(_shown), _store, null, () => Interlocked.Add(ref _now, 60_000),
+            NullLogger<NotificationBridge>.Instance, () => []);
+        builder.Services.AddSingleton(_notifications);
         var app = builder.Build();
         _usb = new UsbLink(_usbPort, "pin");
         _usb.SetKey("serial1", UsbKey);
@@ -259,5 +274,122 @@ public sealed class BridgeGateTests : IAsyncLifetime
         WriteConfig(wifiOn: true, wifiKey: WifiKey, clipboard: false); // the switch ends it, after the copy went out
         var text = await UntilEnded(res);
         Assert.Contains("id: 1\nevent: clipboard\ndata: {\"seq\":1,\"text\":\"copied on the Mac\"}\n\n", text);
+    }
+
+    // ---- notifications: phone -> Mac on the phone's ports only, the Settings test button on the local port only ----
+
+    private const string NotificationPath = "/api/bridge/notification";
+    private const string TestPath = "/api/bridge/notification/test";
+
+    private async Task<HttpStatusCode> PostNotification(string via, string? key, string path = NotificationPath, string title = "Anna")
+    {
+        using var m = Message(HttpMethod.Post, Url(via, path), key);
+        m.Content = new StringContent("{\"key\":\"k-" + title + "\",\"app\":\"Messages\",\"package\":\"com.example.sms\",\"title\":\"" + title
+            + "\",\"text\":\"hello there\",\"category\":\"message\",\"time\":1}", Encoding.UTF8, "application/json");
+        using var res = await _http!.SendAsync(m);
+        return res.StatusCode;
+    }
+
+    private async Task<int> ShownCount()
+    {
+        await _notifications!.DrainAsync();
+        lock (_shown) return _shown.Count;
+    }
+
+    [Theory]
+    [InlineData("usb", UsbKey)]
+    [InlineData("wifi", WifiKey)]
+    public async Task ANotificationFromThePhoneWithItsKeyIsShown(string via, string key)
+    {
+        Assert.Equal(HttpStatusCode.OK, await PostNotification(via, key));
+        Assert.Equal(1, await ShownCount());
+        lock (_shown) Assert.Equal("Anna", _shown[0].Title);
+    }
+
+    [Theory]
+    [InlineData("usb", null, HttpStatusCode.Unauthorized)]
+    [InlineData("usb", "wrong", HttpStatusCode.Unauthorized)]
+    [InlineData("usb", WifiKey, HttpStatusCode.Unauthorized)]
+    [InlineData("wifi", null, HttpStatusCode.Forbidden)]
+    [InlineData("wifi", "wrong", HttpStatusCode.Forbidden)]
+    [InlineData("wifi", UsbKey, HttpStatusCode.Forbidden)]
+    [InlineData("wifi", WebhookKey, HttpStatusCode.Forbidden)]
+    public async Task ANotificationWithAWrongKeyIsRefusedBeforeAnythingIsRead(string via, string? key, HttpStatusCode expected)
+    {
+        Assert.Equal(expected, await PostNotification(via, key));
+        Assert.Equal(0, await ShownCount());
+    }
+
+    [Theory]
+    [InlineData(NotificationPath)]
+    [InlineData(NotificationPath + "/")]
+    [InlineData("/API/BRIDGE/NOTIFICATION")]
+    public async Task TheLocalPortRefusesPhoneNotificationsEvenWithAPhonesKey(string path)
+    {
+        foreach (var key in new[] { null, UsbKey, WifiKey })
+            Assert.Equal(HttpStatusCode.Forbidden, await PostNotification("local", key, path));
+        Assert.Equal(0, await ShownCount());
+    }
+
+    [Fact]
+    public async Task ANotificationWhileTheSwitchIsOffIs403OnBothPhonePorts()
+    {
+        WriteConfig(wifiOn: true, wifiKey: WifiKey, clipboard: true, notifications: false);
+        Assert.Equal(HttpStatusCode.Forbidden, await PostNotification("usb", UsbKey));
+        Assert.Equal(HttpStatusCode.Forbidden, await PostNotification("wifi", WifiKey));
+        Assert.Equal(0, await ShownCount());
+    }
+
+    [Fact]
+    public async Task ATooLargeNotificationIs413AndOneThatIsNoJsonIs400()
+    {
+        using var big = Message(HttpMethod.Post, Url("wifi", NotificationPath), WifiKey);
+        big.Content = new StringContent("{\"key\":\"k\",\"title\":\"" + new string('a', BridgeApi.MaxNotificationBytes) + "\"}", Encoding.UTF8, "application/json");
+        using var tooLarge = await _http!.SendAsync(big);
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, tooLarge.StatusCode);
+        using var bad = Message(HttpMethod.Post, Url("usb", NotificationPath), UsbKey);
+        bad.Content = new StringContent("not json", Encoding.UTF8, "application/json");
+        using var invalid = await _http.SendAsync(bad);
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+        Assert.Equal(0, await ShownCount());
+    }
+
+    [Fact]
+    public async Task TheTestButtonWorksOnTheLocalPortOnly()
+    {
+        // the Settings page's own request: no key, same origin
+        using var local = Message(HttpMethod.Post, Url("local", TestPath), null);
+        local.Headers.Add("Origin", $"http://127.0.0.1:{_local}");
+        using var res = await _http!.SendAsync(local);
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        Assert.Equal(1, await ShownCount());
+        lock (_shown) Assert.Equal("PhoneBox test", _shown[0].Title);
+
+        // with a phone's key it is still not served on a phone port: the USB tunnel and the Wi-Fi allow-list do not list it
+        Assert.Equal(HttpStatusCode.Forbidden, await PostNotification("usb", UsbKey, TestPath));
+        Assert.Equal(HttpStatusCode.Forbidden, await PostNotification("wifi", WifiKey, TestPath));
+        Assert.Equal(HttpStatusCode.Unauthorized, await PostNotification("usb", null, TestPath));
+        Assert.Equal(HttpStatusCode.Forbidden, await PostNotification("wifi", null, TestPath));
+        Assert.Equal(1, await ShownCount());
+    }
+
+    [Fact]
+    public async Task TheTestButtonIsOffWhileTheSwitchIsOffAndOnlyTheExactPathIsExempt()
+    {
+        Assert.False(Lan.AllowedOverLan(TestPath));
+        Assert.False(UsbLink.Allowed("POST", TestPath));
+        Assert.True(Lan.AllowedOverLan(NotificationPath));
+        WriteConfig(wifiOn: true, wifiKey: WifiKey, clipboard: true, notifications: false);
+        using var off = Message(HttpMethod.Post, Url("local", TestPath), null);
+        using var res = await _http!.SendAsync(off);
+        Assert.Equal(HttpStatusCode.Forbidden, res.StatusCode);
+        // neighbours of the one exempt path stay refused on the local port
+        foreach (var path in new[] { TestPath + "/", TestPath + "/x", NotificationPath + "/test2", "/api/bridge/notifications/test", "/api/bridge/probe" })
+        {
+            using var m = Message(HttpMethod.Post, Url("local", path), null);
+            using var r = await _http.SendAsync(m);
+            Assert.Equal(HttpStatusCode.Forbidden, r.StatusCode);
+        }
+        Assert.Equal(0, await ShownCount());
     }
 }

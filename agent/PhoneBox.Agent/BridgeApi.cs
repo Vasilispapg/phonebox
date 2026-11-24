@@ -31,11 +31,13 @@ internal static class BridgeApi
     {
         app.MapPost("/api/bridge/clipboard", (HttpContext ctx, ConfigStore cfg) =>
             PostClipboardAsync(ctx, ctx.RequestServices.GetService<ClipboardBridge>(), cfg, () => Authorized(gate, ctx)));
-        app.MapPost("/api/bridge/notification", (HttpContext ctx) =>
-            PostNotificationAsync(ctx, ctx.RequestServices.GetService<NotificationBridge>(), () => Authorized(gate, ctx)));
-        app.MapPost("/api/bridge/notification/test", (HttpContext ctx) =>
-            PostTestNotificationAsync(ctx.RequestServices.GetService<NotificationBridge>(), () => gate.IsLocalPort(ctx.Connection.LocalPort),
-                DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()));
+        // These take the request, not the HttpContext: a lambda from HttpContext to a Task or IResult would be taken for a
+        // RequestDelegate, whose result is dropped (an empty 200 for every answer).
+        app.MapPost("/api/bridge/notification", (HttpRequest req) =>
+            PostNotificationAsync(req.HttpContext, req.HttpContext.RequestServices.GetService<NotificationBridge>(), () => Authorized(gate, req.HttpContext)));
+        app.MapPost("/api/bridge/notification/test", (HttpRequest req) =>
+            PostTestNotification(req.HttpContext.RequestServices.GetService<NotificationBridge>(),
+                gate.IsLocalPort(req.HttpContext.Connection.LocalPort), DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()));
         app.MapGet("/api/bridge/stream", async (HttpContext ctx, ConfigStore cfg, BridgeStream bridge, IHostApplicationLifetime life) =>
         {
             // what the request came with, so the open stream can be checked again with exactly that (see StreamAsync)
@@ -79,8 +81,8 @@ internal static class BridgeApi
     }
 
     /// <summary>The test button's endpoint: only from the local port, then the same 501 and switch checks, and no body.</summary>
-    public static Task<IResult> PostTestNotificationAsync(NotificationBridge? bridge, Func<bool> local, long now) =>
-        Task.FromResult(!local() ? Results.Json(new { error = "not allowed here" }, statusCode: 403) : PostTestNotification(bridge, now));
+    public static IResult PostTestNotification(NotificationBridge? bridge, bool local, long now) =>
+        !local ? Results.Json(new { error = "not allowed here" }, statusCode: 403) : PostTestNotification(bridge, now);
 
     public static IResult PostClipboard(ClipboardBridge? bridge, string? text, string? deviceId)
     {
