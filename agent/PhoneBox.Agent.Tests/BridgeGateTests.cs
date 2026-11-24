@@ -152,6 +152,7 @@ public sealed class BridgeGateTests : IAsyncLifetime
     [InlineData("/api/bridge/stream/")]
     [InlineData("/API/BRIDGE/STREAM")]
     [InlineData("/api/bridge/probe")]
+    [InlineData("/api/bridge/files/in")]
     public async Task TheLocalPortRefusesTheBridgeEvenWithAPhonesKey(string path)
     {
         foreach (var key in new[] { null, UsbKey, WifiKey })

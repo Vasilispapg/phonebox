@@ -1,4 +1,6 @@
 using System.Text;
+using System.Text.Json;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -552,6 +554,153 @@ public sealed class BridgeApiTests : IDisposable
         Assert.Equal(501, Status(BridgeApi.PostTestNotification(null, 3)));
     }
 
+    // ---- PUT /api/bridge/files/in ----
+
+    private sealed class BodyLimit : IHttpMaxRequestBodySizeFeature
+    {
+        public bool IsReadOnly => false;
+        public long? MaxRequestBodySize { get; set; } = 30_000_000;
+    }
+
+    /// <summary>A body that fails the test if anything reads it.</summary>
+    private sealed class NeverReadBody : Stream
+    {
+        public override int Read(byte[] buffer, int offset, int count) => throw new InvalidOperationException("the body was read");
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default) => throw new InvalidOperationException("the body was read");
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    private sealed class ResetBody : Stream
+    {
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default) => throw new IOException("connection reset");
+        public override int Read(byte[] buffer, int offset, int count) => throw new IOException("connection reset");
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    private long _free = long.MaxValue / 2;
+
+    private FileReceiver NewReceiver() => new(Path.Combine(_root, "received"), _ => _free, _ => { }, NullLogger.Instance);
+
+    private void SetFiles(bool fromPhone)
+    {
+        File.WriteAllText(_config, "{\"bridge\":{\"filesFromPhone\":" + (fromPhone ? "true" : "false") + "}}");
+        File.SetLastWriteTimeUtc(_config, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddSeconds(++_stamp));
+    }
+
+    private static DefaultHttpContext FileRequest(string query, Stream body)
+    {
+        var ctx = new DefaultHttpContext();
+        ctx.Request.Method = "PUT";
+        ctx.Request.QueryString = new QueryString(query);
+        ctx.Request.Body = body;
+        ctx.Features.Set<IHttpMaxRequestBodySizeFeature>(new BodyLimit());
+        return ctx;
+    }
+
+    private static string Json(IResult r) => JsonSerializer.Serialize(Assert.IsAssignableFrom<IValueHttpResult>(r).Value);
+
+    [Fact]
+    public async Task PutFileStoresAndAnswersWithTheFinalName()
+    {
+        SetFiles(true);
+        var ctx = FileRequest("?name=hello.txt&size=5", new MemoryStream("hello"u8.ToArray()));
+        var result = await BridgeApi.PutFileAsync(ctx, NewReceiver(), new RecordingNotifier(_shown), _store, () => true);
+        Assert.Equal(200, Status(result));
+        Assert.Contains("\"name\":\"hello.txt\"", Json(result));
+        Assert.Equal("hello", File.ReadAllText(Path.Combine(_root, "received", "hello.txt")));
+        var shown = Assert.Single(_shown);
+        Assert.Equal("Received hello.txt", shown.Body);
+        Assert.DoesNotContain(_root, shown.Body); // never a folder path
+    }
+
+    [Fact]
+    public async Task PutFileRefusesInTheCheapestOrderWithoutReadingTheBody()
+    {
+        SetFiles(true);
+        var body = new NeverReadBody();
+        // who is asking comes first
+        Assert.Equal(403, Status(await BridgeApi.PutFileAsync(FileRequest("?name=a", body), NewReceiver(), null, _store, () => false)));
+        // then the platform
+        Assert.Equal(501, Status(await BridgeApi.PutFileAsync(FileRequest("?name=a", body), null, null, _store, () => true)));
+        // then the switch
+        SetFiles(false);
+        var off = await BridgeApi.PutFileAsync(FileRequest("?name=a", body), NewReceiver(), null, _store, () => true);
+        Assert.Equal(403, Status(off));
+        Assert.Contains("off", Json(off));
+        SetFiles(true);
+        // then the size, the disk and the number of uploads
+        Assert.Equal(413, Status(await BridgeApi.PutFileAsync(FileRequest($"?name=a&size={FileLimits.MaxFileBytes + 1}", body), NewReceiver(), null, _store, () => true)));
+        _free = 100;
+        Assert.Equal(507, Status(await BridgeApi.PutFileAsync(FileRequest("?name=a&size=5", body), NewReceiver(), null, _store, () => true)));
+        _free = long.MaxValue / 2;
+        var busy = NewReceiver();
+        Assert.Null(busy.Precheck(1));
+        Assert.Null(busy.Precheck(1));
+        Assert.Equal(429, Status(await BridgeApi.PutFileAsync(FileRequest("?name=a&size=5", body), busy, null, _store, () => true)));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("?name=")]
+    [InlineData("?size=5")]
+    [InlineData("?name=a&size=-1")]
+    [InlineData("?name=a&size=abc")]
+    [InlineData("?name=a&size=99999999999999999999")]
+    public async Task PutFileWithoutANameOrWithABadSizeIs400(string query)
+    {
+        SetFiles(true);
+        var receiver = NewReceiver();
+        Assert.Equal(400, Status(await BridgeApi.PutFileAsync(FileRequest(query, new NeverReadBody()), receiver, null, _store, () => true)));
+        // no upload slot stays taken by the refusal
+        Assert.Null(receiver.Precheck(1));
+        Assert.Null(receiver.Precheck(1));
+    }
+
+    [Fact]
+    public async Task PutFileWhoseSizeIsWrongIs409AndStoresNothing()
+    {
+        SetFiles(true);
+        var result = await BridgeApi.PutFileAsync(FileRequest("?name=a.txt&size=10", new MemoryStream("abcd"u8.ToArray())), NewReceiver(), null, _store, () => true);
+        Assert.Equal(409, Status(result));
+        Assert.False(Directory.Exists(Path.Combine(_root, "received")) && Directory.GetFileSystemEntries(Path.Combine(_root, "received")).Length > 0);
+    }
+
+    [Fact]
+    public async Task PutFileWithAResetConnectionStoresNothing()
+    {
+        SetFiles(true);
+        var result = await BridgeApi.PutFileAsync(FileRequest("?name=a.txt", new ResetBody()), NewReceiver(), null, _store, () => true);
+        Assert.Equal(499, Status(result));
+        Assert.False(Directory.Exists(Path.Combine(_root, "received")) && Directory.GetFileSystemEntries(Path.Combine(_root, "received")).Length > 0);
+    }
+
+    [Fact]
+    public async Task PutFileRaisesTheBodyLimitOnlyForItself()
+    {
+        SetFiles(true);
+        var ctx = FileRequest("?name=a.txt&size=1", new MemoryStream([1]));
+        await BridgeApi.PutFileAsync(ctx, NewReceiver(), null, _store, () => true);
+        Assert.Equal(FileLimits.MaxFileBytes, ctx.Features.Get<IHttpMaxRequestBodySizeFeature>()!.MaxRequestBodySize);
+        // the clipboard endpoint's context keeps the server's own limit
+        Assert.Equal(30_000_000, new BodyLimit().MaxRequestBodySize);
+    }
+
     // ---- what Wi-Fi can reach ----
 
     [Theory]
@@ -565,6 +714,10 @@ public sealed class BridgeApiTests : IDisposable
     [InlineData("/api/bridge/notification", true)]
     [InlineData("/api/bridge/notification/test", false)]       // the settings page's test button: local only
     [InlineData("/api/bridge/notification/test/x", false)]
+    [InlineData("/api/bridge/files/in", true)]                 // a file from the phone
+    [InlineData("/api/bridge/files/in/x", false)]
+    [InlineData("/api/bridge/files", false)]
+    [InlineData("/api/bridge/files/anything-else", false)]
     public void OnlyTheBridgePathsAreOpenOverWifi(string path, bool allowed) =>
         Assert.Equal(allowed, Lan.AllowedOverLan(new PathString(path)));
 

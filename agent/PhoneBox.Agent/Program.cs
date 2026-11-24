@@ -92,6 +92,8 @@ if (OperatingSystem.IsMacOS())
     builder.Services.AddSingleton(sp => new NotificationBridge(sp.GetRequiredService<IMacNotifier>(), sp.GetRequiredService<ConfigStore>(),
         sp.GetService<ClipboardBridge>(), () => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), sp.GetRequiredService<ILogger<NotificationBridge>>()));
     builder.Services.AddHostedService(sp => sp.GetRequiredService<NotificationBridge>());
+    // files from the phone go to ~/Downloads/PhoneBox (FilesFromPhone switch)
+    builder.Services.AddSingleton(sp => FileReceiver.ForMac(sp.GetRequiredService<ILoggerFactory>().CreateLogger("PhoneBox.Agent.FileReceiver")));
 }
 #endif
 builder.Services.AddSingleton<CommandRunner>();

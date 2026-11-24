@@ -38,6 +38,13 @@ internal static class BridgeApi
         app.MapPost("/api/bridge/notification/test", (HttpRequest req) =>
             PostTestNotification(req.HttpContext.RequestServices.GetService<NotificationBridge>(),
                 gate.IsLocalPort(req.HttpContext.Connection.LocalPort), DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()));
+        // A file from the phone: the body is the raw file, streamed to disk. Takes the request for the same reason as the notification endpoint.
+        app.MapPut("/api/bridge/files/in", (HttpRequest req) =>
+        {
+            var services = req.HttpContext.RequestServices;
+            return PutFileAsync(req.HttpContext, services.GetService<FileReceiver>(), services.GetService<IMacNotifier>(),
+                services.GetRequiredService<ConfigStore>(), () => Authorized(gate, req.HttpContext));
+        });
         app.MapGet("/api/bridge/stream", async (HttpContext ctx, ConfigStore cfg, BridgeStream bridge, IHostApplicationLifetime life) =>
         {
             // what the request came with, so the open stream can be checked again with exactly that (see StreamAsync)
@@ -79,6 +86,52 @@ internal static class BridgeApi
         if (error is not null) return BodyError(error);
         return PostNotification(bridge, notification, DeviceId(ctx.Request.Headers["X-PhoneBox-Device"]));
     }
+
+    /// <summary>
+    /// PUT /api/bridge/files/in?name=&lt;file name&gt;[&amp;size=&lt;bytes&gt;]: in the cheapest order: who is asking (403), the platform (501),
+    /// the switch (403), the name and size (400), the size, the disk and the number of uploads (413, 507, 429), and only then
+    /// the body, which is streamed to disk and never held in memory. The name is data; the answer carries the name it was stored under.
+    /// </summary>
+    public static async Task<IResult> PutFileAsync(HttpContext ctx, FileReceiver? receiver, IMacNotifier? notifier, ConfigStore cfg, Func<bool> authorized)
+    {
+        if (!authorized()) return Results.Json(new { error = "not allowed here" }, statusCode: 403);
+        if (receiver is null) return Results.Json(new { error = "not supported on this system" }, statusCode: 501);
+        if (!cfg.Get().Bridge.FilesFromPhone) return Results.Json(new { error = "off" }, statusCode: 403);
+        var query = ctx.Request.Query;
+        var name = query["name"].ToString();
+        if (name.Length is 0 or > 1024) return Results.Json(new { error = "give a name" }, statusCode: 400);
+        long? size = null;
+        if (query.ContainsKey("size"))
+        {
+            var text = query["size"].ToString();
+            if (text.Length is 0 or > 19 || !long.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed))
+                return Results.Json(new { error = "size is not a number" }, statusCode: 400);
+            size = parsed;
+        }
+        if (receiver.Precheck(size) is { } refused) return FileRefusal(refused);
+        // this request only: the server's own limit (about 30 MB) stays for every other endpoint
+        if (ctx.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } limit)
+            limit.MaxRequestBodySize = FileLimits.MaxFileBytes;
+        var result = await receiver.ReceiveAsync(name, size, ctx.Request.Body, ctx.RequestAborted);
+        if (result.Status != ReceiveStatus.Stored) return FileRefusal(result.Status);
+        if (notifier is not null)
+        {
+            // never awaited: osascript can take seconds, and the phone's answer must not wait for it
+            try { _ = notifier.PostAsync("PhoneBox", "From your phone", $"Received {result.Name}", null, null, CancellationToken.None); }
+            catch (Exception) { /* a notification that cannot be shown is not a failed transfer */ }
+        }
+        return Results.Ok(new { ok = true, name = result.Name, size = result.Bytes });
+    }
+
+    private static IResult FileRefusal(ReceiveStatus status) => status switch
+    {
+        ReceiveStatus.TooLarge => Results.Json(new { error = "too large" }, statusCode: 413),
+        ReceiveStatus.NoSpace => Results.Json(new { error = "no space" }, statusCode: 507),
+        ReceiveStatus.Busy => Results.Json(new { error = "busy" }, statusCode: 429),
+        ReceiveStatus.SizeMismatch => Results.Json(new { error = "size does not match" }, statusCode: 409),
+        ReceiveStatus.Aborted => Results.StatusCode(499), // the phone went away: nobody reads the answer
+        _ => Results.Json(new { error = "could not save the file" }, statusCode: 500),
+    };
 
     /// <summary>The test button's endpoint: only from the local port, then the same 501 and switch checks, and no body.</summary>
     public static IResult PostTestNotification(NotificationBridge? bridge, bool local, long now) =>
