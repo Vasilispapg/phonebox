@@ -4,8 +4,8 @@ import java.io.Closeable
 
 /**
  * Keeps one live connection to the agent's /api/stream (server-sent events) and hands every event to [deliver].
- * Reconnects after errors. On Wi-Fi it reconnects every minute so a freshly plugged-in USB cable is preferred again.
- * "open" / "close" pseudo-events tell the panel when to stop or resume its polling fallback.
+ * Reconnects after errors. On Wi-Fi it reconnects every minute (unless [rotateOnWifi] is false) so a freshly plugged-in
+ * USB cable is preferred again. "open" / "close" pseudo-events tell the panel when to stop or resume its polling fallback.
  */
 class AgentStream(
     private val link: AgentLink,
@@ -20,8 +20,22 @@ class AgentStream(
     private val refusedRetryMs: Long = 2000,
     /** Called for every failed attempt with the HTTP status the agent answered, or null when it could not be reached. */
     private val onFailure: ((Int?) -> Unit)? = null,
+    /** Drop a Wi-Fi stream after [wifiRotateMs] so a USB cable plugged in meanwhile is used. The panel's stream does (its
+     *  data comes every second, a reconnect costs nothing); the bridge's does not: each reconnect is a TLS handshake, and
+     *  what is copied in the gap would be lost. */
+    private val rotateOnWifi: Boolean = true,
+    private val wifiRotateMs: Long = WIFI_ROTATE_MS,
+    /** Where the last SSE `id:` this stream delivered is kept, for a `Last-Event-ID` header on the next connection (the
+     *  agent then replays what came in between). Null for the panel's stream: no ids are kept and no header is sent. One
+     *  [EventIds] can outlive the stream, so a replacement stream in the same process resumes where this one ended. */
+    private val eventIds: EventIds? = null,
     private val deliver: (event: String, data: String) -> Unit,
 ) {
+
+    /** The last event id received; written only for an event delivered while its stream was current. */
+    class EventIds {
+        @Volatile var last: String? = null
+    }
 
     private val gate = Any()
     @Volatile private var running = false
@@ -66,6 +80,19 @@ class AgentStream(
         synchronized(gate) { if (running && gen == generation) deliver(event, data) }
     }
 
+    /**
+     * The end of one frame: delivers its data, then remembers its id, both only while generation [gen] is current, so an id
+     * is never kept for an event that was not handed over (the agent would not replay it). A frame with an id and no data
+     * still moves the id on, as in the SSE spec.
+     */
+    private fun endFrame(gen: Int, event: String, data: String?, id: String?) {
+        synchronized(gate) {
+            if (!running || gen != generation) return
+            if (data != null) deliver(event, data)
+            if (id != null) eventIds?.last = id
+        }
+    }
+
     private fun loop(gen: Int) {
         val alive = { running && gen == generation }
         var failures = 0 // in a row, for the backoff
@@ -75,7 +102,9 @@ class AgentStream(
             var failed = false
             var body: Closeable? = null
             try {
-                val (route, reply) = link.stream(path, readTimeoutMs) ?: run { failed = true; throw java.io.IOException("offline") }
+                val resumeFrom = eventIds?.last
+                val headers = if (resumeFrom != null) mapOf("Last-Event-ID" to resumeFrom) else emptyMap()
+                val (route, reply) = link.stream(path, readTimeoutMs, headers) ?: run { failed = true; throw java.io.IOException("offline") }
                 if (reply.code != 200) {
                     failed = true
                     failedWith = reply.code
@@ -98,18 +127,21 @@ class AgentStream(
                     val since = System.currentTimeMillis()
                     var event = "message"
                     val data = StringBuilder()
+                    var id: String? = null // this frame's, kept only once the frame is complete (a cut frame is replayed)
                     while (alive()) {
                         val line = r.readLine() ?: break
                         if (!alive()) break
                         when {
                             line.isEmpty() -> {
-                                if (data.isNotEmpty()) dispatch(gen, event, data.toString())
+                                if (data.isNotEmpty() || id != null) endFrame(gen, event, data.takeIf { it.isNotEmpty() }?.toString(), id)
                                 event = "message"
                                 data.setLength(0)
-                                if (route == AgentLink.Route.WIFI && System.currentTimeMillis() - since > 60_000) break
+                                id = null
+                                if (rotateOnWifi && route == AgentLink.Route.WIFI && System.currentTimeMillis() - since > wifiRotateMs) break
                             }
                             line.startsWith("event:") -> event = line.substring(6).trim()
                             line.startsWith("data:") -> data.append(line.substring(5).trimStart())
+                            line.startsWith("id:") -> parseEventId(line)?.let { id = it }
                         }
                     }
                 }
@@ -130,6 +162,21 @@ class AgentStream(
             }
             if (!opened) failures++
             if (alive()) try { Thread.sleep(wait) } catch (_: InterruptedException) {}
+        }
+    }
+
+    companion object {
+        /** How long the panel's stream stays on Wi-Fi before it looks for USB again. */
+        const val WIFI_ROTATE_MS = 60_000L
+
+        /**
+         * The value of an SSE `id:` line, or null when it is not one this app sends back: the agent numbers its events in
+         * decimal, so anything else (empty, a sign, letters, more than 18 digits) is ignored and the previous id stays.
+         */
+        fun parseEventId(line: String): String? {
+            if (!line.startsWith("id:")) return null
+            val value = line.substring(3).removePrefix(" ")
+            return value.takeIf { it.length in 1..18 && it.all { c -> c in '0'..'9' } }
         }
     }
 }

@@ -133,11 +133,14 @@ class AgentLink(private val context: Context) {
     @Volatile private var factory: Pair<String, SSLSocketFactory>? = null
     @Volatile private var usbFactory: Pair<String, SSLSocketFactory>? = null // its own: the USB agent's pin may differ from the Wi-Fi PC's
 
-    /** Opens a long-lived GET (the live stream) over the best route; null when the PC is unreachable. */
-    /** [readTimeoutMs]: how long a silent stream may stay open before the read gives up (the panel's stream sends every second). */
-    fun stream(path: String, readTimeoutMs: Int = STREAM_READ_TIMEOUT): Pair<Route, Reply>? {
-        usb("GET", path, readTimeoutMs)?.let { route = Route.USB; return Route.USB to it }
-        wifi("GET", path, readTimeoutMs)?.let { route = Route.WIFI; return Route.WIFI to it }
+    /**
+     * Opens a long-lived GET (the live stream) over the best route; null when the PC is unreachable. [readTimeoutMs]: how
+     * long a silent stream may stay open before the read gives up (the panel's stream sends every second). [headers]: extra
+     * request headers (the bridge stream's Last-Event-ID); the panel's stream sends none.
+     */
+    fun stream(path: String, readTimeoutMs: Int = STREAM_READ_TIMEOUT, headers: Map<String, String> = emptyMap()): Pair<Route, Reply>? {
+        usb("GET", path, readTimeoutMs, null, null, headers)?.let { route = Route.USB; return Route.USB to it }
+        wifi("GET", path, readTimeoutMs, null, null, headers = headers)?.let { route = Route.WIFI; return Route.WIFI to it }
         return null
     }
 
@@ -224,9 +227,11 @@ class AgentLink(private val context: Context) {
     private fun usb(method: String, pathAndQuery: String, readTimeout: Int = 4000): Reply? =
         usb(method, pathAndQuery, readTimeout, null, null)
 
-    private fun usb(method: String, pathAndQuery: String, readTimeout: Int, body: ByteArray?, contentType: String?): Reply? = try {
+    private fun usb(method: String, pathAndQuery: String, readTimeout: Int, body: ByteArray?, contentType: String?,
+                    headers: Map<String, String> = emptyMap()): Reply? = try {
         val c = usbConnection(pathAndQuery)
         c.connectTimeout = 400 // refused instantly when no adb reverse tunnel exists
+        headers.forEach { (name, value) -> c.setRequestProperty(name, value) }
         val r = send(c, method, readTimeout, body, contentType)
         if (r.code == 401) {
             // the agent doesn't know this app's key yet (it reads it over adb within seconds): nothing ran, try Wi-Fi
@@ -252,7 +257,8 @@ class AgentLink(private val context: Context) {
         wifi(method, pathAndQuery, readTimeout, null, null)
 
     /** Over Wi-Fi to the active computer, or to [target] when a caller must reach one particular computer. */
-    private fun wifi(method: String, pathAndQuery: String, readTimeout: Int, body: ByteArray?, contentType: String?, target: Pc? = null): Reply? {
+    private fun wifi(method: String, pathAndQuery: String, readTimeout: Int, body: ByteArray?, contentType: String?, target: Pc? = null,
+                     headers: Map<String, String> = emptyMap()): Reply? {
         val pc = target ?: activePc() ?: return null
         val hosts = pc.hosts
         val token = pc.token
@@ -271,6 +277,7 @@ class AgentLink(private val context: Context) {
                 c.hostnameVerifier = PINNED_HOSTNAME_VERIFIER // identity is the pinned certificate
                 c.connectTimeout = 1500
                 c.setRequestProperty("Authorization", "Bearer $token")
+                headers.forEach { (name, value) -> c.setRequestProperty(name, value) }
                 val r = send(c, method, readTimeout, body, contentType)
                 if (target == null) preferredHost = i
                 return r

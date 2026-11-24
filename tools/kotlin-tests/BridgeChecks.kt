@@ -5,7 +5,8 @@ import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-// JVM checks for the phone bridge's pure parts (BridgeClip.kt) and for AgentStream's new path and refusal delay.
+// JVM checks for the phone bridge's pure parts (BridgeClip.kt) and for what AgentStream does for the bridge: its path,
+// read timeout, back-off, refusal delay, Last-Event-ID on reconnect and the Wi-Fi rotation switch.
 // Run with: python3 tools/test-bridge-checks.py
 
 private var passed = 0
@@ -220,6 +221,97 @@ private fun refusedDefaultDelayCheck() {
     check("the default retry is still about 2 s ($gapMs ms)", gapMs in 1800..3500)
 }
 
+private fun eventIdParseChecks() {
+    check("id: 7 is 7", AgentStream.parseEventId("id: 7") == "7")
+    check("id:12 (no space) is 12", AgentStream.parseEventId("id:12") == "12")
+    check("a large seq is kept as text", AgentStream.parseEventId("id: 900719925474099") == "900719925474099")
+    check("an empty id is ignored", AgentStream.parseEventId("id:") == null && AgentStream.parseEventId("id: ") == null)
+    check("a non-decimal id is ignored", AgentStream.parseEventId("id: abc") == null && AgentStream.parseEventId("id: -1") == null && AgentStream.parseEventId("id: 0x10") == null)
+    check("only one space is stripped (the SSE rule)", AgentStream.parseEventId("id:  5") == null)
+    check("an id too long for a seq is ignored", AgentStream.parseEventId("id: " + "1".repeat(19)) == null)
+    check("another field is not an id", AgentStream.parseEventId("data: 5") == null)
+}
+
+/** One body per attempt from [bodies]; then empty bodies. Waits until [attempts] connections were made. */
+private fun headersFor(bodies: List<String>, attempts: Int, eventIds: AgentStream.EventIds?, seen: MutableList<String>? = null): List<Map<String, String>> {
+    val calls = java.util.concurrent.atomic.AtomicInteger()
+    val reached = CountDownLatch(attempts)
+    val link = AgentLink { reached.countDown(); ByteArrayInputStream((bodies.getOrNull(calls.getAndIncrement()) ?: "").toByteArray()) }
+    val stream = AgentStream(link, "/api/bridge/stream", eventIds = eventIds) { event, data -> if (event != "open" && event != "close") seen?.add("$event $data") }
+    stream.start()
+    check("$attempts connections were made", reached.await(8, TimeUnit.SECONDS))
+    stream.stop()
+    return link.headers.take(attempts)
+}
+
+private fun lastEventIdChecks() {
+    val ids = AgentStream.EventIds()
+    val seen = CopyOnWriteArrayList<String>()
+    val first = "id: 7\nevent: clipboard\ndata: {\"seq\":7,\"text\":\"hi\"}\n\n"
+    val headers = headersFor(listOf(first), 2, ids, seen)
+    check("the first connection sends no Last-Event-ID (nothing received yet)", headers[0].isEmpty())
+    check("the reconnect sends Last-Event-ID: 7", headers[1] == mapOf("Last-Event-ID" to "7"))
+    check("the event with the id was still delivered", seen.firstOrNull() == "clipboard {\"seq\":7,\"text\":\"hi\"}")
+
+    val latest = headersFor(listOf("id: 3\ndata: {}\n\nid: 9\ndata: {}\n\nid: x\ndata: {}\n\n"), 2, AgentStream.EventIds())
+    check("the latest valid id is sent, a bad one does not replace it", latest[1] == mapOf("Last-Event-ID" to "9"))
+
+    // a frame with only an id moves the id on; a frame cut by the connection (no blank line) does not, so the agent replays it
+    val cut = headersFor(listOf("id: 4\n\nid: 5\nevent: clipboard\ndata: {\"seq\":5,\"text\":\"x\"}"), 2, AgentStream.EventIds())
+    check("an id-only frame counts and a cut frame does not", cut[1] == mapOf("Last-Event-ID" to "4"))
+
+    // the service builds a new stream on a pairing change or a reconnect from the screen: the same EventIds carries on
+    val carried = headersFor(emptyList(), 1, ids)
+    check("a replacement stream sends the id on its first connection", carried[0] == mapOf("Last-Event-ID" to "7"))
+
+    val panel = headersFor(listOf(first), 2, null)
+    check("the panel's stream never sends Last-Event-ID", panel.all { it.isEmpty() })
+}
+
+/** A body that sends a small frame every 20 ms until it is closed (the panel's stream, or the bridge's pings). */
+private fun endless(): java.io.InputStream = object : java.io.InputStream() {
+    @Volatile var closed = false
+    val frame = "data: {}\n\n".toByteArray()
+    override fun read(): Int = throw IllegalStateException("bulk reads only")
+    override fun read(b: ByteArray, off: Int, len: Int): Int {
+        if (closed) return -1
+        try { Thread.sleep(20) } catch (_: InterruptedException) { return -1 }
+        if (closed) return -1
+        val n = minOf(len, frame.size)
+        System.arraycopy(frame, 0, b, off, n)
+        return n
+    }
+    override fun close() { closed = true }
+}
+
+private fun rotationChecks() {
+    check("the panel's Wi-Fi rotation stays at a minute", AgentStream.WIFI_ROTATE_MS == 60_000L)
+
+    val rotating = AgentLink(route = { AgentLink.Route.WIFI }) { endless() }
+    val second = CountDownLatch(1)
+    val panel = AgentStream(rotating, wifiRotateMs = 200) { event, _ -> if (event == "close") second.countDown() }
+    panel.start()
+    check("a rotating stream drops its Wi-Fi connection", second.await(5, TimeUnit.SECONDS))
+    Thread.sleep(500)
+    panel.stop()
+    check("and connects again", rotating.paths.size >= 2)
+
+    val steady = AgentLink(route = { AgentLink.Route.WIFI }) { endless() }
+    val closes = java.util.concurrent.atomic.AtomicInteger()
+    val bridge = AgentStream(steady, "/api/bridge/stream", rotateOnWifi = false, wifiRotateMs = 200) { event, _ -> if (event == "close") closes.incrementAndGet() }
+    bridge.start()
+    Thread.sleep(1500)
+    check("with rotation off the Wi-Fi stream stays open (${steady.paths.size} connections)", steady.paths.size == 1 && closes.get() == 0)
+    bridge.stop()
+
+    val usb = AgentLink(route = { AgentLink.Route.USB }) { endless() }
+    val usbStream = AgentStream(usb, wifiRotateMs = 200) { _, _ -> }
+    usbStream.start()
+    Thread.sleep(1000)
+    usbStream.stop()
+    check("a USB stream is never rotated", usb.paths.size == 1)
+}
+
 fun main() {
     shouldSendChecks()
     parseEventChecks()
@@ -236,5 +328,8 @@ fun main() {
     backoffChecks()
     backoffResetChecks()
     refusedDefaultDelayCheck()
+    eventIdParseChecks()
+    lastEventIdChecks()
+    rotationChecks()
     println("ALL $passed CHECKS PASSED")
 }

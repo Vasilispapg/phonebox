@@ -15,6 +15,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import java.util.concurrent.Executors
 
 /**
  * Holds the connection to the computer's bridge stream while Phone bridge › clipboard is on, and puts each text copied
@@ -23,9 +24,17 @@ import android.os.Looper
  */
 class ClipboardService : Service() {
     private var stream: AgentStream? = null
+    /** The current stream's link, closed with it: each one holds a worker thread for its pairing refreshes. */
+    private var link: AgentLink? = null
+    /** A stream is wanted (between the first start and onDestroy), also while its link is still being built. */
+    private var wanted = false
     private val main = Handler(Looper.getMainLooper())
+    /** Builds each AgentLink off the main thread: it reads the pairing preferences and looks up the WebView package. */
+    private val builder = Executors.newSingleThreadExecutor()
     /** Which stream is the current one: what an old stream still delivers, or has queued for the main thread, is dropped. */
     @Volatile private var generation = 0
+    /** The active computer the last stream was built for: the event ids of one Mac mean nothing to another. */
+    private var activePc: String? = null
 
     /**
      * The stream's AgentLink read the paired computers once, when it was built. Choosing or forgetting a computer in the
@@ -35,7 +44,7 @@ class ClipboardService : Service() {
      * AgentLink can itself save (moving an old pairing), and a restart nested in restartStream would leave two streams.
      */
     private val pairingChanged = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
-        main.post { if (stream != null && BridgePrefs.clipboardEnabled(this)) restartStream() }
+        main.post { if (wanted && BridgePrefs.clipboardEnabled(this)) restartStream() }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -65,18 +74,45 @@ class ClipboardService : Service() {
         return START_STICKY
     }
 
-    /** A new link and stream each time, so they use the computers paired now. */
+    /** A new link and stream each time, so they use the computers paired now. Main thread only. */
     private fun restartStream() {
-        stream?.stop()
+        stopStream()
+        wanted = true
         val mine = ++generation
-        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         BridgePrefs.clipboardState = ClipboardState.WAITING
+        val app = applicationContext
+        try {
+            builder.execute {
+                val fresh = try { AgentLink(app) } catch (e: Exception) {
+                    // the screen says so (with the class name) instead of waiting for ever
+                    main.post { if (mine == generation) { BridgePrefs.lastError = e.javaClass.simpleName; BridgePrefs.clipboardState = ClipboardState.STOPPED } }
+                    return@execute
+                }
+                val active = app.getSharedPreferences(AgentLink.PAIRING_PREFS, Context.MODE_PRIVATE).getString("active", null)
+                main.post {
+                    // a newer restart, or onDestroy, came first: this link is not used
+                    if (mine != generation || !wanted) closeLater(fresh) else startStream(mine, fresh, active)
+                }
+            }
+        } catch (_: java.util.concurrent.RejectedExecutionException) {} // onDestroy shut the builder down
+    }
+
+    private fun startStream(mine: Int, fresh: AgentLink, active: String?) {
+        // another computer was chosen or paired: its seq numbers are its own, so it hears only new events
+        if (active != activePc) eventIds.last = null
+        activePc = active
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        link = fresh
         // the bridge stream only pings every 15 s, so a read timeout of 40 s (the panel's 8 s would cut it and reconnect, losing
-        // copies and the battery); failures back off from 2 s to a minute instead of hammering an absent Mac all day
+        // copies and the battery); failures back off from 2 s to a minute instead of hammering an absent Mac all day. It stays on
+        // Wi-Fi (no reconnect every minute to look for USB) and resumes from the last event id, so copies made on the Mac while
+        // it reconnects are replayed by the agent instead of lost.
         stream = AgentStream(
-            AgentLink(applicationContext), "/api/bridge/stream", readTimeoutMs = 40_000,
+            fresh, "/api/bridge/stream", readTimeoutMs = 40_000,
             retryMinMs = 2_000, retryMaxMs = 60_000, refusedRetryMs = 60_000,
             onFailure = { code -> if (mine == generation) BridgePrefs.clipboardState = BridgeClip.stateAfterFailure(code) },
+            rotateOnWifi = false,
+            eventIds = eventIds,
         ) { event, data ->
             if (mine != generation) return@AgentStream
             when (event) {
@@ -87,6 +123,20 @@ class ClipboardService : Service() {
                 }
             }
         }.also { it.start() }
+    }
+
+    /** Stops the stream and closes its link. */
+    private fun stopStream() {
+        stream?.stop()
+        stream = null
+        link?.let { closeLater(it) }
+        link = null
+    }
+
+    /** Frees the link's worker thread and trackpad socket; on the builder's thread, like building, while there is one. */
+    private fun closeLater(old: AgentLink) {
+        val close = Runnable { try { old.close() } catch (_: Exception) {} }
+        try { builder.execute(close) } catch (_: java.util.concurrent.RejectedExecutionException) { close.run() }
     }
 
     private fun goForeground() {
@@ -119,8 +169,11 @@ class ClipboardService : Service() {
     override fun onDestroy() {
         getSharedPreferences(AgentLink.PAIRING_PREFS, Context.MODE_PRIVATE).unregisterOnSharedPreferenceChangeListener(pairingChanged)
         generation++
-        stream?.stop()
-        stream = null
+        wanted = false
+        stopStream()
+        // a new start hears only new events: a replay could bring back what was copied on the Mac while the phone's switch was off
+        eventIds.last = null
+        builder.shutdown() // a link still being built is closed by its post, which sees !wanted
         BridgePrefs.clipboardState = ClipboardState.STOPPED
         super.onDestroy()
     }
@@ -129,14 +182,23 @@ class ClipboardService : Service() {
         private const val CHANNEL = "bridge"
         private const val NOTIFICATION_ID = 7
 
+        /**
+         * The last bridge event id this process received, sent as Last-Event-ID when a stream connects again (also the new
+         * stream after a pairing change or a reconnect from the screen), so the agent replays the copies made in between.
+         * Cleared when the service stops, and never saved: a new start hears only new events, as the agent expects without
+         * the header.
+         */
+        private val eventIds = AgentStream.EventIds()
+
         /** Starts or stops the service to match the phone's switch. Safe to call often; a start reconnects a stream that is not connected. */
         fun sync(context: Context) {
             val app = context.applicationContext
             val intent = Intent(app, ClipboardService::class.java)
-            // "Send to Mac" shows in other apps' menus only while the bridge is on
-            BridgeEntryPoints.setEnabled(app, BridgePrefs.clipboardEnabled(app))
-            if (!BridgePrefs.clipboardEnabled(app)) {
-                app.stopService(intent)
+            val on = BridgePrefs.clipboardEnabled(app)
+            // "Send to Mac" shows in other apps' menus only while the bridge is on (a no-op when nothing changes)
+            BridgeEntryPoints.setEnabled(app, on)
+            if (!on) {
+                app.stopService(intent) // nothing happens when it is not running
                 return
             }
             try {
