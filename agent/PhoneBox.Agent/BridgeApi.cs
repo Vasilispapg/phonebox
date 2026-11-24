@@ -9,7 +9,7 @@ namespace PhoneBox.Agent;
 internal static class BridgeApi
 {
     /// <summary>The largest request the clipboard endpoint reads (the text limit is lower; JSON escapes make the body bigger).</summary>
-    public const int MaxRequestBytes = 256 * 1024;
+    public const int MaxRequestBytes = 512 * 1024; // 64 KiB of text can grow six times once JSON escapes it (each character as a six-character escape)
     public const string RequestTooLarge = "request too large";
     /// <summary>An SSE comment, sent now and then so a dead connection is noticed.</summary>
     public const string PingFrame = ": ping\n\n";

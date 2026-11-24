@@ -7,6 +7,11 @@ namespace PhoneBox.Agent;
 /// spawning pbpaste or osascript that often would be slow (osascript takes seconds when the Mac is busy) and wasteful.
 /// Every call runs inside its own autorelease pool because the callers are timer and request threads, which have none.
 /// </summary>
+/// <remarks>
+/// An Objective-C exception (AppKit raises NSPasteboardCommunicationException when the pasteboard server cannot be reached) cannot be
+/// caught by managed code and would end the agent. The calls here are the plain getters and setters AppKit documents for any app, run
+/// only when the owner has turned the bridge on, and the pasteboard is created on first use so a Mac without one never gets here.
+/// </remarks>
 internal sealed class MacPasteboard : ITextPasteboard
 {
     private const string ObjC = "/usr/lib/libobjc.A.dylib";
@@ -25,6 +30,8 @@ internal sealed class MacPasteboard : ITextPasteboard
     [DllImport(ObjC)] private static extern void objc_autoreleasePoolPop(nint pool);
     [DllImport(ObjC, EntryPoint = "objc_msgSend")] private static extern nint Send(nint receiver, nint selector);
     [DllImport(ObjC, EntryPoint = "objc_msgSend")] private static extern nint Send(nint receiver, nint selector, nint a);
+    [DllImport(ObjC, EntryPoint = "objc_msgSend")] private static extern nint SendBytes(nint receiver, nint selector, nint bytes, nuint length, nuint encoding);
+    [DllImport(ObjC, EntryPoint = "objc_msgSend")] private static extern nuint SendLength(nint receiver, nint selector, nuint encoding);
     [DllImport(ObjC, EntryPoint = "objc_msgSend")] private static extern nint SendAt(nint receiver, nint selector, nuint index);
     [DllImport(ObjC, EntryPoint = "objc_msgSend")] private static extern long SendLong(nint receiver, nint selector);
     [DllImport(ObjC, EntryPoint = "objc_msgSend")] [return: MarshalAs(UnmanagedType.I1)]
@@ -99,14 +106,30 @@ internal sealed class MacPasteboard : ITextPasteboard
         finally { objc_autoreleasePoolPop(pool); }
     }
 
-    /// <summary>An autoreleased NSString; valid until the surrounding pool is popped.</summary>
+    private const nuint Utf8 = 4; // NSUTF8StringEncoding
+
+    /// <summary>
+    /// An autoreleased NSString; valid until the surrounding pool is popped. Made from the bytes and their length, not from a C
+    /// string: a text with a NUL in it ("A\0B") would otherwise be cut at the NUL while the caller believes it was written whole.
+    /// </summary>
     private static nint NSString(string value)
     {
-        var utf8 = Marshal.StringToCoTaskMemUTF8(value);
-        try { return Send(objc_getClass("NSString"), Sel("stringWithUTF8String:"), utf8); }
-        finally { Marshal.FreeCoTaskMem(utf8); }
+        var bytes = System.Text.Encoding.UTF8.GetBytes(value);
+        var buffer = Marshal.AllocCoTaskMem(Math.Max(1, bytes.Length));
+        try
+        {
+            Marshal.Copy(bytes, 0, buffer, bytes.Length);
+            var made = SendBytes(Send(objc_getClass("NSString"), Sel("alloc")), Sel("initWithBytes:length:encoding:"), buffer, (nuint)bytes.Length, Utf8);
+            return made == 0 ? 0 : Send(made, Sel("autorelease"));
+        }
+        finally { Marshal.FreeCoTaskMem(buffer); }
     }
 
-    private static string? Managed(nint nsString) =>
-        nsString == 0 ? null : Send(nsString, Sel("UTF8String")) is var chars and not 0 ? Marshal.PtrToStringUTF8(chars) : null;
+    /// <summary>The text of an NSString by its UTF-8 length, so an embedded NUL does not end it early.</summary>
+    private static string? Managed(nint nsString)
+    {
+        if (nsString == 0) return null;
+        var length = SendLength(nsString, Sel("lengthOfBytesUsingEncoding:"), Utf8);
+        return Send(nsString, Sel("UTF8String")) is var chars and not 0 ? Marshal.PtrToStringUTF8(chars, (int)length) : null;
+    }
 }

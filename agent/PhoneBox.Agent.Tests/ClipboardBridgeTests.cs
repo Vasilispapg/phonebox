@@ -151,6 +151,30 @@ public sealed class ClipboardBridgeTests : IDisposable
     }
 
     [Fact]
+    public void AWordThePhoneWroteBeforeTheFirstPollIsStillSentWhenTheOwnerCopiesItLater()
+    {
+        _bridge.ReceiveFromPhone("B", "phone1");    // before the first look at the clipboard: that look only notes what is there
+        _bridge.PollOnce();
+        _pb.Copy("B");                              // the owner copies the same words on purpose
+        _bridge.PollOnce();
+        Assert.Equal([("B", "phone1"), ("B", null)], _stream.Since(0, null).Select(e => (e.Text, e.Origin)));
+    }
+
+    [Fact]
+    public async Task TwoPhonesWritingAtOnceEndWithTheStreamsLastEventEqualToTheClipboard()
+    {
+        // the publish happens inside the lock that guards the write, so the order of the events is the order of the writes
+        for (var round = 0; round < 200; round++)
+        {
+            var pb = new FakePasteboard();
+            var stream = new BridgeStream();
+            var bridge = new ClipboardBridge(pb, _store, stream, NullLogger<ClipboardBridge>.Instance);
+            await Task.WhenAll(Task.Run(() => bridge.ReceiveFromPhone("A", "phoneA")), Task.Run(() => bridge.ReceiveFromPhone("B", "phoneB")));
+            Assert.Equal(pb.Text, stream.Since(0, null)[^1].Text);
+        }
+    }
+
+    [Fact]
     public void CopyingTheSameTextTheAgentJustWroteLaterIsSentAgain()
     {
         _bridge.PollOnce();

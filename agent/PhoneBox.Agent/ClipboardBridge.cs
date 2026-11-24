@@ -43,8 +43,10 @@ public sealed class ClipboardBridge : IHostedService, IDisposable
         {
             if (!_pasteboard.WriteText(text)) return ClipboardResult.Failed;
             _lastReceived = Hash(text);
+            // inside the lock: two phones writing at once publish in the order their text reached the pasteboard, so a phone that applies
+            // events in sequence ends with what the Mac holds
+            _stream.Publish("clipboard", text, deviceId);
         }
-        _stream.Publish("clipboard", text, deviceId);
         return ClipboardResult.Stored;
     }
 
@@ -60,7 +62,12 @@ public sealed class ClipboardBridge : IHostedService, IDisposable
                 return;
             }
             var count = _pasteboard.ChangeCount;
-            if (!_primed) { _primed = true; _lastCount = count; return; }
+            if (!_primed)
+            {
+                // what is on the clipboard now is not sent, and no echo is expected for it: a later deliberate copy of the same words must go out
+                _primed = true; _lastCount = count; _lastReceived = null;
+                return;
+            }
             if (count == _lastCount) return;
             _lastCount = count;
             // Only the first change after our own write can be its echo, whatever that change turns out to be: the guard

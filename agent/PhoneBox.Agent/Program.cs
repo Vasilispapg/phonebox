@@ -865,6 +865,7 @@ app.MapGet("/api/bridge/stream", async (HttpContext ctx, ConfigStore cfg, Bridge
         {
             foreach (var e in bridge.Since(seq, device))
             {
+                if (!BridgeApi.StreamAllowed(cfg)) break; // the switch was turned off during this batch: nothing more is written
                 await ctx.Response.WriteAsync(BridgeApi.EventFrame(e), ct);
                 seq = e.Seq;
             }

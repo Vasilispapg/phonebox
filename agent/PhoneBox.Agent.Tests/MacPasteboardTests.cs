@@ -19,6 +19,14 @@ public sealed class MacPasteboardTests
     }
 
     [Fact]
+    public void ATextWithANulIsWrittenAndReadBackWhole()
+    {
+        if (Fresh() is not { } pb) return;
+        Assert.True(pb.WriteText("left\0right"));
+        Assert.Equal("left\0right", pb.ReadShareableText());     // not cut at the NUL, which "stringWithUTF8String:" would do
+    }
+
+    [Fact]
     public void ChangeCountIncreasesAfterAWrite()
     {
         if (Fresh() is not { } pb) return;

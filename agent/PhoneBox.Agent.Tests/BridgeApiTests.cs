@@ -106,6 +106,16 @@ public sealed class BridgeApiTests : IDisposable
         Assert.Equal(413, Status(BridgeApi.BodyError(error!)));
     }
 
+    [Fact]
+    public async Task SixtyFourKilobytesOfTextEscapedAsUnicodeSequencesIsStillRead()
+    {
+        // 50,000 characters, each sent as a six-character escape: 300 KB of JSON, 50 KB of text
+        var json = "{\"text\":\"" + string.Concat(Enumerable.Repeat("\\u0061", 50_000)) + "\"}";
+        var (text, error) = await BridgeApi.ReadClipboardBody(Request(json));
+        Assert.Null(error);
+        Assert.Equal(new string('a', 50_000), text);
+    }
+
     [Theory]
     [InlineData("not json")]
     [InlineData("")]
@@ -169,7 +179,9 @@ public sealed class BridgeApiTests : IDisposable
     [Theory]
     [InlineData("/api/bridge/clipboard", true)]
     [InlineData("/api/bridge/stream", true)]
-    [InlineData("/api/bridge", true)]
+    [InlineData("/api/bridge", false)]          // the namespace root and other paths under it are not opened
+    [InlineData("/api/bridge/other", false)]
+    [InlineData("/api/bridge/clipboard/x", false)]
     [InlineData("/api/bridgex", false)]
     [InlineData("/api/bridge-clipboard", false)]
     public void OnlyTheBridgePathsAreOpenOverWifi(string path, bool allowed) =>
