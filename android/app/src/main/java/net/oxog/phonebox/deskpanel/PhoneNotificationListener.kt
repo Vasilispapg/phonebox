@@ -236,7 +236,7 @@ class PhoneNotificationListener : NotificationListenerService() {
                 return NotificationDelivery(
                     queue,
                     phoneSwitchOn = { BridgePrefs.notificationsEnabled(app) },
-                    appAllowed = { BridgePrefs.allApps(app) || BridgePrefs.allowedApps(app).contains(it) },
+                    appAllowed = { appAllowed(BridgePrefs.allApps(app), BridgePrefs.allowedApps(app), it) },
                     macSwitchOn = { config.notificationsOn { client.fetchConfig(target) } },
                     send = { body -> client.sendNotification(target, body) },
                     onOutcome = { BridgePrefs.notificationOutcome = it },
