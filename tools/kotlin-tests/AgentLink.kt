@@ -25,7 +25,17 @@ class AgentLink(
     fun upload(pathAndQuery: String, contentType: String, length: Long?, open: () -> InputStream, onProgress: (Long) -> Unit,
                cancelled: () -> Boolean): Reply {
         uploads.add(Triple(pathAndQuery, contentType, length))
-        open().use { input -> FileTransferRules.copy(input, java.io.OutputStream.nullOutputStream(), onProgress, cancelled) }
+        // the same loop as the production link's, written out so the stream check (which compiles no file rules) still builds
+        open().use { input ->
+            val buffer = ByteArray(64 * 1024)
+            var total = 0L
+            while (!cancelled()) {
+                val n = input.read(buffer)
+                if (n < 0) break
+                total += n
+                onProgress(total)
+            }
+        }
         return uploadReply()
     }
     fun request(method: String, pathAndQuery: String): Reply = requestReply()
