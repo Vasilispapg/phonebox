@@ -40,7 +40,7 @@ class NotificationDelivery(
                 // UNKNOWN (the request went out and the reply was lost) is tried again too: the agent drops a repeat of a notification
                 // it already showed. PAIR_AGAIN (the Mac refuses this phone's key) cannot succeed until the phone is paired again; the
                 // notification waits like one for an unreachable Mac and is dropped after two minutes.
-                SendResult.UNREACHABLE, SendResult.UNKNOWN, SendResult.PAIR_AGAIN -> {
+                SendResult.UNREACHABLE, SendResult.UNKNOWN, SendResult.PAIR_AGAIN, SendResult.NO_SPACE, SendResult.BUSY -> {
                     onOutcome(NotificationOutcome.UNREACHABLE)
                     // back with the original times, ahead of what was posted meanwhile (so the cap drops the oldest), and
                     // not at all if the queue was cleared while the request was out
