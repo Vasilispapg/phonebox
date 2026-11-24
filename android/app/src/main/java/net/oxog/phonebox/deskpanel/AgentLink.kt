@@ -43,7 +43,7 @@ class AgentLink(private val context: Context) {
     @Volatile var route: Route = Route.NONE
         private set
 
-    private val prefs = context.getSharedPreferences("pairing", Context.MODE_PRIVATE)
+    private val prefs = context.getSharedPreferences(PAIRING_PREFS, Context.MODE_PRIVATE)
 
     /**
      * A computer this phone is paired with; the certificate fingerprint is its id. [macs] are the MAC addresses of its
@@ -652,6 +652,8 @@ class AgentLink(private val context: Context) {
         private const val USB_BASE = "https://127.0.0.1:8765"
         /** The agent sends "state" every second, so a silent connection for this long is dead. */
         const val STREAM_READ_TIMEOUT = 8000
+        /** The paired computers' preferences. Each AgentLink reads them once, so the clipboard service watches them for changes. */
+        const val PAIRING_PREFS = "pairing"
     }
 }
 
