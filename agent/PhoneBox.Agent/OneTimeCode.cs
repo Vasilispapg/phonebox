@@ -13,11 +13,13 @@ public static partial class OneTimeCode
     /// <summary>The most characters allowed between a code and its keyword.</summary>
     private const int MaxGap = 30;
 
+    // A currency sign before the digits counts even with a space between ("$ 1500"), and a text that was cut ("code 1234…") has no
+    // code in it: the rest of the digits are missing.
     // 4-8 ASCII digits, or two groups split by one space or dash. Not part of a longer run of digits or letters: not a phone number
     // (210-555-1234), a date (23/11/2026, 2026.11.23), a time or an amount (1500.00, 50,00), and not a number that is
     // labelled as something else: an amount (a currency sign before it or a currency after it), the end of a card (ending
     // 4321, *4321), a reference, order, invoice or phone number.
-    [GeneratedRegex(@"(?<![\p{L}\p{N}€$£¥₹*#]|[0-9][ \-./,:]|\b(?:ending|ends|ref|reference|order|invoice|id|no|tel|phone|call|τηλ)\.?:? )(?:[0-9]{4,8}|[0-9]{2,4}[ \-][0-9]{2,4})(?![\p{L}\p{N}]|[ \-./,:][0-9]|\s?(?:eur|usd|gbp|euro|euros|ευρω|€|\$|£))")]
+    [GeneratedRegex(@"(?<![\p{L}\p{N}*#]|[€$£¥₹]\s*|[0-9][ \-./,:]|\b(?:ending|ends|ref|reference|order|invoice|id|no|tel|phone|call|τηλ)\.?:? )(?:[0-9]{4,8}|[0-9]{2,4}[ \-][0-9]{2,4})(?![\p{L}\p{N}…]|[ \-./,:][0-9]|\s?(?:eur|usd|gbp|euro|euros|ευρω|€|\$|£))")]
     private static partial Regex Candidates();
 
     // run on text folded to lower case with accents removed and ς as σ, so ΚΩΔΙΚΟΣ, κωδικός and κωδικοσ are one word.
