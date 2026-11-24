@@ -42,6 +42,7 @@
     <string name="bridge_app_info_button">Uygulama bilgisini aç</string>
     <string name="bridge_apps_button">Uygulamaları seç</string>
     <string name="bridge_apps_title">Mac\'te gösterilen uygulamalar</string>
+    <string name="bridge_apps_all">Tüm uygulamalar</string>
     <string name="bridge_last_none">Henüz bildirim gönderilmedi</string>
     <string name="bridge_last_ok">Son bildirim Mac\'e ulaştı</string>
     <string name="bridge_last_off">Son bildirim: Mac\'in bildirim anahtarı kapalı</string>

@@ -42,6 +42,7 @@
     <string name="bridge_app_info_button">App-Info öffnen</string>
     <string name="bridge_apps_button">Apps auswählen</string>
     <string name="bridge_apps_title">Apps, die am Mac erscheinen</string>
+    <string name="bridge_apps_all">Alle Apps</string>
     <string name="bridge_last_none">Noch keine Benachrichtigung gesendet</string>
     <string name="bridge_last_ok">Die letzte Benachrichtigung hat den Mac erreicht</string>
     <string name="bridge_last_off">Letzte Benachrichtigung: Der Benachrichtigungs-Schalter des Macs ist aus</string>

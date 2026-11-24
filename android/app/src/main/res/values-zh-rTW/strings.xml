@@ -42,6 +42,7 @@
     <string name="bridge_app_info_button">開啟應用程式資訊</string>
     <string name="bridge_apps_button">選擇 App</string>
     <string name="bridge_apps_title">在 Mac 上顯示的 App</string>
+    <string name="bridge_apps_all">所有應用程式</string>
     <string name="bridge_last_none">尚未傳送任何通知</string>
     <string name="bridge_last_ok">最近一則通知已送達 Mac</string>
     <string name="bridge_last_off">最近一則通知：Mac 的通知開關已關閉</string>

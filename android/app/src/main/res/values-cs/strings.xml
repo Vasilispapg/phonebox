@@ -42,6 +42,7 @@
     <string name="bridge_app_info_button">Otevřít informace o aplikaci</string>
     <string name="bridge_apps_button">Vybrat aplikace</string>
     <string name="bridge_apps_title">Aplikace zobrazované v Macu</string>
+    <string name="bridge_apps_all">Všechny aplikace</string>
     <string name="bridge_last_none">Zatím nebylo odesláno žádné oznámení</string>
     <string name="bridge_last_ok">Poslední oznámení dorazilo do Macu</string>
     <string name="bridge_last_off">Poslední oznámení: přepínač oznámení v Macu je vypnutý</string>

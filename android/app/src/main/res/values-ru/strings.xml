@@ -42,6 +42,7 @@
     <string name="bridge_app_info_button">Открыть «О приложении»</string>
     <string name="bridge_apps_button">Выбрать приложения</string>
     <string name="bridge_apps_title">Приложения, показываемые на Mac</string>
+    <string name="bridge_apps_all">Все приложения</string>
     <string name="bridge_last_none">Уведомления ещё не отправлялись</string>
     <string name="bridge_last_ok">Последнее уведомление дошло до Mac</string>
     <string name="bridge_last_off">Последнее уведомление: переключатель уведомлений на Mac выключен</string>

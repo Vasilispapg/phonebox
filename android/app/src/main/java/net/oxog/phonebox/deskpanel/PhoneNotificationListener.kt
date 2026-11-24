@@ -18,7 +18,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * The text is never logged or stored.
  */
 class PhoneNotificationListener : NotificationListenerService() {
-    private val filter by lazy { NotificationFilter({ BridgePrefs.allowedApps(applicationContext) }, packageName, { defaultDialer() }) }
+    private val filter by lazy { NotificationFilter({ BridgePrefs.allowedApps(applicationContext) }, packageName, { defaultDialer() }, { BridgePrefs.allApps(applicationContext) }) }
 
     override fun onListenerConnected() {
         connected = true
@@ -115,7 +115,7 @@ class PhoneNotificationListener : NotificationListenerService() {
 
     private fun enqueue(app: Context, info: NotificationInfo, sendKey: String, shown: String, category: String, postTime: Long) {
         // cut here, as the agent does: a long email in a BigText notification must arrive shortened, not be refused whole
-        val body = BridgeClip.notificationBody(sendKey, label(shown), shown, BridgeClip.cut(info.title, 200), BridgeClip.cut(info.text, 2000), category, postTime)
+        val body = BridgeClip.notificationBody(sendKey, label(shown), shown, BridgeClip.cut(info.title, 200), BridgeClip.cut(info.text, 2000), category, postTime, AppIcons.base64(applicationContext, shown))
         queue.add(NotificationDelivery.Pending(shown, body))
         requestDrain(app)
     }
@@ -210,7 +210,7 @@ class PhoneNotificationListener : NotificationListenerService() {
                 return NotificationDelivery(
                     queue,
                     phoneSwitchOn = { BridgePrefs.notificationsEnabled(app) },
-                    appAllowed = { BridgePrefs.allowedApps(app).contains(it) },
+                    appAllowed = { BridgePrefs.allApps(app) || BridgePrefs.allowedApps(app).contains(it) },
                     macSwitchOn = { config.isOn() },
                     send = { body -> BridgeClient(link ?: AgentLink(app).also { link = it }).sendNotification(body) },
                     onOutcome = { BridgePrefs.notificationOutcome = it },

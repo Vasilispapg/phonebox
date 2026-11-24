@@ -42,6 +42,7 @@
     <string name="bridge_app_info_button">Відкрити «Про застосунок»</string>
     <string name="bridge_apps_button">Вибрати застосунки</string>
     <string name="bridge_apps_title">Застосунки, що показуються на Mac</string>
+    <string name="bridge_apps_all">Усі застосунки</string>
     <string name="bridge_last_none">Сповіщень ще не надсилалося</string>
     <string name="bridge_last_ok">Останнє сповіщення дійшло до Mac</string>
     <string name="bridge_last_off">Останнє сповіщення: перемикач сповіщень на Mac вимкнено</string>

@@ -69,6 +69,18 @@ private fun filterChecks() {
     check("a call from the filter without a dialer function still follows the list", f.decide(ring) == Decision.SKIP)
     check("a message from another unlisted app is still skipped with a dialer set", samsung.decide(info(pkg = "com.shop")) == Decision.SKIP)
 
+    var everything = false
+    val all = NotificationFilter({ allowed }, OWN, { dialer }) { everything }
+    val shop = info(pkg = "com.shop")
+    check("an app that is not on the list is skipped while all apps is off", all.decide(shop) == Decision.SKIP)
+    everything = true
+    check("with all apps on, an app that is not on the list is sent", all.decide(shop) == Decision.SEND)
+    check("with all apps on, PhoneBox's own notifications are still skipped", all.decide(info(pkg = OWN)) == Decision.SKIP)
+    check("with all apps on, an ongoing notification is still skipped", all.decide(info(pkg = "com.shop", ongoing = true)) == Decision.SKIP)
+    check("with all apps on, a group summary is still skipped", all.decide(info(pkg = "com.shop", groupSummary = true)) == Decision.SKIP)
+    check("with all apps on, an empty notification is still skipped", all.decide(info(pkg = "com.shop", title = "", text = "")) == Decision.SKIP)
+    check("with all apps on, a ringing call is sent even when no dialer is known", NotificationFilter({ emptySet() }, OWN, { null }) { true }.decide(ring) == Decision.SEND)
+    everything = false
 
     allowed.remove("com.msg")
     check("the list is read on every decision (removing an app stops it)", f.decide(info()) == Decision.SKIP)
@@ -197,6 +209,13 @@ private fun notificationBodyChecks() {
     check("the time is a number", (m["time"] as Double).toLong() == 1_700_000_000_123L)
     check("the body has no raw control character", body.none { it < ' ' })
     check("the body names exactly the seven fields the agent reads", m.keys == setOf("key", "app", "package", "title", "text", "category", "time"))
+
+    val withIcon = BridgeClip.notificationBody("k", "Facebook", "com.facebook.katana", "Anna", "hi", "message", 1L, "iVBORw0KGgo+/=")
+    val n = BridgeClip.parseObject(withIcon)
+    check("an icon travels as the icon field", n != null && n["icon"] == "iVBORw0KGgo+/=")
+    check("with an icon the body still reads as one object with the same fields", n!!.keys == setOf("key", "app", "package", "title", "text", "category", "time", "icon"))
+    check("the other fields are unchanged by the icon", n["title"] == "Anna" && n["package"] == "com.facebook.katana" && (n["time"] as Double).toLong() == 1L)
+    check("no icon means no icon field", BridgeClip.parseObject(BridgeClip.notificationBody("k", "a", "p", "t", "x", "message", 1L, null))!!.containsKey("icon").not())
 }
 
 /** The agent's real /api/config reply: {"version": "...", "config": { ...the public config... }}. */

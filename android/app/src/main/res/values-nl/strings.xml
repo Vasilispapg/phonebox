@@ -42,6 +42,7 @@
     <string name="bridge_app_info_button">App-info openen</string>
     <string name="bridge_apps_button">Apps kiezen</string>
     <string name="bridge_apps_title">Apps die op de Mac worden getoond</string>
+    <string name="bridge_apps_all">Alle apps</string>
     <string name="bridge_last_none">Nog geen melding verstuurd</string>
     <string name="bridge_last_ok">De laatste melding is op de Mac aangekomen</string>
     <string name="bridge_last_off">Laatste melding: de meldingsschakelaar van de Mac staat uit</string>

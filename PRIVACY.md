@@ -139,11 +139,13 @@ Last updated: 2026-11-20 (PhoneBox 0.9.6).
 - **Phone notifications, on the phone side of the phone bridge** (off by default; the app's **Phone bridge** screen › Show
   notifications on the Mac, plus Android's Notification access): the app reads the notifications of the apps you switched
   on (their name, title, text and kind; for a call, who is calling) and sends them only to your paired computer over the
-  same USB / paired Wi-Fi link. If you allow **Contacts** (Android asks once), a call that rings with only a number is looked
+  same USB / paired Wi-Fi link, together with the posting app's icon (a small PNG, so the computer can show it as the
+  notification's picture). The **All apps** switch on the Apps screen (off until you turn it on) sends every app's
+  notifications instead of the list, which includes banking, security and other private ones. If you allow **Contacts** (Android asks once), a call that rings with only a number is looked
   up once, by that number, and only the matching name goes to the computer in that call's notification; the contacts are
-  never read in bulk, kept or sent. Nothing else is read or sent: not apps you left off, PhoneBox's own notifications,
-  ongoing ones such as music, or a call after the first ring (except its caller's name, when that arrives a moment later).
-  If the computer cannot be reached, up to 20 notifications are kept in the app's memory for two minutes and then dropped;
+  never read in bulk, kept or sent. Nothing else is read or sent: not PhoneBox's own notifications, ongoing ones such as music, or a
+  call after the first ring (except its caller's name, when that arrives a moment later); with the list in use, not apps you left
+  off. If the computer cannot be reached, up to 20 notifications are kept in the app's memory for two minutes and then dropped;
   nothing is written to the phone's storage or its log.
   Until you turn the switch on, the app does not even appear in Android's Notification access list.
 - **Sound for the Spectrum bars widget** (Windows): while an enabled page with the widget is on the phone's screen,

@@ -42,6 +42,7 @@
     <string name="bridge_app_info_button">앱 정보 열기</string>
     <string name="bridge_apps_button">앱 선택</string>
     <string name="bridge_apps_title">Mac에 표시할 앱</string>
+    <string name="bridge_apps_all">모든 앱</string>
     <string name="bridge_last_none">아직 보낸 알림이 없습니다</string>
     <string name="bridge_last_ok">마지막 알림이 Mac에 도착했습니다</string>
     <string name="bridge_last_off">마지막 알림: Mac의 알림 스위치가 꺼져 있습니다</string>

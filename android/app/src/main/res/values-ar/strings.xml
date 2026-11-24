@@ -42,6 +42,7 @@
     <string name="bridge_app_info_button">فتح معلومات التطبيق</string>
     <string name="bridge_apps_button">اختيار التطبيقات</string>
     <string name="bridge_apps_title">التطبيقات المعروضة على Mac</string>
+    <string name="bridge_apps_all">كل التطبيقات</string>
     <string name="bridge_last_none">لم يُرسل أي إشعار بعد</string>
     <string name="bridge_last_ok">وصل آخر إشعار إلى Mac</string>
     <string name="bridge_last_off">آخر إشعار: مفتاح الإشعارات في Mac متوقف</string>

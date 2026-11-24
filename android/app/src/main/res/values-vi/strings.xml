@@ -44,6 +44,7 @@
     <string name="bridge_app_info_button">Mở Thông tin ứng dụng</string>
     <string name="bridge_apps_button">Chọn ứng dụng</string>
     <string name="bridge_apps_title">Ứng dụng hiện trên Mac</string>
+    <string name="bridge_apps_all">Tất cả ứng dụng</string>
     <string name="bridge_last_none">Chưa gửi thông báo nào</string>
     <string name="bridge_last_ok">Thông báo gần nhất đã tới Mac</string>
     <string name="bridge_last_off">Thông báo gần nhất: công tắc thông báo của Mac đang tắt</string>
