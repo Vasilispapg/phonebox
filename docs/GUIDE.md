@@ -278,8 +278,18 @@ Share what you copy between the Mac and the phone. It starts with the clipboard.
   the agent refuses everything the phone sends for it.
 - **Mac to phone:** copy plain text on the Mac and the paired phone's clipboard has it within about a second. Text over
   64 KiB is not sent, and neither is anything a password manager marked concealed.
-- **Phone to Mac:** Android does not let an app read the clipboard in the background, so sending from the phone is one
-  tap, in any of four places: **Send to Mac** in the text-selection menu (select text, it sits next to Copy, and the
+- **Automatic copy from the phone:** with the clipboard switch on and **USB debugging** (or wireless debugging) turned on
+  in the phone's developer options, the Mac's agent starts a small helper on the phone through adb. From then on a plain
+  **Copy** on the phone puts the text on the Mac's clipboard within a second or two, no tap, the way Phone Link does on
+  Windows. Android allows this only for a process started over adb, which is why the Mac must see the phone over adb:
+  your USB cable, or wireless debugging on the same Wi-Fi. The helper keeps running after the cable is unplugged, until
+  the phone restarts; after a restart it starts again as soon as the Mac sees the phone over adb. Text over 64 KiB, and
+  anything Android marks sensitive (a password manager's copy), is not sent. Turning the phone's clipboard switch off, or
+  the Mac's, stops it (within about 15 seconds, or at the next copy); the Mac starts it only while the phone's switch is on. It also leaves when the app is updated or
+  removed (the Mac then starts the new one). If the helper's name is taken by another app, it does not start and automatic
+  copy stays off; the one-tap ways still work.
+- **Phone to Mac without the helper** (debugging off, or the Mac has not seen the phone since it restarted): Android does
+  not let an app read the clipboard in the background, so sending from the phone is one tap, in any of four places: **Send to Mac** in the text-selection menu (select text, it sits next to Copy, and the
   text is sent without copying first), **Share › Send to Mac**, a **Send to Mac** tile (add it under Quick Settings
   › Edit), or the **Send to Mac** button on the app's "sharing the clipboard" notification. A short message says
   whether it arrived. These entries appear in your apps only while the phone's switch below is on.

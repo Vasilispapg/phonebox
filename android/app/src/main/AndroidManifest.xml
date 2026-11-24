@@ -45,6 +45,13 @@
             android:readPermission="android.permission.DUMP"
             android:writePermission="android.permission.DUMP" />
 
+        <!-- The phone bridge's clipboard helper (started over adb, running as adb's shell user) hands copies to the app here with
+             "content call". Exported because the shell user is another uid; the provider answers only the shell user's calls. -->
+        <provider
+            android:name=".ClipProvider"
+            android:authorities="net.oxog.phonebox.deskpanel.clip"
+            android:exported="true" />
+
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density"
@@ -162,7 +169,7 @@
             android:name=".PhoneNotificationListener"
             android:enabled="false"
             android:exported="true"
-            android:label="@string/bridge_title"
+            android:label="PhoneBox"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
             <intent-filter>
                 <action android:name="android.service.notification.NotificationListenerService" />

@@ -94,11 +94,14 @@ object BridgeClip {
      * { ... "bridge": {...} }}. True or false; null when the reply is not that shape (then the answer is unknown, not "off").
      * An agent whose config has no bridge section (an older one) is off.
      */
-    fun notificationsOn(replyJson: String): Boolean? {
+    fun notificationsOn(replyJson: String): Boolean? = bridgeFlag(replyJson, "notifications")
+
+    /** One of the computer's bridge switches ("clipboard", "notifications", "copyCodes") from the same reply; same answers as [notificationsOn]. */
+    fun bridgeFlag(replyJson: String, name: String): Boolean? {
         val reply = Json(replyJson).parseObject() ?: return null
         val config = reply["config"] as? Map<*, *> ?: return null
         val bridge = config["bridge"] as? Map<*, *> ?: return false
-        return bridge["notifications"] == true
+        return bridge[name] == true
     }
 
     /** At most [max] characters: longer text is cut and ends with an ellipsis, never in the middle of an emoji. */

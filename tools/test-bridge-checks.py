@@ -14,8 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 NS = {"m": "http://maven.apache.org/POM/4.0.0"}
 APP = ROOT / "android/app/src/main/java/net/oxog/phonebox/deskpanel"
 # production files that must compile on a plain JVM (no Android types), then the stand-in link and the checks
-PRODUCTION = ["BridgeClip.kt", "AgentStream.kt", "NotificationFilter.kt", "DeliveryQueue.kt", "BridgeConfigCache.kt", "NotificationDelivery.kt"]
-CHECKS = ["AgentLink.kt", "BridgeChecks.kt", "NotificationFilterChecks.kt"]
+PRODUCTION = ["BridgeClip.kt", "AgentStream.kt", "NotificationFilter.kt", "DeliveryQueue.kt", "BridgeConfigCache.kt", "NotificationDelivery.kt", "ClipEcho.kt", "ClipWatcher.kt", "ClipHelperRules.kt", "LatestCopy.kt"]
+CHECKS = ["AgentLink.kt", "BridgeChecks.kt", "NotificationFilterChecks.kt", "ClipRelayChecks.kt"]
 
 
 def main():
@@ -43,7 +43,7 @@ def main():
     sources += [ROOT / "tools/kotlin-tests" / f for f in CHECKS if (ROOT / "tools/kotlin-tests" / f).exists()]
     subprocess.run(["java", "-cp", compiler_cp, "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler", "-no-stdlib", "-no-reflect",
                     "-jvm-target", "17", "-classpath", classpath, "-d", str(output), *map(str, sources)], check=True, timeout=120)
-    mains = ["BridgeChecksKt"] + (["NotificationFilterChecksKt"] if (ROOT / "tools/kotlin-tests/NotificationFilterChecks.kt").exists() else [])
+    mains = ["BridgeChecksKt"] + (["NotificationFilterChecksKt"] if (ROOT / "tools/kotlin-tests/NotificationFilterChecks.kt").exists() else []) + (["ClipRelayChecksKt"] if (ROOT / "tools/kotlin-tests/ClipRelayChecks.kt").exists() else [])
     for main_class in mains:
         result = subprocess.run(["java", "-cp", str(output) + os.pathsep + classpath, f"net.oxog.phonebox.deskpanel.{main_class}"], timeout=60)
         if result.returncode != 0:

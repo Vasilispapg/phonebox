@@ -107,7 +107,9 @@ class BridgeActivity : Activity() {
     override fun onResume() {
         super.onResume()
         // Android may have stopped the service (the Task Manager, an update): opening the screen brings it back
-        if (BridgePrefs.clipboardEnabled(this) && BridgePrefs.clipboardState == ClipboardState.STOPPED) ClipboardService.sync(this)
+        if (BridgePrefs.clipboardEnabled(this)) {
+            if (BridgePrefs.clipboardState == ClipboardState.STOPPED) ClipboardService.sync(this) else ClipboardService.repostNotification(this)
+        }
         handler.post(refresh)
     }
 
