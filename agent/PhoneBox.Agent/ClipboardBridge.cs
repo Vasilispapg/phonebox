@@ -74,6 +74,7 @@ public sealed class ClipboardBridge : IHostedService, IDisposable
                 _stream.Clear(); // nothing copied stays in memory once sharing is off
                 return;
             }
+            _stream.PruneExpired();
             var count = _pasteboard.ChangeCount;
             if (!_primed)
             {

@@ -192,6 +192,7 @@ leaves LRCLIB alone for a while (1 minute, doubling up to 30, or as long as LRCL
 Songs without timed lyrics show their plain lyrics, unless you turn that off. A player that reports no position (no
 timeline in Now playing) gets the words as a page, with a note that the lines can't follow the song. *Timing offset*
 moves the lines earlier (positive) or later when a song's timing is off.
+*Timing offset per player* does the same for one player only, one `Name=ms` per line, where the name is the one **Now playing** shows for that player (for example `Spotify=-200` or `Apple Music=1000`): a song from that player uses its own value instead of the general offset, so a player that needs a lead does not shift the others. Names are not case sensitive; a player with no line, or a line without a number, uses the general offset. Values are held to ±5000 ms, like the general offset.
 
 ## Layout editor & settings
 
@@ -279,13 +280,13 @@ Share what you copy between the Mac and the phone. It starts with the clipboard.
 - **Mac to phone:** copy plain text on the Mac and the paired phone's clipboard has it within about a second. Text over
   64 KiB is not sent, and neither is anything a password manager marked as not to be shared (concealed, transient or
   auto-generated, the markers 1Password, Bitwarden, KeePassXC and Strongbox use). A copy is read only once the clipboard
-  has stayed the same for a moment, so a marker a password manager adds just after the text is still seen. Not every
-  password manager marks what it copies (browser extensions often don't): copy passwords from those only while the
-  bridge is off.
+  has stayed the same for a moment. A password manager can omit a marker or add it after the bridge has read the copy.
+  Turn off sharing before copying sensitive text.
 - **Phone to Mac:** the phone sends text to the Mac, which puts it on the Mac's clipboard. Android does not let an app
   read the clipboard in the background, so the phone's side is one tap (the Android app adds the ways to send).
 - The text goes only to your own paired phones over the PhoneBox link (USB or paired Wi-Fi / Tailscale), with the
-  phone's key; nothing on the Mac itself can read it from the agent's local port. It is kept in memory and never stored
+  phone's key. Enable the bridge only on a computer where users and software with access to the local agent API are
+  trusted. The text is kept in memory and never stored
   or logged. A phone whose connection drops for a moment is sent what it missed when it reconnects (at most the last 20
   copies, and only those from the last two minutes). See [PRIVACY.md](../PRIVACY.md).
 - **macOS asking before an app reads the clipboard:** newer macOS versions can ask whether an app may paste from other
