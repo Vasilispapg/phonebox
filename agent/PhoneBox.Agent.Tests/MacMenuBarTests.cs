@@ -37,19 +37,13 @@ public class MacLoginItemTests
     [Fact]
     public void TheLaunchAgentOpensTheAppAtLogin()
     {
-        var text = MacLoginItem.PlistText("/Users/me/Applications/PhoneBox.app");
+        var text = MacLoginItem.PlistText();
         Assert.Contains("<key>Label</key><string>net.oxog.phonebox.app</string>", text);
-        Assert.Contains("<string>/usr/bin/open</string><string>-a</string><string>/Users/me/Applications/PhoneBox.app</string>", text);
+        // by bundle identifier: a path from a mounted disk image or an App Translocation folder would be dead at the next login
+        Assert.Contains("<string>/usr/bin/open</string><string>-b</string><string>net.oxog.phonebox.agent</string>", text);
+        Assert.DoesNotContain("/Volumes/", text);
         Assert.Contains("<key>RunAtLoad</key><true/>", text);
         System.Xml.Linq.XDocument.Parse(text.Replace("<!DOCTYPE", "<!-- ").Replace("dtd\">", "dtd\" -->")); // well-formed
-    }
-
-    [Fact]
-    public void APathWithMarkupCharactersStaysInsideItsString()
-    {
-        var text = MacLoginItem.PlistText("/Users/a&b/<x>/PhoneBox.app");
-        Assert.Contains("/Users/a&amp;b/&lt;x&gt;/PhoneBox.app", text);
-        Assert.DoesNotContain("<x>", text);
     }
 
     [Fact]

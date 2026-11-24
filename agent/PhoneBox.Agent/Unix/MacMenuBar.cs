@@ -33,15 +33,23 @@ internal static class MacMenuBar
     [DllImport(Lib, EntryPoint = "objc_msgSend")] private static extern IntPtr Send(IntPtr self, IntPtr sel, double a);
     [DllImport(Lib, EntryPoint = "objc_msgSend")] private static extern IntPtr Send(IntPtr self, IntPtr sel, IntPtr a, IntPtr b);
     [DllImport(Lib, EntryPoint = "objc_msgSend")] private static extern IntPtr Send(IntPtr self, IntPtr sel, IntPtr a, IntPtr b, IntPtr c);
+    [DllImport(Lib, EntryPoint = "objc_msgSend")] private static extern IntPtr SendMainThread(IntPtr self, IntPtr sel, IntPtr a, IntPtr b, sbyte wait, IntPtr modes);
     [DllImport(Lib, EntryPoint = "objc_msgSend")] private static extern IntPtr SendEvent(IntPtr self, IntPtr sel, ulong mask, IntPtr date, IntPtr mode, sbyte dequeue);
     [DllImport("/usr/lib/libSystem.B.dylib")] private static extern int pthread_main_np();
     [DllImport("/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices")] private static extern IntPtr CGSessionCopyCurrentDictionary();
     [DllImport("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")] private static extern void CFRelease(IntPtr cf);
 
     private delegate void Action3(IntPtr self, IntPtr sel, IntPtr sender);
+    private delegate nuint Terminate(IntPtr self, IntPtr sel, IntPtr sender);
+    private delegate sbyte Reopen(IntPtr self, IntPtr sel, IntPtr sender, sbyte visibleWindows);
     // kept in fields: the Objective-C runtime holds only the raw function pointers
     private static Action3? _clicked;
+    private static Terminate? _shouldTerminate;
+    private static Reopen? _shouldReopen;
     private static volatile bool _quitting;
+    private static ILogger? _log;
+    private static IntPtr _app, _menu, _handler;
+    private static Action3? _closeMenuOnMain;
 
     private static IntPtr Cls(string name) => objc_getClass(name);
     private static IntPtr Sel(string name) => sel_registerName(name);
@@ -76,11 +84,12 @@ internal static class MacMenuBar
     /// Shows the icon and runs the main thread's event loop until <paramref name="hostStopped"/> says the agent is
     /// shutting down. A click runs the entry's action on a worker thread, so a slow one never freezes the menu bar.
     /// </summary>
-    internal static void Run(MenuEntry[] entries, Func<bool> hostStopped)
+    internal static void Run(MenuEntry[] entries, Func<bool> hostStopped, CancellationToken stopping, Action stop, Action openSettings, ILogger log)
     {
         _entries = entries;
+        _log = log;
         NativeLibrary.Load("/System/Library/Frameworks/AppKit.framework/AppKit");
-        var app = Send(Cls("NSApplication"), Sel("sharedApplication"));
+        var app = _app = Send(Cls("NSApplication"), Sel("sharedApplication"));
         Send(app, Sel("setActivationPolicy:"), (IntPtr)1); // accessory: no Dock icon, no menu bar of its own
 
         _clicked = (_, _, sender) =>
@@ -94,12 +103,40 @@ internal static class MacMenuBar
         {
             var created = objc_allocateClassPair(Cls("NSObject"), "PhoneBoxMenuTarget", 0);
             class_addMethod(created, Sel("menuClicked:"), Marshal.GetFunctionPointerForDelegate(_clicked), "v@:@");
+            _closeMenuOnMain = (_, _, _) => Send(_menu, Sel("cancelTracking")); // a no-op while no menu is open
+            class_addMethod(created, Sel("closeMenu:"), Marshal.GetFunctionPointerForDelegate(_closeMenuOnMain), "v@:@");
             objc_registerClassPair(created);
             target = created;
         }
-        var handler = Send(Send(target, Sel("alloc")), Sel("init"));
+        var handler = _handler = Send(Send(target, Sel("alloc")), Sel("init"));
 
-        var menu = Send(Send(Cls("NSMenu"), Sel("alloc")), Sel("init"));
+        // Every way of quitting the app goes through the host's own shutdown. Without a delegate AppKit answers a quit from
+        // the system (logout, shutdown, `osascript -e 'quit app id ...'`) with -[NSApp terminate:], which calls exit() on this
+        // thread at once: the hosted services never stop. So the host is stopped first and waited for (this thread has
+        // nothing else to do, and no service needs it); then AppKit may end the process (NSTerminateNow). A restart that is
+        // under way (it must run Program's tail) and a host that does not stop in time are answered with NSTerminateCancel:
+        // the loop below ends when the host does, and the process leaves through Program.
+        // (NSTerminateLater would be the usual answer for "not yet", but it parks this thread in a loop of AppKit's own.)
+        _shouldTerminate = (_, _, _) =>
+        {
+            Guard(stop);
+            var limit = DateTime.UtcNow.AddSeconds(10);
+            while (!hostStopped() && DateTime.UtcNow < limit) Thread.Sleep(50);
+            return hostStopped() && !AppRestart.Requested ? 1u : 0u;
+        };
+        // a second double-click on the running app asks it to "reopen"; with no window it opens the settings instead
+        _shouldReopen = (_, _, _, _) => { _ = Task.Run(() => Guard(openSettings)); return 0; };
+        var delegateClass = Cls("PhoneBoxAppDelegate");
+        if (delegateClass == IntPtr.Zero)
+        {
+            delegateClass = objc_allocateClassPair(Cls("NSObject"), "PhoneBoxAppDelegate", 0);
+            class_addMethod(delegateClass, Sel("applicationShouldTerminate:"), Marshal.GetFunctionPointerForDelegate(_shouldTerminate), "Q@:@");
+            class_addMethod(delegateClass, Sel("applicationShouldHandleReopen:hasVisibleWindows:"), Marshal.GetFunctionPointerForDelegate(_shouldReopen), "c@:@c");
+            objc_registerClassPair(delegateClass);
+        }
+        Send(app, Sel("setDelegate:"), Send(Send(delegateClass, Sel("alloc")), Sel("init"))); // the app keeps only a weak reference, so it is never released here
+
+        var menu = _menu = Send(Send(Cls("NSMenu"), Sel("alloc")), Sel("init"));
         Send(menu, Sel("setAutoenablesItems:"), IntPtr.Zero); // we set enabled ourselves
         var items = new IntPtr[entries.Length];
         for (var i = 0; i < entries.Length; i++)
@@ -117,38 +154,64 @@ internal static class MacMenuBar
         }
 
         // statusItemWithLength: NSVariableStatusItemLength (-1). The item must stay referenced or the icon disappears.
-        var item = Send(Send(Cls("NSStatusBar"), Sel("systemStatusBar")), Sel("statusItemWithLength:"), -1.0);
+        var bar = Send(Cls("NSStatusBar"), Sel("systemStatusBar"));
+        var item = Send(bar, Sel("statusItemWithLength:"), -1.0);
         Send(item, Sel("retain"));
-        var button = Send(item, Sel("button"));
-        var image = Send(Cls("NSImage"), Sel("imageWithSystemSymbolName:accessibilityDescription:"), Str("iphone"), Str("PhoneBox"));
-        if (image != IntPtr.Zero)
+        try
         {
-            Send(image, Sel("setTemplate:"), (IntPtr)1); // follows the menu bar's light/dark tint
-            Send(button, Sel("setImage:"), image);
-        }
-        else Send(button, Sel("setTitle:"), Str("PhoneBox"));
-        Send(item, Sel("setMenu:"), menu);
-
-        Send(app, Sel("finishLaunching"));
-        var mode = Str("kCFRunLoopDefaultMode");
-        var shown = new string?[entries.Length];
-        for (var tick = 0; !hostStopped() && !_quitting; tick++)
-        {
-            var pool = objc_autoreleasePoolPush();
-            try
+            var button = Send(item, Sel("button"));
+            var image = Send(Cls("NSImage"), Sel("imageWithSystemSymbolName:accessibilityDescription:"), Str("iphone"), Str("PhoneBox"));
+            if (image != IntPtr.Zero)
             {
-                if (tick % 2 == 0) Refresh(items, shown);
-                var until = Send(Cls("NSDate"), Sel("dateWithTimeIntervalSinceNow:"), 0.5);
-                var ev = SendEvent(app, Sel("nextEventMatchingMask:untilDate:inMode:dequeue:"), ulong.MaxValue, until, mode, 1);
-                if (ev != IntPtr.Zero) Send(app, Sel("sendEvent:"), ev);
+                Send(image, Sel("setTemplate:"), (IntPtr)1); // follows the menu bar's light/dark tint
+                Send(button, Sel("setImage:"), image);
             }
-            finally { objc_autoreleasePoolPop(pool); }
+            else Send(button, Sel("setTitle:"), Str("PhoneBox"));
+            Send(item, Sel("setMenu:"), menu);
+
+            Send(app, Sel("finishLaunching"));
+            // While the menu is open, sendEvent: stays inside AppKit's menu tracking, so a stop (SIGTERM, a restart from the
+            // settings, an update) would wait until the menu is closed: close it from the main thread when the host stops.
+            using var wake = stopping.Register(CloseMenu);
+            var mode = Str("kCFRunLoopDefaultMode");
+            var shown = new string?[entries.Length];
+            var failed = new bool[entries.Length];
+            for (var tick = 0; !hostStopped() && !_quitting; tick++)
+            {
+                var pool = objc_autoreleasePoolPush();
+                try
+                {
+                    if (tick % 2 == 0) Refresh(items, shown, failed);
+                    var until = Send(Cls("NSDate"), Sel("dateWithTimeIntervalSinceNow:"), 0.5);
+                    var ev = SendEvent(app, Sel("nextEventMatchingMask:untilDate:inMode:dequeue:"), ulong.MaxValue, until, mode, 1);
+                    if (ev != IntPtr.Zero) Send(app, Sel("sendEvent:"), ev);
+                }
+                finally { objc_autoreleasePoolPop(pool); }
+            }
         }
-        Send(Send(Cls("NSStatusBar"), Sel("systemStatusBar")), Sel("removeStatusItem:"), item);
+        finally
+        {
+            // also when something above threw: an icon with no event loop behind it would just sit in the menu bar, dead
+            Send(bar, Sel("removeStatusItem:"), item);
+        }
+    }
+
+    /// <summary>Ends menu tracking on the main thread (the menu may be open); any thread may call it. A no-op with no menu open.</summary>
+    private static void CloseMenu()
+    {
+        if (_menu == IntPtr.Zero) return;
+        try
+        {
+            // the modes menu tracking runs in: it is not the default one, and "common modes" are not accepted here
+            var modes = Send(Cls("NSMutableArray"), Sel("array"));
+            foreach (var mode in new[] { "kCFRunLoopDefaultMode", "NSEventTrackingRunLoopMode", "NSModalPanelRunLoopMode" }) Send(modes, Sel("addObject:"), Str(mode));
+            SendMainThread(_handler, Sel("performSelectorOnMainThread:withObject:waitUntilDone:modes:"), Sel("closeMenu:"), IntPtr.Zero, 0, modes);
+        }
+        catch (Exception ex) { _log?.LogDebug(ex, "menu bar: could not close the menu"); }
     }
 
     /// <summary>Applies the dynamic title, visibility, check mark and enabled state of every entry; only a changed title is set again.</summary>
-    private static void Refresh(IntPtr[] items, string?[] shown)
+    private static void Refresh(IntPtr[] items, string?[] shown, bool[] failed)
     {
         for (var i = 0; i < _entries.Length; i++)
         {
@@ -165,21 +228,28 @@ internal static class MacMenuBar
                 if (entry.Checked is { } check) Send(items[i], Sel("setState:"), check() ? (IntPtr)1 : IntPtr.Zero);
                 if (entry.Enabled is { } enabled) Send(items[i], Sel("setEnabled:"), enabled() ? (IntPtr)1 : IntPtr.Zero);
             }
-            catch (Exception ex) { Debug.WriteLine("menu bar refresh failed: " + ex.Message); }
+            catch (Exception ex)
+            {
+                // once per entry: this runs every second
+                if (!failed[i]) _log?.LogWarning(ex, "menu bar: could not update \"{Title}\"", entry.Title);
+                failed[i] = true;
+            }
         }
+    }
+
+    /// <summary>Opens a URL, file or folder with the system's default application.</summary>
+    internal static void OpenUrl(string target)
+    {
+        var start = new ProcessStartInfo("/usr/bin/open") { UseShellExecute = false };
+        start.ArgumentList.Add(target);
+        Process.Start(start);
     }
 
     /// <summary>The menu: what the agent is doing, and what the user can ask of it.</summary>
     internal static MenuEntry[] Entries(AdbReverse adb, UpdateService updates, IHostApplicationLifetime life, string settingsUrl, string configDir)
     {
-        static void Open(string target)
-        {
-            var start = new ProcessStartInfo("/usr/bin/open") { UseShellExecute = false };
-            start.ArgumentList.Add(target);
-            Process.Start(start);
-        }
+        static void Open(string target) => OpenUrl(target);
         var app = UpdateService.BundleDir(AppContext.BaseDirectory);
-        var otherLoginItem = File.Exists(MacLoginItem.SetupScriptPlist);
         return
         [
             new("PhoneBox " + AppPaths.Version),
@@ -194,9 +264,10 @@ internal static class MacMenuBar
             MenuEntry.Separator,
             new("Show Log", () => Open(AppPaths.LogPath)),
             new("Open Config Folder", () => Open(configDir)),
-            new(otherLoginItem ? "Start at Login (set up by setup.sh)" : "Start at Login",
-                app is null || otherLoginItem ? null : () => MacLoginItem.Set(app, !MacLoginItem.Enabled),
-                Checked: () => MacLoginItem.Enabled || otherLoginItem, Enabled: () => app is not null && !otherLoginItem),
+            // read again each time it is drawn: setup.sh may have been run, or removed, since the menu was built
+            new("Start at Login", app is null ? null : () => { if (!MacLoginItem.OtherLoginItem) MacLoginItem.Set(!MacLoginItem.Enabled); },
+                DynamicTitle: () => MacLoginItem.OtherLoginItem ? "Start at Login (set up by setup.sh)" : "Start at Login",
+                Checked: () => MacLoginItem.Enabled || MacLoginItem.OtherLoginItem, Enabled: () => app is not null && !MacLoginItem.OtherLoginItem),
             MenuEntry.Separator,
             new("Quit PhoneBox", () => { _quitting = true; life.StopApplication(); }, Key: "q"),
         ];
@@ -204,13 +275,16 @@ internal static class MacMenuBar
 
     private static void Guard(Action action)
     {
-        try { action(); } catch (Exception ex) { Debug.WriteLine("menu bar action failed: " + ex.Message); }
+        try { action(); } catch (Exception ex) { _log?.LogWarning(ex, "menu bar: an action failed"); }
     }
 }
 
 /// <summary>
 /// "Start at Login" for PhoneBox.app: a launchd agent that opens the app when the user logs in. setup.sh's own agent
-/// (net.oxog.phonebox.agent) is a different thing and takes precedence; running both would start two instances.
+/// (net.oxog.phonebox.agent) is a different thing and takes precedence; running both would start two instances (setup.sh
+/// and install.sh remove this one, and the menu greys the item out while the other exists).
+/// It opens the app by its bundle identifier, not by the path it had when the item was ticked: that path may be a mounted
+/// disk image or an App Translocation folder, and the app may be moved later.
 /// </summary>
 internal static class MacLoginItem
 {
@@ -218,22 +292,25 @@ internal static class MacLoginItem
     internal static readonly string Plist = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library", "LaunchAgents", Label + ".plist");
     internal static readonly string SetupScriptPlist = Path.Combine(Path.GetDirectoryName(Plist)!, "net.oxog.phonebox.agent.plist");
 
+    internal const string BundleId = "net.oxog.phonebox.agent";
+
     internal static bool Enabled => File.Exists(Plist);
+    internal static bool OtherLoginItem => File.Exists(SetupScriptPlist);
 
     /// <summary>Takes effect at the next login; the app that is running now is left alone.</summary>
-    internal static void Set(string appPath, bool on)
+    internal static void Set(bool on)
     {
         if (!on) { File.Delete(Plist); return; }
         Directory.CreateDirectory(Path.GetDirectoryName(Plist)!);
-        File.WriteAllText(Plist, PlistText(appPath));
+        File.WriteAllText(Plist, PlistText());
     }
 
-    internal static string PlistText(string appPath) => $"""
+    internal static string PlistText() => $"""
         <?xml version="1.0" encoding="UTF-8"?>
         <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
         <plist version="1.0"><dict>
           <key>Label</key><string>{Label}</string>
-          <key>ProgramArguments</key><array><string>/usr/bin/open</string><string>-a</string><string>{System.Security.SecurityElement.Escape(appPath)}</string></array>
+          <key>ProgramArguments</key><array><string>/usr/bin/open</string><string>-b</string><string>{BundleId}</string></array>
           <key>RunAtLoad</key><true/>
         </dict></plist>
         """;

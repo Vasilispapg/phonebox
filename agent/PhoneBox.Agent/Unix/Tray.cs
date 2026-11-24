@@ -26,14 +26,20 @@ public static class MenuBarHost
     /// <summary>True when the host ran here, with the icon, until it stopped; false when the caller should just run it.</summary>
     public static bool TryRun(WebApplication app, string[] args, AgentEndpoint endpoint, string configDir)
     {
-        if (!MacMenuBar.Wanted(args, UpdateService.RunningInBundle, Environment.GetEnvironmentVariable) || !MacMenuBar.CanRun()) return false;
+        try
+        {
+            // inside the try: the system libraries behind CanRun may not load, and then the agent should simply run without an icon
+            if (!MacMenuBar.Wanted(args, UpdateService.RunningInBundle, Environment.GetEnvironmentVariable) || !MacMenuBar.CanRun()) return false;
+        }
+        catch (Exception ex) { app.Logger.LogWarning("menu bar icon not available: {Msg}", ex.Message); return false; }
         var host = app.RunAsync();
         try
         {
             MacMenuBar.Run(MacMenuBar.Entries(app.Services.GetRequiredService<AdbReverse>(), app.Services.GetRequiredService<UpdateService>(),
-                app.Lifetime, endpoint.SettingsUrl, configDir), () => host.IsCompleted);
+                app.Lifetime, endpoint.SettingsUrl, configDir), () => host.IsCompleted, app.Lifetime.ApplicationStopping, app.Lifetime.StopApplication,
+                () => MacMenuBar.OpenUrl(endpoint.SettingsUrl), app.Logger);
         }
-        catch (Exception ex) { app.Logger.LogWarning("menu bar icon failed: {Msg}", ex.Message); }
+        catch (Exception ex) { app.Logger.LogWarning(ex, "menu bar icon failed"); }
         host.GetAwaiter().GetResult();
         return true;
     }
