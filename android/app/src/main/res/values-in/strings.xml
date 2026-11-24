@@ -30,4 +30,7 @@
     <string name="bridge_send_too_large">Terlalu panjang untuk dikirim (batasnya 64 KiB)</string>
     <string name="bridge_state_unsupported">Komputer ini tidak dapat membagikan papan klip: jembatan ponsel memerlukan agen PhoneBox di Mac</string>
     <string name="bridge_state_stopped">Dihentikan oleh Android. Buka layar ini lagi, atau mulai ulang PhoneBox, untuk terhubung kembali</string>
+    <string name="bridge_confirm_title">Kirim teks ini ke papan klip Mac?</string>
+    <string name="bridge_pair_again">Mac tidak lagi menerima kunci ponsel ini: Mac disandingkan ulang atau mendapat kunci baru. Hubungkan ponsel lewat USB sekali, atau sandingkan ulang lewat Wi-Fi.</string>
+    <string name="bridge_send_unknown">Tidak ada jawaban dari Mac: teks mungkin sudah sampai. Periksa di Mac sebelum mengirim lagi.</string>
 </resources>

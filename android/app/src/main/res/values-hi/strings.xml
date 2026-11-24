@@ -30,4 +30,7 @@
     <string name="bridge_send_too_large">भेजने के लिए बहुत लंबा (सीमा 64 KiB है)</string>
     <string name="bridge_state_unsupported">यह कंप्यूटर क्लिपबोर्ड साझा नहीं कर सकता: फ़ोन ब्रिज के लिए Mac पर PhoneBox एजेंट चाहिए</string>
     <string name="bridge_state_stopped">Android ने रोक दिया। फिर से जुड़ने के लिए यह स्क्रीन दोबारा खोलें या PhoneBox को फिर से शुरू करें</string>
+    <string name="bridge_confirm_title">यह टेक्स्ट Mac के क्लिपबोर्ड पर भेजें?</string>
+    <string name="bridge_pair_again">Mac अब इस फ़ोन की कुंजी स्वीकार नहीं करता: उसे फिर से पेयर किया गया या नई कुंजी मिली। फ़ोन को एक बार USB से जोड़ें, या Wi-Fi पर फिर से पेयर करें।</string>
+    <string name="bridge_send_unknown">Mac से कोई जवाब नहीं आया: टेक्स्ट शायद पहुँच गया है। दोबारा भेजने से पहले Mac पर देख लें।</string>
 </resources>

@@ -1,9 +1,11 @@
 package net.oxog.phonebox.deskpanel
 
-enum class SendResult { OK, OFF, TOO_LARGE, UNREACHABLE }
+/** [UNKNOWN]: the text was sent but no answer came back (the link's 504), so it may well be on the Mac already.
+ *  [PAIR_AGAIN]: the Mac refused this phone's key (401): it was paired again or got a new key. */
+enum class SendResult { OK, OFF, TOO_LARGE, UNREACHABLE, UNKNOWN, PAIR_AGAIN }
 
 /** Where the clipboard service is, for the Phone bridge screen. Kept in memory: it describes this process only. */
-enum class ClipboardState { STOPPED, WAITING, RUNNING, MAC_OFF, UNSUPPORTED }
+enum class ClipboardState { STOPPED, WAITING, RUNNING, MAC_OFF, UNSUPPORTED, PAIR_AGAIN }
 
 /**
  * The phone bridge's pure helpers. No Android types, so tools/test-bridge-checks.py runs them on a plain JVM. The small
@@ -50,9 +52,11 @@ object BridgeClip {
 
     /**
      * What a failed attempt to open the stream tells the screen: 403 is the Mac's switch, 404 or 501 an agent that has no
-     * bridge (an older one, or a Windows or Linux one), anything else (no route, 401, 5xx) just means waiting.
+     * bridge (an older one, or a Windows or Linux one), 401 a key the Mac no longer accepts (it was paired again, or got a
+     * new key: waiting would never end), anything else (no route, 5xx) just means waiting.
      */
     fun stateAfterFailure(code: Int?): ClipboardState = when (code) {
+        401 -> ClipboardState.PAIR_AGAIN
         403 -> ClipboardState.MAC_OFF
         404, 501 -> ClipboardState.UNSUPPORTED
         else -> ClipboardState.WAITING
@@ -61,9 +65,26 @@ object BridgeClip {
     /** What the agent's answer to a send means. */
     fun resultFor(code: Int): SendResult = when (code) {
         200 -> SendResult.OK
+        401 -> SendResult.PAIR_AGAIN
         403 -> SendResult.OFF
         413 -> SendResult.TOO_LARGE
+        // AgentLink's answer when the request went out and the reply was lost: the Mac may have the text already
+        504 -> SendResult.UNKNOWN
         else -> SendResult.UNREACHABLE
+    }
+
+    /** How much of a shared text the confirmation shows. The whole text is sent; this only keeps the dialog small. */
+    const val PREVIEW_CHARS = 600
+
+    /**
+     * The start of [text] for the confirmation before Send to Mac, never longer than [max] characters plus an ellipsis, and
+     * never cut inside a surrogate pair (half an emoji would show as a box). Only for display: it is not sent or logged.
+     */
+    fun preview(text: String, max: Int = PREVIEW_CHARS): String {
+        if (text.length <= max) return text
+        var end = max
+        if (end > 0 && Character.isHighSurrogate(text[end - 1]) && Character.isLowSurrogate(text[end])) end--
+        return text.substring(0, end).trimEnd() + "…"
     }
 
     /** A strict reader for one flat JSON object; any problem makes [parseObject] return null. */

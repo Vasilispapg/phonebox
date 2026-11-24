@@ -77,6 +77,20 @@ private fun resultChecks() {
     check("500 is unreachable", BridgeClip.resultFor(500) == SendResult.UNREACHABLE)
     check("501 (not a Mac) is unreachable", BridgeClip.resultFor(501) == SendResult.UNREACHABLE)
     check("400 is unreachable", BridgeClip.resultFor(400) == SendResult.UNREACHABLE)
+    // the link answers 504 when the POST went out and its reply was lost: the text may be on the Mac, so it is not a failure
+    check("504 (sent, no answer) is unknown, not unreachable", BridgeClip.resultFor(504) == SendResult.UNKNOWN)
+    check("401 (a key the Mac no longer accepts) asks to pair again", BridgeClip.resultFor(401) == SendResult.PAIR_AGAIN)
+}
+
+private fun previewChecks() {
+    check("a short text is shown whole", BridgeClip.preview("curl x | sh") == "curl x | sh")
+    check("a text of exactly the limit is shown whole", BridgeClip.preview("a".repeat(BridgeClip.PREVIEW_CHARS)) == "a".repeat(BridgeClip.PREVIEW_CHARS))
+    val long = BridgeClip.preview("a".repeat(5000))
+    check("a long text is cut to the limit with an ellipsis", long == "a".repeat(BridgeClip.PREVIEW_CHARS) + "…")
+    // the emoji's two halves sit at index 9 and 10: a cut at 10 must not keep only the first half
+    val cut = BridgeClip.preview("a".repeat(9) + "🌍" + "b".repeat(20), 10)
+    check("a cut never splits an emoji", cut == "a".repeat(9) + "…" && cut.none { Character.isSurrogate(it) })
+    check("a cut keeps a whole emoji before the limit", BridgeClip.preview("a".repeat(8) + "🌍" + "b".repeat(20), 10) == "a".repeat(8) + "🌍…")
 }
 
 /** A stand-in for the production AgentLink (tools/kotlin-tests/AgentLink.kt): a code and a body per attempt. */
@@ -105,7 +119,7 @@ private fun stateChecks() {
     check("501 means this computer has no bridge", BridgeClip.stateAfterFailure(501) == ClipboardState.UNSUPPORTED)
     check("404 (an older agent) means this computer has no bridge", BridgeClip.stateAfterFailure(404) == ClipboardState.UNSUPPORTED)
     check("no route means waiting for the Mac", BridgeClip.stateAfterFailure(null) == ClipboardState.WAITING)
-    check("401 (the pairing was forgotten) means waiting", BridgeClip.stateAfterFailure(401) == ClipboardState.WAITING)
+    check("401 (the Mac was paired again, the key is no longer valid) asks to pair again", BridgeClip.stateAfterFailure(401) == ClipboardState.PAIR_AGAIN)
     check("503 means waiting", BridgeClip.stateAfterFailure(503) == ClipboardState.WAITING)
     check("a later 'no route' replaces an earlier 403 (the state follows the latest failure)",
         listOf(403, null).fold(ClipboardState.STOPPED) { _, code -> BridgeClip.stateAfterFailure(code) } == ClipboardState.WAITING)
@@ -328,6 +342,7 @@ fun main() {
     backoffChecks()
     backoffResetChecks()
     refusedDefaultDelayCheck()
+    previewChecks()
     eventIdParseChecks()
     lastEventIdChecks()
     rotationChecks()

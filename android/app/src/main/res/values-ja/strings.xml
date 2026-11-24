@@ -30,4 +30,7 @@
     <string name="bridge_send_too_large">長すぎて送信できません（上限は 64 KiB）</string>
     <string name="bridge_state_unsupported">このコンピューターはクリップボードを共有できません：スマホブリッジには Mac 上の PhoneBox エージェントが必要です</string>
     <string name="bridge_state_stopped">Android によって停止されました。この画面をもう一度開くか、PhoneBox を再起動して再接続してください</string>
+    <string name="bridge_confirm_title">このテキストを Mac のクリップボードに送信しますか？</string>
+    <string name="bridge_pair_again">Mac はこの電話のキーを受け付けなくなりました（再ペアリングされたか、新しいキーになりました）。電話を一度 USB で接続するか、Wi-Fi で再ペアリングしてください。</string>
+    <string name="bridge_send_unknown">Mac から応答がありません。テキストは届いている可能性があります。もう一度送る前に Mac で確認してください。</string>
 </resources>

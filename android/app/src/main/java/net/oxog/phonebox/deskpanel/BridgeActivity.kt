@@ -99,6 +99,7 @@ class BridgeActivity : Activity() {
             ClipboardState.MAC_OFF -> getString(R.string.bridge_state_mac_off)
             ClipboardState.UNSUPPORTED -> getString(R.string.bridge_state_unsupported)
             ClipboardState.WAITING -> getString(R.string.bridge_state_waiting)
+            ClipboardState.PAIR_AGAIN -> getString(R.string.bridge_pair_again)
             ClipboardState.STOPPED -> getString(R.string.bridge_state_stopped) + (BridgePrefs.lastError?.let { " ($it)" } ?: "")
         }
     }

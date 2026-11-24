@@ -30,4 +30,7 @@
     <string name="bridge_send_too_large">Troppo lungo da inviare (il limite è 64 KiB)</string>
     <string name="bridge_state_unsupported">Questo computer non può condividere gli appunti: il ponte telefono richiede l\'agente PhoneBox su un Mac</string>
     <string name="bridge_state_stopped">Arrestato da Android. Riapri questa schermata, o riavvia PhoneBox, per riconnetterti</string>
+    <string name="bridge_confirm_title">Inviare questo testo negli appunti del Mac?</string>
+    <string name="bridge_pair_again">Il Mac non accetta più la chiave di questo telefono: è stato associato di nuovo o ha ricevuto una nuova chiave. Collega il telefono via USB una volta, oppure associalo di nuovo via Wi-Fi.</string>
+    <string name="bridge_send_unknown">Nessuna risposta dal Mac: il testo potrebbe essere arrivato. Controlla sul Mac prima di inviarlo di nuovo.</string>
 </resources>

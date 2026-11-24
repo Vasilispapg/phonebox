@@ -34,4 +34,9 @@
     <string name="bridge_send_too_large">Too long to send (the limit is 64 KiB)</string>
     <string name="bridge_state_unsupported">This computer can\'t share the clipboard: the phone bridge needs the PhoneBox agent on a Mac</string>
     <string name="bridge_state_stopped">Stopped by Android. Open this screen again, or restart PhoneBox, to reconnect</string>
+    <!-- Phone bridge: the confirmation before Send to Mac from another app (Share, text selection), a key the Mac no longer
+         accepts (401), and a send whose answer was lost (the text may be on the Mac). -->
+    <string name="bridge_confirm_title">Send this text to the Mac\'s clipboard?</string>
+    <string name="bridge_pair_again">The Mac no longer accepts this phone\'s key: it was paired again or got a new key. Connect the phone by USB once, or pair it again over Wi-Fi.</string>
+    <string name="bridge_send_unknown">No answer from the Mac: the text may have arrived. Check on the Mac before sending it again.</string>
 </resources>

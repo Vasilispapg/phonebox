@@ -101,7 +101,8 @@
             </intent-filter>
         </activity-alias>
 
-        <!-- "Send to Mac": the text-selection menu (Android 6+, next to Copy) and the Share sheet. See-through, sends and closes.
+        <!-- "Send to Mac": the text-selection menu (Android 6+, next to Copy) and the Share sheet. See-through: shows the start of
+             the text and sends it only when the owner taps Send to Mac (any app can start it with any text).
              Disabled until Phone bridge is turned on (BridgeEntryPoints), so it never clutters other apps' menus for anyone else. -->
         <activity
             android:name=".SendToMacActivity"
