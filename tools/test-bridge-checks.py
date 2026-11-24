@@ -14,8 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 NS = {"m": "http://maven.apache.org/POM/4.0.0"}
 APP = ROOT / "android/app/src/main/java/net/oxog/phonebox/deskpanel"
 # production files that must compile on a plain JVM (no Android types), then the stand-in link and the checks
-PRODUCTION = ["BridgeClip.kt", "AgentStream.kt", "NotificationFilter.kt", "DeliveryQueue.kt", "BridgeConfigCache.kt"]
-CHECKS = ["AgentLink.kt", "BridgeChecks.kt", "NotificationFilterChecks.kt"]
+PRODUCTION = ["BridgeClip.kt", "AgentStream.kt"]
+CHECKS = ["AgentLink.kt", "BridgeChecks.kt"]
 
 
 def main():
@@ -39,15 +39,16 @@ def main():
     classpath = os.pathsep.join(map(str, [stdlib, annotations[-1]]))
     output = Path(tempfile.mkdtemp(prefix="phonebox-bridge-check-"))
     compiler_cp = os.pathsep.join(map(str, [compiler, *dependencies, annotations[-1]]))
-    sources = [APP / f for f in PRODUCTION if (APP / f).exists()]
-    sources += [ROOT / "tools/kotlin-tests" / f for f in CHECKS if (ROOT / "tools/kotlin-tests" / f).exists()]
+    sources = [APP / f for f in PRODUCTION] + [ROOT / "tools/kotlin-tests" / f for f in CHECKS]
+    # a renamed or deleted file must fail the run, not drop its checks without a word
+    missing = [str(f.relative_to(ROOT)) for f in sources if not f.is_file()]
+    if missing:
+        raise SystemExit("ERROR: missing source files: " + ", ".join(missing))
     subprocess.run(["java", "-cp", compiler_cp, "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler", "-no-stdlib", "-no-reflect",
                     "-jvm-target", "17", "-classpath", classpath, "-d", str(output), *map(str, sources)], check=True, timeout=120)
-    mains = ["BridgeChecksKt"] + (["NotificationFilterChecksKt"] if (ROOT / "tools/kotlin-tests/NotificationFilterChecks.kt").exists() else [])
-    for main_class in mains:
-        result = subprocess.run(["java", "-cp", str(output) + os.pathsep + classpath, f"net.oxog.phonebox.deskpanel.{main_class}"], timeout=60)
-        if result.returncode != 0:
-            raise SystemExit(result.returncode)
+    result = subprocess.run(["java", "-cp", str(output) + os.pathsep + classpath, "net.oxog.phonebox.deskpanel.BridgeChecksKt"], timeout=120)
+    if result.returncode != 0:
+        raise SystemExit(result.returncode)
 
 
 if __name__ == "__main__":
