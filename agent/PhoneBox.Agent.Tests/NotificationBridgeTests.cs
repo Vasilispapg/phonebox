@@ -102,6 +102,14 @@ public sealed class NotificationBridgeTests : IDisposable
     }
 
     [Fact]
+    public async Task ACallThatBecomesAMissedCallIsShownAgainEvenWithTheSameTitleAndText()
+    {
+        await Send(N("c9|100", "Phone", "Maria", "", "call"));
+        await Send(N("c9|100", "Phone", "Maria", "", "missed_call"));   // the same key, title and text: only the kind changed
+        Assert.Equal(2, _notifier.Posts.Count);
+    }
+
+    [Fact]
     public async Task AMissedCallSaysMissedCall()
     {
         await Send(N("c2", "Phone", "+30 210 5551234", "", "missed_call"));
