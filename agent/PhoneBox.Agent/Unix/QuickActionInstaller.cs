@@ -58,7 +58,7 @@ internal sealed class QuickActionInstaller(string servicesDir, string keyFilePat
 
     /// <summary>
     /// The script the workflow runs. It reads the port and the key from <paramref name="keyFilePath"/> (the key is never written
-    /// into it), skips folders, sends every file with <c>curl --upload-file</c>, and says in one notification how it went.
+    /// into it), skips folders, sends every file with <c>curl --globoff --upload-file</c> (without --globoff curl reads [ ] and { } in a path as a pattern), and says in one notification how it went.
     /// Names are percent-encoded byte by byte (od), so no name can reach a shell, an AppleScript or a curl option.
     /// </summary>
     public static string BuildScript(string keyFilePath) => $$"""
@@ -85,7 +85,7 @@ internal sealed class QuickActionInstaller(string servicesDir, string keyFilePat
         for f in "$@"; do
           [ -f "$f" ] || continue
           name=$(basename -- "$f")
-          code=$(curl --silent --connect-timeout 5 --output /dev/null --write-out '%{http_code}' -H "X-PhoneBox-Transfer-Key: $key" --upload-file "$f" "http://127.0.0.1:$port/api/transfer/send?name=$(encode "$name")")
+          code=$(curl --globoff --silent --connect-timeout 5 --output /dev/null --write-out '%{http_code}' -H "X-PhoneBox-Transfer-Key: $key" --upload-file "$f" "http://127.0.0.1:$port/api/transfer/send?name=$(encode "$name")")
           case "$code" in
             202) sent=$((sent + 1)) ;;
             403) problem="Sending files to the phone is off"; break ;;

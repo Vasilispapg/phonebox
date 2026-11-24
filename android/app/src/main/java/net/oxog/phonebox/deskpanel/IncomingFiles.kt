@@ -174,9 +174,7 @@ object MediaSaver {
     private fun saveLegacy(context: Context, file: FileTransferRules.IncomingFile, input: InputStream): Saved? {
         val dir = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: return null, "PhoneBox")
         if (!dir.isDirectory && !dir.mkdirs()) return null
-        var target = File(dir, file.name)
-        var n = 1
-        while (target.exists()) target = File(dir, "${file.name.substringBeforeLast('.', file.name)} ($n++)${if (file.name.contains('.')) "." + file.name.substringAfterLast('.') else ""}")
+        val target = File(dir, FileTransferRules.uniqueName(file.name) { File(dir, it).exists() })
         val copied = target.outputStream().use { out -> FileTransferRules.copy(input, out, {}, { false }) }
         if (copied != file.size) { target.delete(); return null }
         return Saved(null)

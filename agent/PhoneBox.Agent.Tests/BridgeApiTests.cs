@@ -615,6 +615,46 @@ public sealed class BridgeApiTests : IDisposable
 
     private static string Json(IResult r) => JsonSerializer.Serialize(Assert.IsAssignableFrom<IValueHttpResult>(r).Value);
 
+    // ---- GET /api/bridge/files/in: the same checks as the PUT, answered before the phone sends a single byte ----
+
+    private static DefaultHttpContext CheckRequest(string query)
+    {
+        var ctx = new DefaultHttpContext();
+        ctx.Request.Method = "GET";
+        ctx.Request.QueryString = new QueryString(query);
+        return ctx;
+    }
+
+    [Fact]
+    public void ThePreflightAnswersInTheSameOrderAsTheUploadAndTakesNoSlot()
+    {
+        SetFiles(true);
+        var receiver = NewReceiver();
+        Assert.Equal(403, Status(BridgeApi.CheckFile(CheckRequest("?name=a&size=5"), receiver, _store, () => false)));
+        Assert.Equal(501, Status(BridgeApi.CheckFile(CheckRequest("?name=a&size=5"), null, _store, () => true)));
+        Assert.Equal(400, Status(BridgeApi.CheckFile(CheckRequest("?name=a&size=abc"), receiver, _store, () => true)));
+        Assert.Equal(413, Status(BridgeApi.CheckFile(CheckRequest($"?name=a&size={FileLimits.MaxFileBytes + 1}"), receiver, _store, () => true)));
+        _free = 100;
+        Assert.Equal(507, Status(BridgeApi.CheckFile(CheckRequest("?name=a&size=5"), receiver, _store, () => true)));
+        _free = long.MaxValue / 2;
+        for (var i = 0; i < 10; i++) Assert.Equal(200, Status(BridgeApi.CheckFile(CheckRequest("?name=a&size=5"), receiver, _store, () => true)));
+        Assert.Null(receiver.Precheck(1)); // ten checks took no upload slot
+        Assert.Null(receiver.Precheck(1));
+        Assert.Equal(429, Status(BridgeApi.CheckFile(CheckRequest("?name=a&size=5"), receiver, _store, () => true)));
+        SetFiles(false);
+        var off = BridgeApi.CheckFile(CheckRequest("?name=a&size=5"), NewReceiver(), _store, () => true);
+        Assert.Equal(403, Status(off));
+        Assert.Contains("off", Json(off));
+    }
+
+    [Fact]
+    public void ThePreflightWithoutASizeStillChecksTheDisk()
+    {
+        SetFiles(true);
+        _free = 5;
+        Assert.Equal(507, Status(BridgeApi.CheckFile(CheckRequest("?name=a"), NewReceiver(), _store, () => true)));
+    }
+
     [Fact]
     public async Task PutFileStoresAndAnswersWithTheFinalName()
     {

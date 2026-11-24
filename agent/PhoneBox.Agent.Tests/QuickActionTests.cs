@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Net;
+using System.Net.Sockets;
 using System.Text;
 using PhoneBox.Agent;
 using Xunit;
@@ -146,6 +148,110 @@ public sealed class QuickActionTests : IDisposable
         Assert.NotEqual(0, result.Exit);
         Assert.Equal("", result.Curl);
         Assert.Contains("off", result.Notes, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ---- the real curl, against a real listener: curl itself must not read a name as a pattern ----
+
+    /// <summary>A server that answers every request 202 and remembers each request line and body.</summary>
+    private sealed class OneLineAgent : IDisposable
+    {
+        private readonly TcpListener _listener = new(IPAddress.Loopback, 0);
+        private readonly CancellationTokenSource _stop = new();
+        public readonly List<(string Target, string Body)> Requests = [];
+        public int Port => ((IPEndPoint)_listener.LocalEndpoint).Port;
+
+        public OneLineAgent()
+        {
+            _listener.Start();
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    while (!_stop.IsCancellationRequested)
+                    {
+                        using var client = await _listener.AcceptTcpClientAsync(_stop.Token);
+                        var stream = client.GetStream();
+                        var head = new StringBuilder();
+                        var one = new byte[1];
+                        while (!head.ToString().EndsWith("\r\n\r\n") && await stream.ReadAsync(one, _stop.Token) == 1) head.Append((char)one[0]);
+                        var text = head.ToString();
+                        var target = text.Split(' ')[1];
+                        var length = 0;
+                        foreach (var line in text.Split("\r\n"))
+                            if (line.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase)) length = int.Parse(line[15..].Trim());
+                        var body = new byte[length];
+                        for (var read = 0; read < length;) read += await stream.ReadAsync(body.AsMemory(read), _stop.Token);
+                        lock (Requests) Requests.Add((target, Encoding.UTF8.GetString(body)));
+                        await stream.WriteAsync("HTTP/1.1 202 Accepted\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"u8.ToArray(), _stop.Token);
+                    }
+                }
+                catch (Exception) { /* stopped */ }
+            });
+        }
+
+        public void Dispose() { _stop.Cancel(); _listener.Stop(); }
+    }
+
+    private (int Exit, string Notes) RunWithRealCurl(int port, params string[] files)
+    {
+        var keyFile = new LocalTransferKey(Path.Combine(_root, "real-transfer.json"), port);
+        keyFile.Ensure();
+        var realBin = Path.Combine(_root, "realbin"); // only a silent osascript: the real curl comes from /usr/bin
+        Directory.CreateDirectory(realBin);
+        File.Copy(Path.Combine(Bin, "osascript"), Path.Combine(realBin, "osascript"), true);
+        var scriptPath = Path.Combine(_root, "real.sh");
+        File.WriteAllText(scriptPath, QuickActionInstaller.BuildScript(keyFile.Path));
+        var info = new ProcessStartInfo("/bin/bash") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+        info.ArgumentList.Add(scriptPath);
+        foreach (var f in files) info.ArgumentList.Add(f);
+        info.Environment["PATH"] = realBin + ":/usr/bin:/bin";
+        info.Environment["NOTE_LOG"] = NoteLog;
+        using var process = Process.Start(info)!;
+        process.StandardOutput.ReadToEnd();
+        process.StandardError.ReadToEnd();
+        Assert.True(process.WaitForExit(30_000));
+        return (process.ExitCode, File.Exists(NoteLog) ? File.ReadAllText(NoteLog) : "");
+    }
+
+    [Theory]
+    [InlineData("Report [final].pdf", "Report%20%5Bfinal%5D.pdf")]
+    [InlineData("IMG [1].jpg", "IMG%20%5B1%5D.jpg")]
+    public void ABracketInANameIsNotAPatternToCurl(string name, string encoded)
+    {
+        using var agent = new OneLineAgent();
+        var file = Make(name, "photo bytes");
+        var result = RunWithRealCurl(agent.Port, file);
+        Assert.True(result.Exit == 0, result.Notes);
+        var request = Assert.Single(agent.Requests);
+        Assert.Equal("/api/transfer/send?name=" + encoded, request.Target);
+        Assert.Equal("photo bytes", request.Body);
+    }
+
+    [Fact]
+    public void ABraceInANameDoesNotSendItsSiblings()
+    {
+        using var agent = new OneLineAgent();
+        Make("ab.txt", "sibling one");
+        Make("ac.txt", "sibling two");
+        var file = Make("a{b,c}.txt", "the real one");
+        var result = RunWithRealCurl(agent.Port, file);
+        Assert.True(result.Exit == 0, result.Notes);
+        var request = Assert.Single(agent.Requests);
+        Assert.Equal("/api/transfer/send?name=a%7Bb%2Cc%7D.txt", request.Target);
+        Assert.Equal("the real one", request.Body);
+    }
+
+    [Fact]
+    public void ABracketInAParentFolderDoesNotBreakItsFiles()
+    {
+        using var agent = new OneLineAgent();
+        var folder = Path.Combine(Files, "Photos [2024]");
+        Directory.CreateDirectory(folder);
+        var file = Path.Combine(folder, "plain.jpg");
+        File.WriteAllText(file, "inside");
+        var result = RunWithRealCurl(agent.Port, file);
+        Assert.True(result.Exit == 0, result.Notes);
+        Assert.Equal("inside", Assert.Single(agent.Requests).Body);
     }
 
     // ---- the bundle ----

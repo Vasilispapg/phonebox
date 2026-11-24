@@ -21,17 +21,30 @@ import android.provider.OpenableColumns
  */
 class FileUploadService : Service() {
     @Volatile private var cancelled = false
-    private var worker: Thread? = null
+    private val queue = FileTransferRules.WorkQueue<Uri>()
+    private val lock = Any()
+    private var total = 0 // files taken up since the service went idle, for "3 / 5"
+    private var done = 0
+    private var sent = 0
+    private var failure: SendResult? = null
+    private var lastStart = 0
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_CANCEL) { cancelled = true; return START_NOT_STICKY }
+        synchronized(lock) { lastStart = startId }
+        if (intent?.action == ACTION_CANCEL) { cancelled = true; queue.clear(); return START_NOT_STICKY }
         val uris = urisOf(intent)
         try { goForeground(progressNotification(0, 0)) } catch (_: Exception) { stopSelf(); return START_NOT_STICKY }
-        if (uris.isEmpty() || worker != null || !BridgePrefs.filesFromPhoneEnabled(this)) { stopSelf(); return START_NOT_STICKY }
-        cancelled = false
-        worker = Thread { run(uris) }.also { it.start() }
+        if (uris.isEmpty() || !BridgePrefs.filesFromPhoneEnabled(this)) {
+            // nothing to send; the service stops only when no upload is running (stopSelf(startId) is a no-op while a later start is pending)
+            stopSelf(startId)
+            return START_NOT_STICKY
+        }
+        // a share while an upload runs is added to it: the running worker takes it next, nothing is cut off. Under the same lock as the
+        // end of a worker, so a batch either joins the running one or starts the next one, and is never left to a worker that is leaving.
+        val startWorker = synchronized(lock) { total += uris.size; queue.add(uris) }
+        if (startWorker) Thread { run() }.start()
         return START_NOT_STICKY
     }
 
@@ -40,37 +53,49 @@ class FileUploadService : Service() {
         return (0 until clip.itemCount).mapNotNull { clip.getItemAt(it).uri }
     }
 
-    private fun run(uris: List<Uri>) {
+    private fun run() {
         val app = applicationContext
         val link = AgentLink(app)
-        var sent = 0
-        var failure: SendResult? = null
         try {
             val client = BridgeClient(link)
-            for ((index, uri) in uris.withIndex()) {
-                if (cancelled) break
+            while (true) {
+                val uri = queue.next() ?: break
+                if (cancelled) continue // drain: a cancel also drops what was waiting
+                val number = synchronized(lock) { done + 1 }
                 val size = sizeOf(uri)
-                if (size != null && size > FileTransferRules.MAX_FILE_BYTES) { failure = SendResult.TOO_LARGE; continue }
-                var lastShown = 0L
-                val result = client.uploadFile(nameOf(uri), size, { app.contentResolver.openInputStream(uri) ?: throw java.io.FileNotFoundException() },
-                    { done ->
-                        val now = System.currentTimeMillis()
-                        if (now - lastShown > 1000) { lastShown = now; notify(progressNotification(index + 1, uris.size, done, size)) }
-                    }, { cancelled })
-                if (cancelled) break
-                if (result == SendResult.OK) sent++ else {
-                    failure = result
-                    // the Mac will not take more (switch off, disk full, key refused, busy): stop instead of failing each file
-                    if (result == SendResult.OFF || result == SendResult.NO_SPACE || result == SendResult.PAIR_AGAIN || result == SendResult.BUSY) break
+                var result: SendResult
+                if (size != null && size > FileTransferRules.MAX_FILE_BYTES) result = SendResult.TOO_LARGE
+                else {
+                    var lastShown = 0L
+                    result = client.uploadFile(nameOf(uri), size, { app.contentResolver.openInputStream(uri) ?: throw java.io.FileNotFoundException() },
+                        { sentBytes ->
+                            val now = System.currentTimeMillis()
+                            if (now - lastShown > 1000) { lastShown = now; notify(progressNotification(number, synchronized(lock) { total }, sentBytes, size)) }
+                        }, { cancelled })
                 }
+                if (cancelled) continue
+                synchronized(lock) {
+                    done++
+                    if (result == SendResult.OK) sent++ else failure = result
+                }
+                // the Mac will not take more (switch off, disk full, key refused, busy): stop instead of failing each file
+                if (result == SendResult.OFF || result == SendResult.NO_SPACE || result == SendResult.PAIR_AGAIN || result == SendResult.BUSY) queue.clear()
             }
         } finally {
             link.close()
         }
+        val ending = synchronized(lock) {
+            // a batch that arrived as this one ended started a new worker: that one reports for both and stops the service
+            if (!queue.idle()) null
+            else Triple(sent, failure, lastStart).also { total = 0; done = 0; sent = 0; failure = null }
+        } ?: return
+        val (count, problem, last) = ending
+        val wasCancelled = cancelled
+        cancelled = false
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.cancel(PROGRESS_ID)
-        if (!cancelled) manager.notify(RESULT_ID, resultNotification(sent, failure))
-        stopSelf()
+        if (!wasCancelled) manager.notify(RESULT_ID, resultNotification(count, problem))
+        stopSelf(last) // a start request that arrived since has a later id: then the service stays
     }
 
     private fun sizeOf(uri: Uri): Long? = try {
@@ -135,10 +160,11 @@ class FileUploadService : Service() {
     }
 
     /** Android 15 ends a data-sync foreground service after about six hours a day; stop cleanly instead of being killed. */
-    override fun onTimeout(startId: Int, fgsType: Int) { cancelled = true; stopSelf() }
+    override fun onTimeout(startId: Int, fgsType: Int) { cancelled = true; queue.clear(); stopSelf() }
 
     override fun onDestroy() {
         cancelled = true
+        queue.clear()
         super.onDestroy()
     }
 

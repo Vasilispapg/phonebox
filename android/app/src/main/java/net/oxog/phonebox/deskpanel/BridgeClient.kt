@@ -34,9 +34,22 @@ class BridgeClient(private val link: AgentLink) {
      * [SendResult.UNREACHABLE], and a cancelled upload is whatever the link answered (the caller knows it cancelled).
      */
     fun uploadFile(name: String, size: Long?, open: () -> java.io.InputStream, onProgress: (Long) -> Unit, cancelled: () -> Boolean): SendResult = try {
-        val reply = link.upload(FileTransferRules.uploadPath(FileTransferRules.displayName(name), size), "application/octet-stream", size, open, onProgress, cancelled)
-        try { reply.body.close() } catch (_: Exception) {}
-        BridgeClip.resultFor(reply.code)
+        val path = FileTransferRules.uploadPath(FileTransferRules.displayName(name), size)
+        // Ask first: a refusal (the Mac's switch is off, no room, busy) answered while the body is still being pushed shows up on
+        // the phone as a broken connection, and the file would be sent a second time over the other route. 404 and 405 are an agent
+        // without this question (it simply gets the file); anything the phone cannot tell goes on to the upload.
+        val verdict = try {
+            val reply = link.request("GET", path)
+            try { reply.body.close() } catch (_: Exception) {}
+            reply.code
+        } catch (_: Exception) { null }
+        val refused = if (verdict == null || verdict == 200 || verdict == 404 || verdict == 405) null else BridgeClip.resultFor(verdict)
+        if (refused != null && refused != SendResult.UNREACHABLE) refused
+        else {
+            val reply = link.upload(path, "application/octet-stream", size, open, onProgress, cancelled)
+            try { reply.body.close() } catch (_: Exception) {}
+            BridgeClip.resultFor(reply.code)
+        }
     } catch (_: Exception) {
         SendResult.UNREACHABLE
     }

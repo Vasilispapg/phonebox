@@ -56,6 +56,13 @@ internal static class BridgeApi
         app.MapPost("/api/bridge/files/out/{id}/done", (HttpRequest req, string id) =>
             DoneOutboxFile(id, req.HttpContext.RequestServices.GetService<Outbox>(), req.HttpContext.RequestServices.GetRequiredService<ConfigStore>(),
                 () => Authorized(gate, req.HttpContext)));
+        // The question before the upload: would a file of this size be taken now? (the same checks, no body, no upload slot taken)
+        app.MapGet("/api/bridge/files/in", (HttpRequest req) =>
+        {
+            var services = req.HttpContext.RequestServices;
+            return CheckFile(req.HttpContext, services.GetService<FileReceiver>(), services.GetRequiredService<ConfigStore>(),
+                () => Authorized(gate, req.HttpContext));
+        });
         app.MapGet("/api/bridge/stream", async (HttpContext ctx, ConfigStore cfg, BridgeStream bridge, IHostApplicationLifetime life) =>
         {
             // what the request came with, so the open stream can be checked again with exactly that (see StreamAsync)
@@ -108,17 +115,7 @@ internal static class BridgeApi
         if (!authorized()) return Results.Json(new { error = "not allowed here" }, statusCode: 403);
         if (receiver is null) return Results.Json(new { error = "not supported on this system" }, statusCode: 501);
         if (!cfg.Get().Bridge.FilesFromPhone) return Results.Json(new { error = "off" }, statusCode: 403);
-        var query = ctx.Request.Query;
-        var name = query["name"].ToString();
-        if (name.Length is 0 or > 1024) return Results.Json(new { error = "give a name" }, statusCode: 400);
-        long? size = null;
-        if (query.ContainsKey("size"))
-        {
-            var text = query["size"].ToString();
-            if (text.Length is 0 or > 19 || !long.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed))
-                return Results.Json(new { error = "size is not a number" }, statusCode: 400);
-            size = parsed;
-        }
+        if (FileQuery(ctx.Request, out var name, out var size) is { } bad) return bad;
         if (receiver.Precheck(size) is { } refused) return FileRefusal(refused);
         // this request only: the server's own limit (about 30 MB) stays for every other endpoint
         if (ctx.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } limit)
@@ -165,6 +162,37 @@ internal static class BridgeApi
     {
         if (OutboxGate(outbox, cfg, authorized) is { } refused) return refused;
         return outbox!.Done(id) ? Results.Ok(new { ok = true }) : Results.Json(new { error = "not found" }, statusCode: 404);
+    }
+
+    /// <summary>The name and the optional size of a file request, or the 400 to answer when they do not fit.</summary>
+    private static IResult? FileQuery(HttpRequest request, out string name, out long? size)
+    {
+        var query = request.Query;
+        name = query["name"].ToString();
+        size = null;
+        if (name.Length is 0 or > 1024) return Results.Json(new { error = "give a name" }, statusCode: 400);
+        if (query.ContainsKey("size"))
+        {
+            var text = query["size"].ToString();
+            if (text.Length is 0 or > 19 || !long.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed))
+                return Results.Json(new { error = "size is not a number" }, statusCode: 400);
+            size = parsed;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// GET /api/bridge/files/in?name=&amp;size=: the checks of the upload in the same order, answered before the phone sends the body
+    /// (200 when the file would be taken now). A refusal of the PUT itself comes while the phone is still writing a large body, which it
+    /// sees as a broken connection and cannot tell from a network failure; this answer is clean.
+    /// </summary>
+    public static IResult CheckFile(HttpContext ctx, FileReceiver? receiver, ConfigStore cfg, Func<bool> authorized)
+    {
+        if (!authorized()) return Results.Json(new { error = "not allowed here" }, statusCode: 403);
+        if (receiver is null) return Results.Json(new { error = "not supported on this system" }, statusCode: 501);
+        if (!cfg.Get().Bridge.FilesFromPhone) return Results.Json(new { error = "off" }, statusCode: 403);
+        if (FileQuery(ctx.Request, out _, out var size) is { } bad) return bad;
+        return receiver.Check(size) is { } refused ? FileRefusal(refused) : Results.Ok(new { ok = true });
     }
 
     private static IResult FileRefusal(ReceiveStatus status) => status switch

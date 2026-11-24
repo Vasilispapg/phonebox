@@ -175,7 +175,59 @@ private fun listClientChecks() {
     check("done never throws", BridgeClient(link).markDone(ID) == SendResult.UNREACHABLE)
 }
 
+private fun queueChecks() {
+    val q = FileTransferRules.WorkQueue<String>()
+    check("the first batch starts a worker", q.add(listOf("a", "b")))
+    check("a second batch while it runs does not start another and is not lost", !q.add(listOf("c")))
+    check("the worker takes everything in order", listOf(q.next(), q.next(), q.next()) == listOf("a", "b", "c"))
+    check("an empty queue ends the worker", q.next() == null)
+    check("after it ended the next batch starts a new worker", q.add(listOf("d")))
+    q.clear()
+    check("a cleared queue has nothing left but is still running until the worker asks", q.next() == null && q.add(listOf("e")))
+    check("an empty batch starts nothing", FileTransferRules.WorkQueue<String>().add(emptyList()).not())
+    val idle = FileTransferRules.WorkQueue<String>()
+    check("a new queue is idle", idle.idle())
+    idle.add(listOf("x"))
+    check("a queue with a worker is not idle", !idle.idle())
+    idle.next()
+    check("a worker that has taken the last item is still running, so not idle", !idle.idle())
+    idle.next()
+    check("a drained queue whose worker has ended is idle", idle.idle())
+}
+
+private fun uniqueNameChecks() {
+    check("a free name is kept", FileTransferRules.uniqueName("a.jpg") { false } == "a.jpg")
+    check("a taken name gets (1) before the extension", FileTransferRules.uniqueName("a.jpg") { it == "a.jpg" } == "a (1).jpg")
+    check("then (2)", FileTransferRules.uniqueName("a.jpg") { it == "a.jpg" || it == "a (1).jpg" } == "a (2).jpg")
+    check("a name without an extension gets it at the end", FileTransferRules.uniqueName("notes") { it == "notes" } == "notes (1)")
+    check("a dotted stem keeps its last extension", FileTransferRules.uniqueName("a.tar.gz") { it == "a.tar.gz" } == "a.tar (1).gz")
+    val always = FileTransferRules.uniqueName("a.jpg") { true }
+    check("a name that is always taken still ends, with something else", always.endsWith(".jpg") && always != "a.jpg")
+}
+
+private fun preflightChecks() {
+    val link = AgentLink { java.io.ByteArrayInputStream(ByteArray(0)) }
+    link.requestReply = { AgentLink.Reply(403, "{}".byteInputStream()) }
+    check("a Mac that refuses is told before any byte is sent",
+        BridgeClient(link).uploadFile("a", 5L, { "hello".byteInputStream() }, {}, { false }) == SendResult.OFF && link.uploads.isEmpty())
+    link.requestReply = { AgentLink.Reply(507, "{}".byteInputStream()) }
+    check("a full disk is known before the upload", BridgeClient(link).uploadFile("a", 5L, { "hello".byteInputStream() }, {}, { false }) == SendResult.NO_SPACE && link.uploads.isEmpty())
+    link.requestReply = { AgentLink.Reply(429, "{}".byteInputStream()) }
+    check("a busy Mac is known before the upload", BridgeClient(link).uploadFile("a", 5L, { "hello".byteInputStream() }, {}, { false }) == SendResult.BUSY && link.uploads.isEmpty())
+    link.requestReply = { AgentLink.Reply(413, "{}".byteInputStream()) }
+    check("a file that is too large is known before the upload", BridgeClient(link).uploadFile("a", 5L, { "hello".byteInputStream() }, {}, { false }) == SendResult.TOO_LARGE && link.uploads.isEmpty())
+    link.requestReply = { AgentLink.Reply(404, "{}".byteInputStream()) }
+    check("an agent without the check (404) is simply sent to", BridgeClient(link).uploadFile("a", 5L, { "hello".byteInputStream() }, {}, { false }) == SendResult.OK && link.uploads.size == 1)
+    link.requestReply = { throw java.io.IOException("reset") }
+    check("a check that cannot be made goes on to the upload", BridgeClient(link).uploadFile("a", 5L, { "hello".byteInputStream() }, {}, { false }) == SendResult.OK && link.uploads.size == 2)
+    link.requestReply = { AgentLink.Reply(200, "{}".byteInputStream()) }
+    check("the check asks for the same path as the upload", BridgeClient(link).uploadFile("b c", 7L, { "x".byteInputStream() }, {}, { false }) == SendResult.OK && link.uploads.last().first == "/api/bridge/files/in?name=b%20c&size=7")
+}
+
 fun main() {
+    queueChecks()
+    uniqueNameChecks()
+    preflightChecks()
     incomingChecks()
     listClientChecks()
     confirmChecks()

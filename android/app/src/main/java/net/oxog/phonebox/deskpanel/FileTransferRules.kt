@@ -105,6 +105,48 @@ object FileTransferRules {
         }
     }
 
+    /**
+     * Work that arrives while a worker is already busy is added to what that worker takes next, instead of stopping it: [add] says
+     * whether the caller has to start a worker (true only when none is running), [next] gives the next item and, when there is none,
+     * marks the worker as finished in the same step, so a batch that arrives just then starts a new one and is not lost.
+     */
+    class WorkQueue<T> {
+        private val items = java.util.ArrayDeque<T>()
+        private var running = false
+
+        @Synchronized fun add(batch: List<T>): Boolean {
+            if (batch.isEmpty()) return false
+            items.addAll(batch)
+            if (running) return false
+            running = true
+            return true
+        }
+
+        @Synchronized fun next(): T? {
+            val item = items.pollFirst()
+            if (item == null) running = false
+            return item
+        }
+
+        @Synchronized fun clear() { items.clear() }
+
+        /** No worker is running and nothing waits: the moment the service may stop (checked together with [add], under the service's lock). */
+        @Synchronized fun idle(): Boolean = !running && items.isEmpty()
+    }
+
+    /** [name], or "stem (1).ext", "stem (2).ext", ... for the first one [exists] says is free; after 200 tries a time stamp, so it always ends. */
+    fun uniqueName(name: String, exists: (String) -> Boolean): String {
+        if (!exists(name)) return name
+        val dot = name.lastIndexOf('.')
+        val stem = if (dot > 0) name.substring(0, dot) else name
+        val extension = if (dot > 0) name.substring(dot) else ""
+        for (n in 1..200) {
+            val candidate = "$stem ($n)$extension"
+            if (!exists(candidate)) return candidate
+        }
+        return "$stem (${System.currentTimeMillis()})$extension"
+    }
+
     /** The lines of the confirmation: up to [maxLines] of "name — size" (just the name when the size is unknown), and how many more there are. */
     data class ConfirmLines(val lines: List<String>, val more: Int)
 

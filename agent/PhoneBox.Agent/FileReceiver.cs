@@ -39,6 +39,19 @@ internal sealed class FileReceiver(string folder, Func<string, long> freeSpace, 
         return null;
     }
 
+    /// <summary>
+    /// The same answer <see cref="Precheck"/> would give right now, without taking an upload slot: what the phone asks before it sends
+    /// a large file, so a refusal comes back at once instead of after the whole body was pushed at a connection that is being closed.
+    /// </summary>
+    public ReceiveStatus? Check(long? declaredSize)
+    {
+        if (declaredSize > maxBytes) return ReceiveStatus.TooLarge;
+        long free;
+        try { free = freeSpace(folder); } catch (Exception) { free = long.MaxValue; }
+        if (free < (declaredSize ?? 0) + marginBytes) return ReceiveStatus.NoSpace;
+        return Volatile.Read(ref _slots) >= FileLimits.MaxConcurrentUploads ? ReceiveStatus.Busy : null;
+    }
+
     public void Release()
     {
         if (Interlocked.Decrement(ref _slots) < 0) Interlocked.Increment(ref _slots);
