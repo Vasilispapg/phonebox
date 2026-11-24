@@ -22,6 +22,13 @@ class PhoneNotificationListener : NotificationListenerService() {
 
     override fun onListenerConnected() { connected = true }
 
+    // Turning the switch off disables this component and Android unbinds it, not always through onListenerDisconnected (and
+    // never below Android 7): without this the screen would say "allowed" after the switch comes back but before a rebind
+    override fun onDestroy() {
+        connected = false
+        super.onDestroy()
+    }
+
     override fun onListenerDisconnected() {
         connected = false
         // Android may drop the listener; ask to be bound again while the switch is on
@@ -84,6 +91,15 @@ class PhoneNotificationListener : NotificationListenerService() {
 
         /** Forgets what waits for the Mac: called when the switch is turned off, so nothing is sent afterwards. */
         fun clearPending() = queue.clear()
+
+        /**
+         * Another computer was chosen or one was forgotten in the panel: what waited was meant for the old one, and the
+         * cached state of its switch says nothing about the new one (a cached "off" would drop notifications for a minute).
+         */
+        fun computerChanged() {
+            queue.clear()
+            cache = null
+        }
 
         private fun configCache(app: Context): BridgeConfigCache =
             cache ?: BridgeConfigCache({ val link = AgentLink(app); try { BridgeClient(link).fetchConfig() } finally { link.close() } },

@@ -86,6 +86,19 @@ private fun queueChecks() {
     q.add(first.item, first.at) // a failed retry goes back with its original time
     now += 30_000
     check("a retried item keeps its original time and expires on schedule", q.take().isEmpty())
+
+    // restore: unsent entries go back ahead of newer ones, and the cap then drops the oldest
+    val r = DeliveryQueue<String>(max = 3, ttlMs = 120_000) { now }
+    r.add("a"); r.add("b")
+    val (mark, batch) = r.takeBatch()
+    r.add("new1"); r.add("new2")              // posted while the batch was out
+    check("a batch taken before any clear can be put back", r.restore(batch, mark))
+    check("put-back entries come before newer ones and the cap drops the oldest", r.take().map { it.item } == listOf("b", "new1", "new2"))
+    r.add("x")
+    val (mark2, batch2) = r.takeBatch()
+    r.clear()
+    check("a batch taken before a clear is no longer current", !r.isCurrent(mark2))
+    check("and cannot be put back", !r.restore(batch2, mark2) && r.isEmpty())
 }
 
 private fun notificationBodyChecks() {
@@ -237,6 +250,33 @@ private fun deliveryChecks() {
         { body -> switching.sent.add(body); switching.phoneOn = false; SendResult.OK }, { }, { }, { })   // the owner turns the switch off during the first send
     switchingDelivery.drain()
     check("a switch turned off during a batch stops it at once and empties the queue", switching.sent == listOf("first") && switching.queue.isEmpty())
+
+    // off and on again while one request is out: clearPending ran, so the rest of the batch must not go
+    val flipping = Rig { now }
+    flipping.add("com.msg", "first", now); flipping.add("com.msg", "second", now)
+    val flippingDelivery = NotificationDelivery(flipping.queue, { flipping.phoneOn }, { it in flipping.allowedApps }, { flipping.macOn },
+        { body -> flipping.sent.add(body); flipping.queue.clear(); flipping.queue.add(NotificationDelivery.Pending("com.msg", "posted-after"), now); SendResult.OK },
+        { }, { }, { })
+    flippingDelivery.drain()
+    check("a switch turned off and on again during a send voids the rest of the batch",
+        flipping.sent == listOf("first") && flipping.queue.take().map { it.item.body } == listOf("posted-after"))
+
+    // the switch goes off while a request that fails is out: nothing is put back
+    val offDuringFailure = Rig { now }
+    offDuringFailure.add("com.msg", "first", now); offDuringFailure.add("com.msg", "second", now)
+    val offDelivery = NotificationDelivery(offDuringFailure.queue, { offDuringFailure.phoneOn }, { it in offDuringFailure.allowedApps }, { offDuringFailure.macOn },
+        { _ -> offDuringFailure.queue.clear(); SendResult.UNREACHABLE }, { }, { }, { })
+    check("a failed send after the queue was cleared puts nothing back and asks for no retry", !offDelivery.drain() && offDuringFailure.queue.isEmpty())
+
+    // an unreachable Mac while new notifications arrive: the unsent ones stay ahead of them, the cap drops the oldest
+    val capped = DeliveryQueue<NotificationDelivery.Pending>(max = 3, clock = { now })
+    capped.add(NotificationDelivery.Pending("com.msg", "a"), now); capped.add(NotificationDelivery.Pending("com.msg", "b"), now)
+    val cappedDelivery = NotificationDelivery(capped, { true }, { true }, { true },
+        { _ -> capped.add(NotificationDelivery.Pending("com.msg", "new1"), now); capped.add(NotificationDelivery.Pending("com.msg", "new2"), now); SendResult.UNREACHABLE },
+        { }, { }, { })
+    check("an unreachable Mac asks for a retry", cappedDelivery.drain())
+    check("the unsent come back before the newer ones and the oldest is the one dropped",
+        capped.take().map { it.item.body } == listOf("b", "new1", "new2"))
 
     r = Rig { now }
     r.add("com.msg", "one"); r.add("com.msg", "two"); r.add("com.msg", "three")

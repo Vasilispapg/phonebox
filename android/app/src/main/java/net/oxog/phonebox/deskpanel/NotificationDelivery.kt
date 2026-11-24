@@ -23,21 +23,25 @@ class NotificationDelivery(
     fun drain(): Boolean {
         if (!phoneSwitchOn()) { queue.clear(); return false }
         if (!macSwitchOn()) { queue.clear(); onOutcome(NotificationOutcome.MAC_OFF); return false }
-        val waiting = queue.take() // anything older than two minutes is not in it
+        val (mark, waiting) = queue.takeBatch() // anything older than two minutes is not in it
         var i = 0
         while (i < waiting.size) {
             val entry = waiting[i]
             // a batch can take a while: the switch, the app's place on the list and the age are looked at again for each notification
             if (!phoneSwitchOn()) { queue.clear(); return false }
+            // the switch went off and on again while a request was out (or another computer was chosen): a switched-off
+            // switch drops what waited, so the rest of this batch is void; what was posted since stays for the next pass
+            if (!queue.isCurrent(mark)) return false
             if (!queue.isFresh(entry) || !appAllowed(entry.item.pkg)) { i++; continue }
             when (send(entry.item.body)) {
                 SendResult.OK -> { markMacOn(); onOutcome(NotificationOutcome.OK); i++ }
                 SendResult.OFF -> { markMacOff(); onOutcome(NotificationOutcome.MAC_OFF); queue.clear(); return false }
                 SendResult.TOO_LARGE -> i++ // the agent will never take it; dropped
                 SendResult.UNREACHABLE -> {
-                    for (rest in waiting.drop(i)) queue.add(rest.item, rest.at) // back with the original times
                     onOutcome(NotificationOutcome.UNREACHABLE)
-                    return true
+                    // back with the original times, ahead of what was posted meanwhile (so the cap drops the oldest), and
+                    // not at all if the queue was cleared while the request was out
+                    return queue.restore(waiting.drop(i), mark)
                 }
             }
         }
