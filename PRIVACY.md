@@ -142,8 +142,9 @@ Last updated: 2026-11-20 (PhoneBox 0.9.6).
   same USB / paired Wi-Fi link. If you allow **Contacts** (Android asks once), a call that rings with only a number is looked
   up once, by that number, and only the matching name goes to the computer in that call's notification; the contacts are
   never read in bulk, kept or sent. Nothing else is read or sent: not apps you left off, PhoneBox's own notifications,
-  ongoing ones such as music, or a call after the first ring. If the computer cannot be reached, up to 20 notifications
-  are kept in the app's memory for two minutes and then dropped; nothing is written to the phone's storage or its log.
+  ongoing ones such as music, or a call after the first ring (except its caller's name, when that arrives a moment later).
+  If the computer cannot be reached, up to 20 notifications are kept in the app's memory for two minutes and then dropped;
+  nothing is written to the phone's storage or its log.
   Until you turn the switch on, the app does not even appear in Android's Notification access list.
 - **Sound for the Spectrum bars widget** (Windows): while an enabled page with the widget is on the phone's screen,
   the agent captures what the default output device plays, analyzes it in memory and sends only 48 loudness levels
