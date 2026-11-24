@@ -282,15 +282,19 @@ Share what you copy between the Mac and the phone. It starts with the clipboard.
   has stayed the same for a moment, so a marker a password manager adds just after the text is still seen. Not every
   password manager marks what it copies (browser extensions often don't): copy passwords from those only while the
   bridge is off.
+  On Android 9 and older every app on the phone can read the clipboard at any time, so there the text you copy on the
+  Mac is readable by all of the phone's apps; from Android 10 only the app in front can read it.
 - **Phone to Mac:** Android does not let an app read the clipboard in the background, so sending from the phone is one
   tap, in any of four places: **Send to Mac** in the text-selection menu (select text, it sits next to Copy, and the
   text is sent without copying first), **Share › Send to Mac**, a **Send to Mac** tile (add it under Quick Settings
-  › Edit), or the **Send to Mac** button on the app's "sharing the clipboard" notification. A short message says
+  › Edit), or the **Send to Mac** button on the app's "sharing the clipboard" notification. The selection menu and
+  Share show the start of the text first and send it when you tap **Send to Mac**, because any app can hand text to
+  them; the tile and the notification button send what is on the clipboard straight away. A short message says
   whether it arrived. These entries appear in your apps only while the phone's switch below is on.
 - **On the phone:** open the page overview (long-press the page dots) and tap **Phone bridge**, then turn on **Share
   the clipboard with the Mac**. Both switches, this one and the Mac's, must be on; the screen says whether it is
-  connected, the Mac's switch is off, the computer has no bridge, or Android stopped the service (opening the screen
-  starts it again). Android 13 and later asks to show notifications. On Samsung phones set PhoneBox's battery use to
+  connected, the Mac's switch is off, the computer has no bridge, the phone must be paired again (the Mac was paired
+  again or got a new key), or Android stopped the service (opening the screen starts it again). Android 13 and later asks to show notifications. On Samsung phones set PhoneBox's battery use to
   **Unrestricted** (Settings › Apps › PhoneBox › Battery), or the system may stop the service.
 - The text goes only to your own paired phones over the PhoneBox link (USB or paired Wi-Fi / Tailscale), with the
   phone's key; nothing on the Mac itself can read it from the agent's local port. It is kept in memory and never stored

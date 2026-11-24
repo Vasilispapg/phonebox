@@ -32,7 +32,8 @@ Last updated: 2026-11-20 (PhoneBox 0.9.6).
   the first time. For the phone bridge's clipboard sharing (off until you turn it on in the app's Phone bridge screen)
   it also holds `FOREGROUND_SERVICE` and `FOREGROUND_SERVICE_SPECIAL_USE` (a service with a visible notification keeps
   the connection to your computer), `POST_NOTIFICATIONS` (so that notification can show, asked when you turn the
-  switch on) and `RECEIVE_BOOT_COMPLETED` (to start that service again after a restart).
+  switch on) and `RECEIVE_BOOT_COMPLETED` (to start that service again after a restart; the receiver is switched off,
+  and the app does not start at boot, while the bridge is off).
 - **Computer data shown on the panel** (CPU, GPU, memory, disks, processes, media, volume, AI coding sessions and
   quotas, Docker / Podman, OBS) is read locally and goes only to your phone: over the USB cable (`adb reverse` to
   `127.0.0.1`, with a key only the PhoneBox app has) or, after pairing, over Wi-Fi / Tailscale with a pinned certificate and a key. On Linux, an Intel GPU's
@@ -97,6 +98,11 @@ Last updated: 2026-11-20 (PhoneBox 0.9.6).
   On the phone the app puts the text you copied on the computer onto the phone's clipboard, and
   reads the phone's clipboard only when you ask it to (Send to Mac in the text-selection menu, the Share sheet, a
   Quick Settings tile or a button on the service's notification); it never sends a clip Android marks as sensitive.
+  Text that another app hands to Send to Mac (the selection menu, the Share sheet) is shown first and sent only when
+  you tap **Send to Mac**. To pick up again after a dropped connection, the phone keeps the number of the last
+  clipboard event in memory (not the text) and sends it when it reconnects. **On Android 9 and older, every app on the
+  phone can read the clipboard at any time**, not only the app in front: there, text you copy on the Mac is readable
+  by all apps installed on the phone. Android 10 and later let only the app in front (and the keyboard) read it.
 - **Sound for the Spectrum bars widget** (Windows): while an enabled page with the widget is on the phone's screen,
   the agent captures what the default output device plays, analyzes it in memory and sends only 48 loudness levels
   per frame to the phone. Audio is never stored or sent; capture stops a few seconds after the widget leaves the
