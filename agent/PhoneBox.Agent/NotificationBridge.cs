@@ -69,7 +69,7 @@ public sealed class NotificationBridge : IHostedService, IDisposable
         lock (_gate)
         {
             var seenKey = (deviceId ?? "") + "|" + n.Key;
-            var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(title + "\n" + text)));
+            var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(title + "\n" + text + "\n" + n.Category)));
             if (_seen.TryGetValue(seenKey, out var old) && old == hash) return NotifyResult.Duplicate;
             if (old is null) { _seenOrder.Enqueue(seenKey); while (_seenOrder.Count > MaxRemembered) _seen.Remove(_seenOrder.Dequeue()); }
             _seen[seenKey] = hash;
