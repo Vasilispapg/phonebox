@@ -266,6 +266,13 @@ public sealed class ClipHelperWantedTests
     }
 
     [Fact]
+    public void AFilesOnlyStreamNeverStartsTheClipboardHelper()
+    {
+        var filesOnly = new AgentConfig { Bridge = new BridgeConfig { Clipboard = false, FilesToPhone = true, FilesFromPhone = true } };
+        Assert.False(AdbReverse.HelperWanted(true, filesOnly, 1));
+    }
+
+    [Fact]
     public void TheStreamCountFollowsPhonesOpeningAndClosingTheirStream()
     {
         var stream = new BridgeStream();

@@ -701,6 +701,81 @@ public sealed class BridgeApiTests : IDisposable
         Assert.Equal(30_000_000, new BodyLimit().MaxRequestBodySize);
     }
 
+    // ---- which switch opens the stream, and which events it carries ----
+
+    [Theory]
+    [InlineData(false, false, false, false)]
+    [InlineData(true, false, true, false)]
+    [InlineData(false, true, false, true)]
+    [InlineData(true, true, true, true)]
+    public void TheStreamFollowsEitherSwitchAndEachEventItsOwn(bool clipboard, bool filesToPhone, bool clipboardEvent, bool fileEvent)
+    {
+        var cfg = new BridgeConfig { Clipboard = clipboard, FilesToPhone = filesToPhone };
+        Assert.Equal(clipboard || filesToPhone, BridgeApi.StreamAllowed(StoreWith(cfg)));
+        Assert.Equal(clipboardEvent, BridgeApi.EventAllowed(cfg, "clipboard"));
+        Assert.Equal(fileEvent, BridgeApi.EventAllowed(cfg, "file"));
+        Assert.False(BridgeApi.EventAllowed(cfg, "anything-else"));
+    }
+
+    private ConfigStore StoreWith(BridgeConfig bridge)
+    {
+        static string Bool(bool b) => b ? "true" : "false";
+        File.WriteAllText(_config, "{\"bridge\":{\"clipboard\":" + Bool(bridge.Clipboard) + ",\"filesToPhone\":" + Bool(bridge.FilesToPhone) + "}}");
+        File.SetLastWriteTimeUtc(_config, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddSeconds(++_stamp));
+        return _store;
+    }
+
+    // ---- the phone's three outbox calls: who, the platform, the switch, then the file ----
+
+    private Outbox NewOutbox() => new(Path.Combine(_root, "outbox"), TimeProvider.System);
+
+    [Fact]
+    public async Task TheOutboxCallsRefuseInTheCheapestOrder()
+    {
+        var outbox = NewOutbox();
+        var item = (await outbox.AddAsync("a.txt", null, null, new MemoryStream("x"u8.ToArray()), default)).Item!;
+        StoreWith(new BridgeConfig { FilesToPhone = true });
+        Assert.Equal(403, Status(BridgeApi.ListOutbox(outbox, _store, () => false)));
+        Assert.Equal(403, Status(BridgeApi.GetOutboxFile(item.Id, outbox, _store, () => false)));
+        Assert.Equal(403, Status(BridgeApi.DoneOutboxFile(item.Id, outbox, _store, () => false)));
+        Assert.Equal(501, Status(BridgeApi.ListOutbox(null, _store, () => true)));
+        Assert.Equal(501, Status(BridgeApi.GetOutboxFile(item.Id, null, _store, () => true)));
+        Assert.Equal(501, Status(BridgeApi.DoneOutboxFile(item.Id, null, _store, () => true)));
+        StoreWith(new BridgeConfig { FilesToPhone = false });
+        foreach (var result in new[] { BridgeApi.ListOutbox(outbox, _store, () => true), BridgeApi.GetOutboxFile(item.Id, outbox, _store, () => true),
+                     BridgeApi.DoneOutboxFile(item.Id, outbox, _store, () => true) })
+        {
+            Assert.Equal(403, Status(result));
+            Assert.Contains("off", System.Text.Json.JsonSerializer.Serialize(Assert.IsAssignableFrom<IValueHttpResult>(result).Value));
+        }
+        Assert.Equal(OutboxState.Waiting, Assert.Single(outbox.List()).State); // none of it touched the file
+    }
+
+    [Fact]
+    public async Task TheListHoldsOnlyWhatWaits()
+    {
+        var outbox = NewOutbox();
+        var waiting = (await outbox.AddAsync("waiting.txt", null, "text/plain", new MemoryStream("x"u8.ToArray()), default)).Item!;
+        var finished = (await outbox.AddAsync("finished.txt", null, null, new MemoryStream("y"u8.ToArray()), default)).Item!;
+        outbox.Done(finished.Id);
+        StoreWith(new BridgeConfig { FilesToPhone = true });
+        var json = System.Text.Json.JsonSerializer.Serialize(Assert.IsAssignableFrom<IValueHttpResult>(BridgeApi.ListOutbox(outbox, _store, () => true)).Value);
+        Assert.Contains(waiting.Id, json);
+        Assert.DoesNotContain(finished.Id, json);
+        Assert.DoesNotContain(_root, json);
+    }
+
+    [Theory]
+    [InlineData("0123456789abcdef0123456789abcdef")] // well formed, nobody was given it
+    [InlineData("../x")]
+    public void AnUnknownIdIs404(string id)
+    {
+        var outbox = NewOutbox();
+        StoreWith(new BridgeConfig { FilesToPhone = true });
+        Assert.Equal(404, Status(BridgeApi.GetOutboxFile(id, outbox, _store, () => true)));
+        Assert.Equal(404, Status(BridgeApi.DoneOutboxFile(id, outbox, _store, () => true)));
+    }
+
     // ---- what Wi-Fi can reach ----
 
     [Theory]
@@ -716,6 +791,13 @@ public sealed class BridgeApiTests : IDisposable
     [InlineData("/api/bridge/notification/test/x", false)]
     [InlineData("/api/bridge/files/in", true)]                 // a file from the phone
     [InlineData("/api/bridge/files/in/x", false)]
+    [InlineData("/api/bridge/files/out", true)]                // the phone asks what the Mac is offering
+    [InlineData("/api/bridge/files/out/0123456789abcdef0123456789abcdef", true)]
+    [InlineData("/api/bridge/files/out/0123456789abcdef0123456789abcdef/done", true)]
+    [InlineData("/api/bridge/files/out/0123456789abcdef0123456789abcdef/other", false)]
+    [InlineData("/api/bridge/files/out/0123456789ABCDEF0123456789ABCDEF", false)]
+    [InlineData("/api/bridge/files/out/short", false)]
+    [InlineData("/api/bridge/files/out/", false)]
     [InlineData("/api/bridge/files", false)]
     [InlineData("/api/bridge/files/anything-else", false)]
     public void OnlyTheBridgePathsAreOpenOverWifi(string path, bool allowed) =>

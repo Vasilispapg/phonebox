@@ -45,6 +45,17 @@ internal static class BridgeApi
             return PutFileAsync(req.HttpContext, services.GetService<FileReceiver>(), services.GetService<IMacNotifier>(),
                 services.GetRequiredService<ConfigStore>(), () => Authorized(gate, req.HttpContext));
         });
+        // What the Mac offers the phone: the waiting files, one file (range requests resume it), and the phone's "I have it".
+        // {id} is only taken as 32 lower-case hex characters: Outbox answers null (404) for anything else.
+        app.MapGet("/api/bridge/files/out", (HttpRequest req) =>
+            ListOutbox(req.HttpContext.RequestServices.GetService<Outbox>(), req.HttpContext.RequestServices.GetRequiredService<ConfigStore>(),
+                () => Authorized(gate, req.HttpContext)));
+        app.MapGet("/api/bridge/files/out/{id}", (HttpRequest req, string id) =>
+            GetOutboxFile(id, req.HttpContext.RequestServices.GetService<Outbox>(), req.HttpContext.RequestServices.GetRequiredService<ConfigStore>(),
+                () => Authorized(gate, req.HttpContext)));
+        app.MapPost("/api/bridge/files/out/{id}/done", (HttpRequest req, string id) =>
+            DoneOutboxFile(id, req.HttpContext.RequestServices.GetService<Outbox>(), req.HttpContext.RequestServices.GetRequiredService<ConfigStore>(),
+                () => Authorized(gate, req.HttpContext)));
         app.MapGet("/api/bridge/stream", async (HttpContext ctx, ConfigStore cfg, BridgeStream bridge, IHostApplicationLifetime life) =>
         {
             // what the request came with, so the open stream can be checked again with exactly that (see StreamAsync)
@@ -121,6 +132,39 @@ internal static class BridgeApi
             catch (Exception) { /* a notification that cannot be shown is not a failed transfer */ }
         }
         return Results.Ok(new { ok = true, name = result.Name, size = result.Bytes });
+    }
+
+    /// <summary>Who is asking (403), the platform (501) and the switch (403) for the three outbox calls; null when the call may go on.</summary>
+    private static IResult? OutboxGate(Outbox? outbox, ConfigStore cfg, Func<bool> authorized) =>
+        !authorized() ? Results.Json(new { error = "not allowed here" }, statusCode: 403)
+        : outbox is null ? Results.Json(new { error = "not supported on this system" }, statusCode: 501)
+        : !cfg.Get().Bridge.FilesToPhone ? Results.Json(new { error = "off" }, statusCode: 403)
+        : null;
+
+    /// <summary>GET /api/bridge/files/out: the files that wait for the phone (metadata only).</summary>
+    public static IResult ListOutbox(Outbox? outbox, ConfigStore cfg, Func<bool> authorized)
+    {
+        if (OutboxGate(outbox, cfg, authorized) is { } refused) return refused;
+        var files = outbox!.List().Where(e => e.State is OutboxState.Waiting or OutboxState.Sending)
+            .Select(e => new { id = e.Item.Id, name = e.Item.Name, size = e.Item.Size, mime = e.Item.Mime });
+        return Results.Ok(new { files });
+    }
+
+    /// <summary>GET /api/bridge/files/out/{id}: the file's bytes, with range requests so an interrupted download resumes.</summary>
+    public static IResult GetOutboxFile(string id, Outbox? outbox, ConfigStore cfg, Func<bool> authorized)
+    {
+        if (OutboxGate(outbox, cfg, authorized) is { } refused) return refused;
+        var mime = outbox!.List().FirstOrDefault(e => e.Item.Id == id)?.Item.Mime;
+        var stream = outbox.Open(id);
+        if (stream is null || mime is null) { stream?.Dispose(); return Results.Json(new { error = "not found" }, statusCode: 404); }
+        return Results.Stream(stream, mime, enableRangeProcessing: true);
+    }
+
+    /// <summary>POST /api/bridge/files/out/{id}/done: the phone has the whole file, so the Mac deletes its copy.</summary>
+    public static IResult DoneOutboxFile(string id, Outbox? outbox, ConfigStore cfg, Func<bool> authorized)
+    {
+        if (OutboxGate(outbox, cfg, authorized) is { } refused) return refused;
+        return outbox!.Done(id) ? Results.Ok(new { ok = true }) : Results.Json(new { error = "not found" }, statusCode: 404);
     }
 
     private static IResult FileRefusal(ReceiveStatus status) => status switch
@@ -252,8 +296,16 @@ internal static class BridgeApi
         header.Count == 1 && header[0] is { Length: > 0 and <= 19 } value
         && long.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var id) ? id : null;
 
-    /// <summary>The bridge stream follows the clipboard switch: when it is off a new connection is refused and an open one ends.</summary>
-    public static bool StreamAllowed(ConfigStore config) => config.Get().Bridge.Clipboard;
+    /// <summary>The bridge stream is open while the clipboard switch or the files-to-phone switch is on: when both are off a new connection is refused and an open one ends.</summary>
+    public static bool StreamAllowed(ConfigStore config) => config.Get().Bridge is { Clipboard: true } or { FilesToPhone: true };
+
+    /// <summary>Each kind of event follows its own switch: a phone that only wants files hears no clipboard, and the reverse.</summary>
+    public static bool EventAllowed(BridgeConfig bridge, string eventName) => eventName switch
+    {
+        "clipboard" => bridge.Clipboard,
+        "file" => bridge.FilesToPhone,
+        _ => false,
+    };
 
     /// <summary>How often an open stream looks at the switch and the phone's key on its own, apart from every pass of its loop.</summary>
     private const int SwitchCheckMs = 500;
@@ -292,6 +344,7 @@ internal static class BridgeApi
             await ctx.Response.WriteAsync(PingFrame, ct); // lets the phone see the connection is up
             foreach (var e in replay)
             {
+                if (!EventAllowed(cfg.Get().Bridge, e.Name)) continue;
                 if (!Open()) return;
                 await ctx.Response.WriteAsync(EventFrame(e), ct);
             }
@@ -301,9 +354,10 @@ internal static class BridgeApi
             {
                 foreach (var e in bridge.Since(seq, device))
                 {
+                    seq = e.Seq; // an event this phone's switches do not want is passed over, not asked for again
+                    if (!EventAllowed(cfg.Get().Bridge, e.Name)) continue;
                     if (!Open()) return; // the switch was turned off (or the key revoked) during this batch: nothing more is written
                     await ctx.Response.WriteAsync(EventFrame(e), ct);
-                    seq = e.Seq;
                 }
                 if (Environment.TickCount64 >= nextPing)
                 {

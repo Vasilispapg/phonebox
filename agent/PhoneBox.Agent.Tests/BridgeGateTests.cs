@@ -28,6 +28,7 @@ public sealed class BridgeGateTests : IAsyncLifetime
     private readonly ConfigStore _store;
     private readonly FakePasteboard _pb = new();
     private readonly BridgeStream _stream = new();
+    private readonly Outbox _outbox;
     private readonly List<(string Title, string Subtitle, string Body)> _shown = [];
     private NotificationBridge? _notifications;
     private long _now = 1_000_000;
@@ -43,6 +44,7 @@ public sealed class BridgeGateTests : IAsyncLifetime
         Directory.CreateDirectory(_root);
         _config = Path.Combine(_root, "config.json");
         _store = new ConfigStore(_config);
+        _outbox = new Outbox(Path.Combine(_root, "outbox"), TimeProvider.System);
         WriteConfig(wifiOn: true, wifiKey: WifiKey, clipboard: true);
     }
 
@@ -55,11 +57,12 @@ public sealed class BridgeGateTests : IAsyncLifetime
         }
     }
 
-    private void WriteConfig(bool wifiOn, string wifiKey, bool clipboard, bool notifications = true)
+    private void WriteConfig(bool wifiOn, string wifiKey, bool clipboard, bool notifications = true, bool filesToPhone = false)
     {
         static string Bool(bool b) => b ? "true" : "false";
         File.WriteAllText(_config, "{\"lan\":{\"enabled\":" + Bool(wifiOn) + ",\"token\":\"" + wifiKey + "\",\"webhookToken\":\"" + WebhookKey
-            + "\"},\"bridge\":{\"clipboard\":" + Bool(clipboard) + ",\"notifications\":" + Bool(notifications) + "}}");
+            + "\"},\"bridge\":{\"clipboard\":" + Bool(clipboard) + ",\"notifications\":" + Bool(notifications)
+            + ",\"filesToPhone\":" + Bool(filesToPhone) + "}}");
         File.SetLastWriteTimeUtc(_config, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddSeconds(++_stamp));
     }
 
@@ -94,6 +97,7 @@ public sealed class BridgeGateTests : IAsyncLifetime
         });
         builder.Services.AddSingleton(_store);
         builder.Services.AddSingleton(_stream);
+        builder.Services.AddSingleton(_outbox);
         builder.Services.AddSingleton(_ => new ClipboardBridge(_pb, _store, _stream, NullLogger<ClipboardBridge>.Instance));
         _notifications = new NotificationBridge(new RecordingNotifier(_shown), _store, null, () => Interlocked.Add(ref _now, 60_000),
             NullLogger<NotificationBridge>.Instance, () => []);
@@ -290,6 +294,106 @@ public sealed class BridgeGateTests : IAsyncLifetime
         WriteConfig(wifiOn: true, wifiKey: WifiKey, clipboard: false); // the switch ends it, after the copy went out
         var text = await UntilEnded(res);
         Assert.Contains("id: 1\nevent: clipboard\ndata: {\"seq\":1,\"text\":\"copied on the Mac\"}\n\n", text);
+    }
+
+    // ---- files to the phone: the stream follows either switch, and each event type its own ----
+
+    [Fact]
+    public async Task AFilesOnlyStreamHearsFilesAndNoClipboard()
+    {
+        WriteConfig(wifiOn: true, wifiKey: WifiKey, clipboard: false, filesToPhone: true);
+        using var res = await OpenStream("wifi", WifiKey);
+        await Opened(res);
+        _stream.Publish("clipboard", "a copy that must not reach a files-only phone", null);
+        _stream.Publish("file", "{\"id\":\"0123456789abcdef0123456789abcdef\",\"name\":\"a.jpg\",\"size\":3,\"mime\":\"image/jpeg\"}", null);
+        await Task.Delay(1500); // the stream wakes at once, and looks at the switches every pass
+        WriteConfig(wifiOn: true, wifiKey: WifiKey, clipboard: false, filesToPhone: false); // both off: the stream ends
+        var text = await UntilEnded(res);
+        Assert.Contains("event: file\n", text);
+        Assert.DoesNotContain("event: clipboard", text);
+        Assert.DoesNotContain("must not reach", text);
+    }
+
+    [Fact]
+    public async Task AClipboardOnlyStreamHearsNoFiles()
+    {
+        using var res = await OpenStream("wifi", WifiKey);
+        await Opened(res);
+        _stream.Publish("file", "{\"id\":\"0123456789abcdef0123456789abcdef\",\"name\":\"a.jpg\",\"size\":3,\"mime\":\"image/jpeg\"}", null);
+        _stream.Publish("clipboard", "copied", null);
+        await Task.Delay(1500);
+        WriteConfig(wifiOn: true, wifiKey: WifiKey, clipboard: false);
+        var text = await UntilEnded(res);
+        Assert.Contains("event: clipboard\n", text);
+        Assert.DoesNotContain("event: file", text);
+    }
+
+    [Fact]
+    public async Task AStreamWithNeitherSwitchOnIsRefused()
+    {
+        WriteConfig(wifiOn: true, wifiKey: WifiKey, clipboard: false, filesToPhone: false);
+        using var res = await OpenStream("wifi", WifiKey);
+        Assert.Equal(HttpStatusCode.Forbidden, res.StatusCode);
+    }
+
+    private async Task<HttpResponseMessage> Get(string via, string path, string? key, string? range = null)
+    {
+        var m = Message(HttpMethod.Get, Url(via, path), key);
+        if (range is not null) m.Headers.TryAddWithoutValidation("Range", range);
+        return await _http!.SendAsync(m);
+    }
+
+    [Theory]
+    [InlineData("usb")]
+    [InlineData("wifi")]
+    public async Task ThePhoneListsFetchesAndConfirmsAFile(string via)
+    {
+        WriteConfig(wifiOn: true, wifiKey: WifiKey, clipboard: false, filesToPhone: true);
+        var key = via == "usb" ? UsbKey : WifiKey;
+        var item = (await _outbox.AddAsync("a.txt", null, "text/plain", new MemoryStream("0123456789"u8.ToArray()), default)).Item!;
+        using (var list = await Get(via, "/api/bridge/files/out", key))
+        {
+            Assert.Equal(HttpStatusCode.OK, list.StatusCode);
+            var json = await list.Content.ReadAsStringAsync();
+            Assert.Contains(item.Id, json);
+            Assert.Contains("\"name\":\"a.txt\"", json);
+        }
+        using (var whole = await Get(via, "/api/bridge/files/out/" + item.Id, key))
+        {
+            Assert.Equal(HttpStatusCode.OK, whole.StatusCode);
+            Assert.Equal("text/plain", whole.Content.Headers.ContentType?.MediaType);
+            Assert.Equal("0123456789", await whole.Content.ReadAsStringAsync());
+        }
+        using (var part = await Get(via, "/api/bridge/files/out/" + item.Id, key, "bytes=3-"))
+        {
+            Assert.Equal(HttpStatusCode.PartialContent, part.StatusCode);
+            Assert.Equal("3456789", await part.Content.ReadAsStringAsync());
+        }
+        using (var done = await _http!.SendAsync(Message(HttpMethod.Post, Url(via, "/api/bridge/files/out/" + item.Id + "/done"), key)))
+            Assert.Equal(HttpStatusCode.OK, done.StatusCode);
+        using (var gone = await Get(via, "/api/bridge/files/out/" + item.Id, key))
+            Assert.Equal(HttpStatusCode.NotFound, gone.StatusCode);
+        using (var twice = await _http!.SendAsync(Message(HttpMethod.Post, Url(via, "/api/bridge/files/out/" + item.Id + "/done"), key)))
+            Assert.Equal(HttpStatusCode.NotFound, twice.StatusCode);
+    }
+
+    [Fact]
+    public async Task TheOutboxEndpointsRefuseWhileTheSwitchIsOffAndWithoutTheKeyAndLocally()
+    {
+        var item = (await _outbox.AddAsync("a.txt", null, null, new MemoryStream("x"u8.ToArray()), default)).Item!;
+        var path = "/api/bridge/files/out/" + item.Id;
+        // the switch is off (the default here)
+        using (var off = await Get("wifi", path, WifiKey)) Assert.Equal(HttpStatusCode.Forbidden, off.StatusCode);
+        WriteConfig(wifiOn: true, wifiKey: WifiKey, clipboard: false, filesToPhone: true);
+        // no key, a wrong key, and the local port
+        using (var none = await Get("wifi", path, null)) Assert.Equal(HttpStatusCode.Forbidden, none.StatusCode);
+        using (var wrong = await Get("usb", path, "wrong")) Assert.Equal(HttpStatusCode.Unauthorized, wrong.StatusCode);
+        using (var local = await Get("local", path, WifiKey)) Assert.Equal(HttpStatusCode.Forbidden, local.StatusCode);
+        using (var localList = await Get("local", "/api/bridge/files/out", WifiKey)) Assert.Equal(HttpStatusCode.Forbidden, localList.StatusCode);
+        // an id that is not 32 hex characters never reaches the handler
+        using (var bad = await Get("wifi", "/api/bridge/files/out/..%2fx", WifiKey)) Assert.NotEqual(HttpStatusCode.OK, bad.StatusCode);
+        using (var upper = await Get("wifi", "/api/bridge/files/out/" + item.Id.ToUpperInvariant(), WifiKey)) Assert.NotEqual(HttpStatusCode.OK, upper.StatusCode);
+        Assert.Equal(OutboxState.Waiting, Assert.Single(_outbox.List()).State); // nothing of this opened the file
     }
 
     // ---- notifications: phone -> Mac on the phone's ports only, the Settings test button on the local port only ----
