@@ -7,7 +7,7 @@ import java.security.MessageDigest
  * changes too, and sending them back would only make the Mac rewrite its own clipboard (and flatten whatever formatting it had).
  * An echo is recognised once, for [ttlMs], among the last four writes.
  */
-class ClipEcho(private val ttlMs: Long = 5_000, private val clock: () -> Long) {
+class ClipEcho(private val ttlMs: Long, private val clock: () -> Long) {
     private class Entry(val hash: String, val at: Long)
 
     private val writes = ArrayDeque<Entry>()
