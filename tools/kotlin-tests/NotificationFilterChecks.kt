@@ -5,9 +5,8 @@ import java.util.concurrent.atomic.AtomicInteger
 // JVM checks for the phone's notification rules: NotificationFilter.kt, DeliveryQueue.kt, BridgeConfigCache.kt and the
 // nested JSON reader in BridgeClip.kt. Run with: python3 tools/test-bridge-checks.py
 //
-// UNVERIFIED FIXTURES: the call checks use the documented Android model (a CallStyle notification of type "incoming", or
-// an answer action) because the owner's Samsung dialer has not been recorded yet (plan task D0, the live session). Replace
-// them with the recorded notifications there.
+// The generic call checks use the documented Android model (a CallStyle notification of type "incoming", or an answer
+// action); the Samsung in-call UI checks use what was recorded on a Galaxy S25 Ultra. Other makers' dialers are not recorded.
 
 private var passed = 0
 private fun check(name: String, ok: Boolean) {
@@ -55,7 +54,8 @@ private fun filterChecks() {
     val ring = info(pkg = "com.samsung.android.incallui", category = "call", ongoing = true, callStyle = true, title = "Maria", text = "")
     val voip = info(pkg = "com.whatsapp", category = "call", ongoing = true, callStyle = true, title = "Maria", text = "")
     check("another app's CallStyle call is NOT let through on the dialer's say", samsung.decide(voip) == Decision.SKIP)
-    check("not even with all apps off and the dialer listed, whatever its call type", samsung.decide(voip.copy(callStyleIncoming = true)) == Decision.SKIP)
+    check("not even when it is of type incoming, with the dialer listed and the app not", samsung.decide(voip.copy(callStyleIncoming = true)) == Decision.SKIP)
+    check("an in-call UI call without CallStyle follows the list, which the in-call UI is not on", samsung.decide(ring.copy(callStyle = false)) == Decision.SKIP)
     allowed.add("com.whatsapp")
     check("a listed app's incoming CallStyle call follows the list rule", samsung.decide(voip.copy(callStyleIncoming = true)) == Decision.SEND)
     check("a listed app's ongoing call (answered or placed by the owner) is not sent", samsung.decide(voip) == Decision.SKIP)
@@ -87,6 +87,20 @@ private fun callerNameChecks() {
     check("an unknown number stays a number", CallerName.pick("6940931040", null, { null }) == "6940931040" && CallerName.pick("6940931040", " ", { " " }) == "6940931040")
     check("the contacts are asked with the number as it was shown", run { var asked = ""; CallerName.pick("+30 694 093 1040", null) { asked = it; null }; asked == "+30 694 093 1040" })
     check("the contacts are not asked when the title is a name", run { var asked = false; CallerName.pick("Maria", null) { asked = true; null }; !asked })
+    // an Arabic or Hebrew phone wraps the number in direction marks; Germany writes 030/1234567; Arabic-Indic digits are digits
+    val wrapped = "‪+30 694 093 1040‬"
+    check("a number in direction marks is number-like", CallerName.isNumberLike(wrapped) && CallerName.isNumberLike("⁨030/1234567⁩") && CallerName.isNumberLike("٠١٢٣٤٥٦٧٨٩"))
+    check("and the contacts are asked without the marks", run { var asked = ""; CallerName.pick(wrapped, null) { asked = it; "Maria" } == "Maria" && asked == "+30 694 093 1040" })
+    check("an unknown number in marks is shown as it came", CallerName.pick(wrapped, null) { null } == wrapped)
+    check("a short code is a number, two digits are not", CallerName.isNumberLike("112") && CallerName.isNumberLike("*100#") && !CallerName.isNumberLike("12"))
+    check("a Hebrew or Arabic name is not a number", !CallerName.isNumberLike("‏מריה") && !CallerName.isNumberLike("ماريا 24"))
+
+    var lookups = 0
+    val once = LookupOnce { lookups++; if (it == "6940931040") "Maria" else null }
+    check("the contacts are asked once for the number of a call", once.get("6940931040") == "Maria" && once.get("6940931040") == "Maria" && lookups == 1)
+    check("an unknown number is not looked up again at every update", once.get("2105551234") == null && once.get("2105551234") == null && lookups == 2)
+    once.forget()
+    check("after the call ended the next call is looked up again", once.get("2105551234") == null && lookups == 3)
 
     val calls = CallLifetimes()
     calls.begin("c", 1000L, "6940931040")
@@ -96,6 +110,16 @@ private fun callerNameChecks() {
     check("a call that is not known is never renamed", calls.renamed("other", "Maria") == null)
     calls.ended("c")
     check("after the call ended nothing is renamed", calls.renamed("c", "Anna") == null)
+
+    // the listener reconnects while a call is posted: the Mac may show it already, under the start time it had then
+    calls.running("r", 2000L)
+    check("a call already running at reconnect is not sent at its next update", calls.begin("r", 2500L, "6940931040") == null)
+    check("nor when its title differs from anything sent", calls.renamed("r", "6940931040") == null && calls.renamed("r", "Maria") == null)
+    calls.ended("r")
+    check("the next call under that key is sent again", calls.begin("r", 9000L, "Anna") == 9000L)
+    calls.begin("s", 100L, "Maria")
+    calls.running("s", 200L)
+    check("a reconnect does not reset a call this listener knows", calls.renamed("s", "Anna") == 100L)
 }
 
 private fun callLifetimeChecks() {

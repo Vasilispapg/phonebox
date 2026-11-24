@@ -76,29 +76,56 @@ fun gatePackage(defaultDialer: String?, postingPackage: String): String =
  * failing that, by the contact with that number. Anything that already reads as a name is left alone.
  */
 object CallerName {
-    /** Digits with the usual separators, at least three of them: "+30 694 093 1040", "(210) 555-1234", "6940931040". */
+    /**
+     * The text without invisible formatting characters: Android wraps a phone number in direction marks (U+200E, U+202A..U+202C,
+     * U+2066..U+2069) so that it reads left to right in an Arabic or Hebrew phone, and with them the number neither looks like a
+     * number nor matches a contact.
+     */
+    fun plain(s: String): String = s.filter { Character.getType(it) != Character.FORMAT.toInt() }.trim()
+
+    /** Digits with the usual separators, at least three of them: "+30 694 093 1040", "(210) 555-1234", "030/1234567", "6940931040". */
     fun isNumberLike(s: String): Boolean {
-        val t = s.trim()
-        return t.count { it.isDigit() } >= 3 && t.all { it.isDigit() || it in "+-().#*" || it.isWhitespace() }
+        val t = plain(s)
+        return t.count { it.isDigit() } >= 3 && t.all { it.isDigit() || it in "+-().#*/" || it.isWhitespace() }
     }
 
     fun pick(title: String, personName: String?, lookup: (String) -> String?): String {
         if (!isNumberLike(title)) return title
         if (!personName.isNullOrBlank() && !isNumberLike(personName)) return personName.trim()
-        return lookup(title)?.takeIf { it.isNotBlank() } ?: title
+        return lookup(plain(title))?.takeIf { it.isNotBlank() } ?: title
     }
+}
+
+/**
+ * The contacts are asked once per number of a call, not at every update of its notification (an unknown number would otherwise be
+ * looked up again each time the in-call UI updates it); forgotten when the call ends, so a contact saved meanwhile is found next time.
+ */
+class LookupOnce(private val lookup: (String) -> String?) {
+    private var number: String? = null
+    private var name: String? = null
+    @Synchronized fun get(n: String): String? {
+        if (n != number) { name = lookup(n); number = n }
+        return name
+    }
+    @Synchronized fun forget() { number = null; name = null }
 }
 
 /** A call notification stays posted for the whole call and is updated many times: it is sent once, and again for the next call. */
 class CallLifetimes {
-    private class Call(val start: Long, var title: String)
+    /** [title] is the one last sent; null for a call that was already running when the listener connected, which is never sent. */
+    private class Call(val start: Long, var title: String?)
     private val live = HashMap<String, Call>()
     /** The time the call started (now) when this is its first update, null for the later ones. */
     @Synchronized fun begin(key: String, now: Long, title: String = ""): Long? = if (key in live) null else { live[key] = Call(now, title); now }
+    /**
+     * A call that was already posted when the listener (re)connected: it may have reached the Mac before, so neither its next
+     * update nor a name that arrives for it is sent (a rename would go out under a new start time, as a second call on the Mac).
+     */
+    @Synchronized fun running(key: String, now: Long) { if (key !in live) live[key] = Call(now, null) }
     /** The start of the call when [title] is not the one last sent for it (the caller was named after the first ring), else null. */
     @Synchronized fun renamed(key: String, title: String): Long? {
         val call = live[key] ?: return null
-        if (call.title == title) return null
+        if (call.title == null || call.title == title) return null
         call.title = title
         return call.start
     }
