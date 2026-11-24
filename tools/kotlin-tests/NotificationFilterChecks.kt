@@ -178,6 +178,8 @@ private fun configCacheChecks() {
 
 private fun cutChecks() {
     check("short text is not cut", BridgeClip.cut("hello", 10) == "hello")
+    check("a limit of zero or less gives no text instead of an error", BridgeClip.cut("abc", 0) == "" && BridgeClip.cut("abc", -3) == "" && BridgeClip.cut("", 0) == "")
+    check("a limit of one is just the ellipsis", BridgeClip.cut("abc", 1) == "…")
     check("text at the limit is not cut", BridgeClip.cut("a".repeat(200), 200) == "a".repeat(200))
     check("text over the limit is cut to the limit with an ellipsis", BridgeClip.cut("a".repeat(201), 200).let { it.length == 200 && it.endsWith("…") })
     val emoji = "a".repeat(198) + "🌍🌍"     // the cut would fall inside the first emoji
@@ -219,6 +221,22 @@ private fun deliveryChecks() {
     r.add("com.msg", "one"); r.macOn = false
     check("with the Mac's switch known off nothing is sent and the screen says so", !r.delivery.drain() && r.sent.isEmpty() && r.outcome == NotificationOutcome.MAC_OFF)
     check("and the queue is emptied", r.queue.isEmpty())
+
+    r = Rig { now }
+    r.add("com.msg", "one", now); r.add("com.msg", "two", now)
+    val slow = Rig { now }
+    slow.add("com.msg", "slow-first", now); slow.add("com.msg", "second", now)
+    val slowDelivery = NotificationDelivery(slow.queue, { slow.phoneOn }, { it in slow.allowedApps }, { slow.macOn },
+        { body -> slow.sent.add(body); now += 121_000; SendResult.OK }, { }, { }, { })   // the first send takes 121 s
+    slowDelivery.drain()
+    check("a notification that grew too old while the batch was being sent is not sent", slow.sent == listOf("slow-first"))
+
+    val switching = Rig { now }
+    switching.add("com.msg", "first", now); switching.add("com.msg", "second", now)
+    val switchingDelivery = NotificationDelivery(switching.queue, { switching.phoneOn }, { it in switching.allowedApps }, { switching.macOn },
+        { body -> switching.sent.add(body); switching.phoneOn = false; SendResult.OK }, { }, { }, { })   // the owner turns the switch off during the first send
+    switchingDelivery.drain()
+    check("a switch turned off during a batch stops it at once and empties the queue", switching.sent == listOf("first") && switching.queue.isEmpty())
 
     r = Rig { now }
     r.add("com.msg", "one"); r.add("com.msg", "two"); r.add("com.msg", "three")

@@ -27,7 +27,9 @@ class NotificationDelivery(
         var i = 0
         while (i < waiting.size) {
             val entry = waiting[i]
-            if (!appAllowed(entry.item.pkg)) { i++; continue }
+            // a batch can take a while: the switch, the app's place on the list and the age are looked at again for each notification
+            if (!phoneSwitchOn()) { queue.clear(); return false }
+            if (!queue.isFresh(entry) || !appAllowed(entry.item.pkg)) { i++; continue }
             when (send(entry.item.body)) {
                 SendResult.OK -> { markMacOn(); onOutcome(NotificationOutcome.OK); i++ }
                 SendResult.OFF -> { markMacOff(); onOutcome(NotificationOutcome.MAC_OFF); queue.clear(); return false }
