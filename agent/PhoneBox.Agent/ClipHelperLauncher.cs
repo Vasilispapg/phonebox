@@ -38,9 +38,13 @@ internal sealed class ClipHelperLauncher(Func<IReadOnlyList<string>, Cancellatio
     /// A phone reached over USB and Wi-Fi at once has two serials; the second is looked at before the first start has bound its
     /// socket, so a second helper is started. It exits at once because the name is taken, which is harmless.
     /// </remarks>
-    public async Task EnsureAsync(IReadOnlyCollection<string> devices, bool wanted, CancellationToken ct)
+    public Task EnsureAsync(IReadOnlyCollection<string> devices, bool wanted, CancellationToken ct) => EnsureAsync(devices, () => wanted, ct);
+
+    /// <param name="wanted">Asked again right before each start: a look at a phone can take up to adb's timeout, and the switch may
+    /// go off (or the last phone close its stream) meanwhile; a helper must not be started after that.</param>
+    public async Task EnsureAsync(IReadOnlyCollection<string> devices, Func<bool> wanted, CancellationToken ct)
     {
-        if (!wanted) { _checkedAt.Clear(); _failures.Clear(); _startedAtLastLook.Clear(); return; } // when it is wanted again, every phone is looked at at once
+        if (!wanted()) { _checkedAt.Clear(); _failures.Clear(); _startedAtLastLook.Clear(); return; } // when it is wanted again, every phone is looked at at once
         foreach (var gone in _checkedAt.Keys.Except(devices).ToList()) Forget(gone); // a phone that returns is looked at at once
         foreach (var device in devices)
         {
@@ -58,6 +62,8 @@ internal sealed class ClipHelperLauncher(Func<IReadOnlyList<string>, Cancellatio
                     _startedAtLastLook.Remove(device);
                     continue;
                 }
+                // no longer wanted since this round began: nothing is started, and the next round looks at this phone at once
+                if (!wanted()) { _checkedAt.Remove(device); return; }
                 // started at the last look and gone again: it does not stay up (an app too old to have the class)
                 if (_startedAtLastLook.Contains(device))
                 {
