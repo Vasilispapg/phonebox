@@ -686,8 +686,9 @@ public sealed class AdbReverse(ConfigStore cfg, ILogger<AdbReverse> log, AgentEn
 
     private async Task EnsureHelperAsync(CancellationToken ct)
     {
-        var wanted = _adbPath is not null && HelperWanted(OperatingSystem.IsMacOS(), cfg.Get(), bridge?.Listeners ?? 0);
-        await Launcher.EnsureAsync([.. _devices.Where(d => !_missingApp.Contains(d) && !_unreachable.Contains(d))], wanted, ct);
+        // read again before every start, not once a round (see ClipHelperLauncher.EnsureAsync)
+        bool Wanted() => _adbPath is not null && HelperWanted(OperatingSystem.IsMacOS(), cfg.Get(), bridge?.Listeners ?? 0);
+        await Launcher.EnsureAsync([.. _devices.Where(d => !_missingApp.Contains(d) && !_unreachable.Contains(d))], Wanted, ct);
     }
 
     private volatile HashSet<string> _unreachable = [];

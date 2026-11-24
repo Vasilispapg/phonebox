@@ -16,12 +16,14 @@ public sealed class ClipHelperLauncherTests
         public readonly HashSet<string> Failing = [];
         public bool StartsStay = true;          // false: app_process exits at once (an app too old to have the helper class)
         public string CountAnswer = "";         // when set, the check answers this instead of 1 or 0
+        public Action? OnCheck;                 // runs while the check is under way (the switch turned off meanwhile)
         public Task<string> Run(IReadOnlyList<string> args, CancellationToken ct)
         {
             Calls.Add([.. args]);
             var device = args[1];
             if (Failing.Contains(device)) throw new IOException("adb: device offline");
             var command = args[3];
+            if (command == ClipHelperLauncher.CheckCommand) OnCheck?.Invoke();
             if (command == ClipHelperLauncher.CheckCommand) return Task.FromResult(CountAnswer != "" ? CountAnswer : Running.GetValueOrDefault(device) ? "1\n" : "0\n");
             if (command == ClipHelperLauncher.StartCommand) { if (StartsStay) Running[device] = true; return Task.FromResult(""); }
             throw new InvalidOperationException("an unexpected command: " + command);
@@ -122,6 +124,22 @@ public sealed class ClipHelperLauncherTests
         _now += 1_000;
         await launcher.EnsureAsync(["phone1"], true, CancellationToken.None);
         Assert.Equal(2, _adb.Started.Count());
+    }
+
+    [Fact]
+    public async Task NoHelperIsStartedWhenTheSwitchWentOffDuringTheCheck()
+    {
+        var wanted = true;
+        _adb.OnCheck = () => wanted = false;            // the check can take up to adb's timeout
+        var launcher = Launcher();
+        await launcher.EnsureAsync(["phone1", "phone2"], () => wanted, CancellationToken.None);
+        Assert.Empty(_adb.Started);
+        Assert.Equal(["phone1"], _adb.Checked);         // nor is the next phone asked
+        _adb.OnCheck = null;
+        wanted = true;
+        _now += 1_000;                                  // on again before the 30 s are up: looked at at once
+        await launcher.EnsureAsync(["phone1", "phone2"], () => wanted, CancellationToken.None);
+        Assert.Equal(["phone1", "phone2"], _adb.Started);
     }
 
     [Fact]
