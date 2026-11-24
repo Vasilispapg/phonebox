@@ -94,6 +94,9 @@ if (OperatingSystem.IsMacOS())
     builder.Services.AddHostedService(sp => sp.GetRequiredService<NotificationBridge>());
     // files from the phone go to ~/Downloads/PhoneBox (FilesFromPhone switch)
     builder.Services.AddSingleton(sp => FileReceiver.ForMac(sp.GetRequiredService<ILoggerFactory>().CreateLogger("PhoneBox.Agent.FileReceiver")));
+    // files to the phone wait here (emptied when the agent starts and when the switch is off) until the phone fetches them
+    builder.Services.AddSingleton(_ => new Outbox(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library", "Caches", "PhoneBox", "outbox"), TimeProvider.System));
+    builder.Services.AddSingleton(_ => new LocalTransferKey(Path.Combine(configDir, "transfer.json"), Port));
 }
 #endif
 builder.Services.AddSingleton<CommandRunner>();
@@ -789,6 +792,7 @@ app.MapPost("/api/rules/test", (RuleConfig rule, RuleEngine rules) =>
 // Settings is off, and 501 where the bridge does not exist (everything but macOS). The Settings page's test notification is the
 // one path that is served on the local port only.
 BridgeApi.Map(app, gate);
+TransferApi.Map(app, SameOrigins);
 
 // The phone reports its battery (charge guard); the settings show the guard's state and can switch the power to test it.
 app.MapPost("/api/phone/battery", (int level, bool plugged, double? temp, string? source, string? usb) => { ChargeGuard.Report(level, plugged, temp, source, usb); return Results.Ok(); });

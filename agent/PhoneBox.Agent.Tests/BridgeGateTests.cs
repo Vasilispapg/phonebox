@@ -108,6 +108,8 @@ public sealed class BridgeGateTests : IAsyncLifetime
         BridgeApi.Map(app, gate);
         // an endpoint the gate alone must keep from the local port, whatever the bridge endpoints check themselves
         app.MapGet("/api/bridge/probe", () => Results.Ok());
+        // a path outside the bridge, like the local trigger for sending files: the local port serves it, the phone's ports do not
+        app.MapGet("/api/transfer/probe", () => Results.Ok());
         await app.StartAsync();
         return app;
     }
@@ -163,6 +165,19 @@ public sealed class BridgeGateTests : IAsyncLifetime
             Assert.Equal(HttpStatusCode.Forbidden, post.StatusCode);
         }
         Assert.Equal(0, _pb.Writes);
+    }
+
+    [Fact]
+    public async Task TheLocalTriggerPathsAreServedLocallyButNeverToThePhonesPorts()
+    {
+        using (var local = await _http!.SendAsync(Message(HttpMethod.Get, Url("local", "/api/transfer/probe"), null)))
+            Assert.Equal(HttpStatusCode.OK, local.StatusCode);
+        foreach (var via in new[] { "usb", "wifi" })
+        {
+            var key = via == "usb" ? UsbKey : WifiKey;
+            using var res = await _http!.SendAsync(Message(HttpMethod.Get, Url(via, "/api/transfer/probe"), key));
+            Assert.Equal(HttpStatusCode.Forbidden, res.StatusCode);
+        }
     }
 
     [Fact]
