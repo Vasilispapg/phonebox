@@ -11,6 +11,8 @@ public sealed class BridgeReplayTests
     {
         public DateTimeOffset Now = new(2026, 11, 24, 12, 0, 0, TimeSpan.Zero);
         public override DateTimeOffset GetUtcNow() => Now;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp() => Now.Ticks;
     }
 
     private readonly Clock _clock = new();
@@ -48,6 +50,16 @@ public sealed class BridgeReplayTests
         Assert.Equal(["recent"], _stream.Resume(0, "phoneA").Replay.Select(e => e.Text));
         _clock.Now += BridgeStream.ReplayWindow;
         Assert.Empty(_stream.Resume(0, "phoneA").Replay);
+    }
+
+    [Fact]
+    public void AnOpenStreamDoesNotReceiveExpiredEvents()
+    {
+        _stream.Publish("clipboard", "old", null);
+        _clock.Now += BridgeStream.ReplayWindow;
+        Assert.Empty(_stream.Since(0, "phoneA"));
+        _stream.Publish("clipboard", "recent", null);
+        Assert.Equal(["recent"], _stream.Since(0, "phoneA").Select(e => e.Text));
     }
 
     [Fact]

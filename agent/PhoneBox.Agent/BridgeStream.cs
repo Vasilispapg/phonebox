@@ -21,7 +21,7 @@ public sealed class BridgeStream(TimeProvider? time = null)
 
     private readonly TimeProvider _time = time ?? TimeProvider.System;
     private readonly Lock _lock = new();
-    private readonly LinkedList<BridgeEvent> _events = new();
+    private readonly LinkedList<(BridgeEvent Event, long PublishedAt)> _events = new();
     private long _seq;
 
     public long Seq { get { lock (_lock) return _seq; } }
@@ -35,7 +35,8 @@ public sealed class BridgeStream(TimeProvider? time = null)
         lock (_lock)
         {
             e = new BridgeEvent(++_seq, name, text, origin, _time.GetUtcNow().ToUnixTimeMilliseconds());
-            _events.AddLast(e);
+            RemoveExpired();
+            _events.AddLast((e, _time.GetTimestamp()));
             while (_events.Count > MaxEvents) _events.RemoveFirst();
         }
         Emitted?.Invoke();
@@ -45,7 +46,11 @@ public sealed class BridgeStream(TimeProvider? time = null)
     /// <summary>Events after <paramref name="seq"/>, oldest first, leaving out the ones <paramref name="forDevice"/> sent itself.</summary>
     public IReadOnlyList<BridgeEvent> Since(long seq, string? forDevice)
     {
-        lock (_lock) return _events.Where(e => e.Seq > seq && (forDevice is null || e.Origin != forDevice)).ToList();
+        lock (_lock)
+        {
+            RemoveExpired();
+            return EventsAfter(seq, forDevice);
+        }
     }
 
     /// <summary>
@@ -58,11 +63,25 @@ public sealed class BridgeStream(TimeProvider? time = null)
     {
         lock (_lock)
         {
+            RemoveExpired();
             if (lastEventId is not { } last || last > _seq) return (_seq, []);
-            var oldest = _time.GetUtcNow().ToUnixTimeMilliseconds() - (long)ReplayWindow.TotalMilliseconds;
-            var replay = _events.Where(e => e.Seq > last && e.AtMs > oldest && (forDevice is null || e.Origin != forDevice)).ToList();
-            return (_seq, replay);
+            return (_seq, EventsAfter(last, forDevice));
         }
+    }
+
+    internal void PruneExpired()
+    {
+        lock (_lock) RemoveExpired();
+    }
+
+    private IReadOnlyList<BridgeEvent> EventsAfter(long sequence, string? device) => _events.Select(entry => entry.Event)
+        .Where(e => e.Seq > sequence && (device is null || e.Origin != device)).ToList();
+
+    private void RemoveExpired()
+    {
+        var now = _time.GetTimestamp();
+        while (_events.First is { } first && _time.GetElapsedTime(first.Value.PublishedAt, now) >= ReplayWindow)
+            _events.RemoveFirst();
     }
 
     /// <summary>Forgets every kept event (the switch was turned off), so no copied text stays in memory. The numbering goes on.</summary>

@@ -56,6 +56,7 @@ internal static class BridgeApi
         if (!cfg.Get().Bridge.Clipboard) return Results.Json(new { error = "off" }, statusCode: 403);
         var (text, error) = await ReadClipboardBody(ctx.Request);
         if (error is not null) return BodyError(error);
+        if (!authorized()) return Results.Json(new { error = "not allowed here" }, statusCode: 403);
         return PostClipboard(bridge, text, DeviceId(ctx.Request.Headers["X-PhoneBox-Device"]));
     }
 
