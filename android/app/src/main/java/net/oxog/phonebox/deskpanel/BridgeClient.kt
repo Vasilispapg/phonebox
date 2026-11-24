@@ -27,4 +27,17 @@ class BridgeClient(private val link: AgentLink) {
     } catch (_: Exception) {
         SendResult.UNREACHABLE
     }
+
+    /**
+     * Streams one file to the Mac (the body is read from [open] while it is sent, never held in memory). [size] is sent when it is
+     * known; [onProgress] gets the bytes sent so far; [cancelled] is asked before every chunk. Never throws: a failure is
+     * [SendResult.UNREACHABLE], and a cancelled upload is whatever the link answered (the caller knows it cancelled).
+     */
+    fun uploadFile(name: String, size: Long?, open: () -> java.io.InputStream, onProgress: (Long) -> Unit, cancelled: () -> Boolean): SendResult = try {
+        val reply = link.upload(FileTransferRules.uploadPath(FileTransferRules.displayName(name), size), "application/octet-stream", size, open, onProgress, cancelled)
+        try { reply.body.close() } catch (_: Exception) {}
+        BridgeClip.resultFor(reply.code)
+    } catch (_: Exception) {
+        SendResult.UNREACHABLE
+    }
 }

@@ -88,6 +88,23 @@ object FileTransferRules {
 
     fun donePath(id: String) = "/api/bridge/files/out/$id/done"
 
+    /**
+     * Copies [input] to [output] in 64 KiB chunks, telling [onProgress] the bytes so far after each one. Returns the byte count, or
+     * null when [cancelled] turned true (it is asked before every chunk, so a cancel takes effect within one chunk). Nothing is closed.
+     */
+    fun copy(input: java.io.InputStream, output: java.io.OutputStream, onProgress: (Long) -> Unit, cancelled: () -> Boolean): Long? {
+        val buffer = ByteArray(64 * 1024)
+        var total = 0L
+        while (true) {
+            if (cancelled()) return null
+            val n = input.read(buffer)
+            if (n < 0) return total
+            output.write(buffer, 0, n)
+            total += n
+            onProgress(total)
+        }
+    }
+
     private fun encode(text: String): String {
         val sb = StringBuilder()
         for (b in text.toByteArray(Charsets.UTF_8)) {

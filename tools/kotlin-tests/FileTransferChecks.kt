@@ -89,7 +89,44 @@ private fun resultChecks() {
     check("200 is still ok", BridgeClip.resultFor(200) == SendResult.OK)
 }
 
+private fun copyChecks() {
+    val data = ByteArray(200_000) { (it % 251).toByte() }
+    val out = java.io.ByteArrayOutputStream()
+    val seen = mutableListOf<Long>()
+    val total = FileTransferRules.copy(data.inputStream(), out, { seen.add(it) }, { false })
+    check("copy returns the byte count", total == 200_000L)
+    check("copy writes every byte", out.toByteArray().contentEquals(data))
+    check("copy reports a growing progress that ends at the total", seen.isNotEmpty() && seen.last() == 200_000L && seen == seen.sorted())
+    check("an empty input copies nothing", FileTransferRules.copy(ByteArray(0).inputStream(), java.io.ByteArrayOutputStream(), {}, { false }) == 0L)
+    val partial = java.io.ByteArrayOutputStream()
+    var chunks = 0
+    val cut = FileTransferRules.copy(data.inputStream(), partial, {}, { ++chunks > 2 })
+    check("a cancel gives null", cut == null)
+    check("a cancel stops early", partial.size() in 1 until data.size)
+}
+
+private fun clientChecks() {
+    val link = AgentLink { java.io.ByteArrayInputStream(ByteArray(0)) }
+    val progress = mutableListOf<Long>()
+    val ok = BridgeClient(link).uploadFile("a b.jpg", 5L, { "hello".byteInputStream() }, { progress.add(it) }, { false })
+    check("an upload that the Mac accepts is ok", ok == SendResult.OK)
+    check("the upload asks for the sanitized path, a binary body and the size",
+        link.uploads.single() == Triple("/api/bridge/files/in?name=a%20b.jpg&size=5", "application/octet-stream", 5L))
+    check("the progress ends at the size", progress.lastOrNull() == 5L)
+    link.uploadReply = { AgentLink.Reply(507, java.io.ByteArrayInputStream(ByteArray(0))) }
+    check("a full disk on the Mac is NO_SPACE", BridgeClient(link).uploadFile("a", null, { "x".byteInputStream() }, {}, { false }) == SendResult.NO_SPACE)
+    check("an unknown size is not announced", link.uploads.last().third == null && !link.uploads.last().first.contains("size="))
+    link.uploadReply = { AgentLink.Reply(429, java.io.ByteArrayInputStream(ByteArray(0))) }
+    check("two uploads already running is BUSY", BridgeClient(link).uploadFile("a", 1L, { "x".byteInputStream() }, {}, { false }) == SendResult.BUSY)
+    link.uploadReply = { throw java.io.IOException("reset") }
+    check("a link that throws is UNREACHABLE, never an exception", BridgeClient(link).uploadFile("a", 1L, { "x".byteInputStream() }, {}, { false }) == SendResult.UNREACHABLE)
+    val failing = AgentLink { java.io.ByteArrayInputStream(ByteArray(0)) }
+    check("a file that cannot be opened is UNREACHABLE", BridgeClient(failing).uploadFile("a", 1L, { throw java.io.FileNotFoundException() }, {}, { false }) == SendResult.UNREACHABLE)
+}
+
 fun main() {
+    copyChecks()
+    clientChecks()
     uriChecks()
     nameChecks()
     routingChecks()
