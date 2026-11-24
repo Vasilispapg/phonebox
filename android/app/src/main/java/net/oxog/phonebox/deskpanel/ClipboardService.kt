@@ -55,6 +55,7 @@ class ClipboardService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val repostOnly = intent?.getBooleanExtra(EXTRA_REPOST, false) == true
         // Android wants startForeground soon after startForegroundService, even when we are about to stop again
         try { goForeground() } catch (e: Exception) {
             BridgePrefs.lastError = e.javaClass.simpleName
@@ -67,6 +68,10 @@ class ClipboardService : Service() {
             return START_NOT_STICKY
         }
         BridgePrefs.lastError = null
+        // opening the Phone bridge screen only brings the notification back (it can be swiped away on Android 14+); the stream stays
+        if (repostOnly && stream != null) return START_STICKY
+        ClipRelay.macOff = false
+        ClipRelay.sink = { text -> handleCopied(applicationContext, text) }
         // the panel calls this on every resume: a connected stream is kept (cutting it would lose what is copied meanwhile and cost
         // a new TLS handshake each time); one that is not connected starts over at once instead of finishing a long back-off.
         // Pairing changes restart it through [pairingChanged].
@@ -110,15 +115,21 @@ class ClipboardService : Service() {
         stream = AgentStream(
             fresh, "/api/bridge/stream", readTimeoutMs = 40_000,
             retryMinMs = 2_000, retryMaxMs = 60_000, refusedRetryMs = 60_000,
-            onFailure = { code -> if (mine == generation) BridgePrefs.clipboardState = BridgeClip.stateAfterFailure(code) },
+            onFailure = { code ->
+                if (mine == generation) {
+                    BridgePrefs.clipboardState = BridgeClip.stateAfterFailure(code)
+                    if (code == 403) ClipRelay.macOff = true // the Mac's switch is off: the helper is told to leave when it next asks
+                }
+            },
             rotateOnWifi = false,
             eventIds = eventIds,
         ) { event, data ->
             if (mine != generation) return@AgentStream
             when (event) {
-                "open" -> BridgePrefs.clipboardState = ClipboardState.RUNNING
+                "open" -> { ClipRelay.macOff = false; macSwitch?.markOn(); BridgePrefs.clipboardState = ClipboardState.RUNNING }
                 "close" -> BridgePrefs.clipboardState = ClipboardState.WAITING
                 else -> BridgeClip.parseEvent(event, data)?.let { text ->
+                    echo.wrote(text) // the helper will see this copy too: it must not go back to the Mac
                     main.post { if (mine == generation && BridgePrefs.clipboardEnabled(this)) clipboard.setPrimaryClip(ClipData.newPlainText("PhoneBox", text)) }
                 }
             }
@@ -159,6 +170,7 @@ class ClipboardService : Service() {
         val send = PendingIntent.getActivity(this, 1, Intent(this, ReadClipboardActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), immutable or PendingIntent.FLAG_UPDATE_CURRENT)
         @Suppress("DEPRECATION") // the Icon-based Action builder is API 23, the app installs on 21
         builder.addAction(R.drawable.ic_tile, getString(R.string.bridge_send_to_mac), send)
+        if (Build.VERSION.SDK_INT >= 31) builder.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE) // not deferred by ten seconds
         return builder.setSmallIcon(R.drawable.ic_tile)
             .setContentTitle(getString(R.string.bridge_notification_title))
             .setContentIntent(open)
@@ -166,9 +178,26 @@ class ClipboardService : Service() {
             .build()
     }
 
+    /** A copy the helper saw on the phone (it runs only when the Mac's agent started it over adb): on to the Mac like Send to Mac, without a toast. */
+    private fun handleCopied(app: Context, text: String) {
+        if (echo.consumeIfEcho(text)) return
+        if (!BridgePrefs.clipboardEnabled(app)) return
+        val mac = macCache(app)
+        if (!mac.isOn()) { ClipRelay.macOff = true; return }
+        val link = AgentLink(app)
+        try {
+            when (BridgeClient(link).sendClipboard(text)) {
+                SendResult.OK -> mac.markOn()
+                SendResult.OFF -> { mac.markOff(); ClipRelay.macOff = true }
+                else -> {} // the Mac cannot be reached or refused it: dropped, an old copy is of no use later
+            }
+        } finally { link.close() }
+    }
+
     override fun onDestroy() {
         getSharedPreferences(AgentLink.PAIRING_PREFS, Context.MODE_PRIVATE).unregisterOnSharedPreferenceChangeListener(pairingChanged)
         generation++
+        ClipRelay.sink = null
         wanted = false
         stopStream()
         // a new start hears only new events: a replay could bring back what was copied on the Mac while the phone's switch was off
@@ -181,6 +210,26 @@ class ClipboardService : Service() {
     companion object {
         private const val CHANNEL = "bridge"
         private const val NOTIFICATION_ID = 7
+        private const val EXTRA_REPOST = "repost"
+        private val echo = ClipEcho { System.currentTimeMillis() }
+        @Volatile private var macSwitch: BridgeConfigCache? = null
+
+        /** Whether the Mac's clipboard switch is on, asked at most once a minute (not knowing counts as on; a 403 turns it off). */
+        private fun macCache(app: Context): BridgeConfigCache =
+            macSwitch ?: BridgeConfigCache({ val link = AgentLink(app); try { BridgeClient(link).fetchConfig() } finally { link.close() } },
+                "clipboard", System::currentTimeMillis).also { macSwitch = it }
+
+        /** Shows the service's notification again if it was dismissed; does nothing else (the connection is not restarted). */
+        fun repostNotification(context: Context) {
+            val app = context.applicationContext
+            if (!BridgePrefs.clipboardEnabled(app)) return
+            try {
+                val intent = Intent(app, ClipboardService::class.java).putExtra(EXTRA_REPOST, true)
+                if (Build.VERSION.SDK_INT >= 26) app.startForegroundService(intent) else app.startService(intent)
+            } catch (e: Exception) {
+                BridgePrefs.lastError = e.javaClass.simpleName
+            }
+        }
 
         /**
          * The last bridge event id this process received, sent as Last-Event-ID when a stream connects again (also the new

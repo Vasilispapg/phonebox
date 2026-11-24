@@ -103,7 +103,7 @@ class PhoneNotificationListener : NotificationListenerService() {
 
         private fun configCache(app: Context): BridgeConfigCache =
             cache ?: BridgeConfigCache({ val link = AgentLink(app); try { BridgeClient(link).fetchConfig() } finally { link.close() } },
-                System::currentTimeMillis).also { cache = it }
+                clock = System::currentTimeMillis).also { cache = it }
 
         /**
          * One drain at a time on one thread: a burst of notifications is one pass over the queue, and the queue's two-minute
@@ -130,7 +130,7 @@ class PhoneNotificationListener : NotificationListenerService() {
                     queue,
                     phoneSwitchOn = { BridgePrefs.notificationsEnabled(app) },
                     appAllowed = { BridgePrefs.allowedApps(app).contains(it) },
-                    macSwitchOn = { config.notificationsOn() },
+                    macSwitchOn = { config.isOn() },
                     send = { body -> BridgeClient(link ?: AgentLink(app).also { link = it }).sendNotification(body) },
                     onOutcome = { BridgePrefs.notificationOutcome = it },
                     markMacOff = config::markOff,

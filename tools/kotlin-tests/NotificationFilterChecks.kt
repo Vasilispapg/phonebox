@@ -138,55 +138,75 @@ private fun jsonChecks() {
     check("absurdly deep nesting is refused, not a stack overflow", BridgeClip.notificationsOn(cfg("""{"x":$deep}""")) == null)
 }
 
+private fun bridgeFlagChecks() {
+    val both = cfg("""{"bridge":{"clipboard":true,"notifications":false,"copyCodes":false}}""")
+    check("the clipboard switch is read by name", BridgeClip.bridgeFlag(both, "clipboard") == true)
+    check("the notifications switch is read by name", BridgeClip.bridgeFlag(both, "notifications") == false)
+    check("a switch the agent does not have is off", BridgeClip.bridgeFlag(both, "somethingElse") == false)
+    check("an old agent (no bridge section) is off", BridgeClip.bridgeFlag(cfg("""{"pages":[]}"""), "clipboard") == false)
+    check("the wrong reply shape is unknown", BridgeClip.bridgeFlag("""{"bridge":{"clipboard":true}}""", "clipboard") == null)
+    check("notificationsOn is the same reading", BridgeClip.notificationsOn(both) == false)
+
+    var now = 9_000_000L
+    var body: String? = both
+    val clipboardCache = BridgeConfigCache({ body }, "clipboard") { now }
+    check("a cache for the clipboard switch finds it on", clipboardCache.isOn())
+    body = cfg("""{"bridge":{"clipboard":false}}""")
+    now += 61_000
+    check("and follows the switch after a minute", !clipboardCache.isOn())
+    val notificationCache = BridgeConfigCache({ both }) { now }
+    check("the default cache still reads the notifications switch", !notificationCache.isOn())
+}
+
 private fun configCacheChecks() {
     var now = 5_000_000L
     val fetches = AtomicInteger()
     var body: String? = cfg("""{"bridge":{"notifications":true}}""")
     val cache = BridgeConfigCache({ fetches.incrementAndGet(); body }) { now }
-    check("the first read asks the agent and finds it on", cache.notificationsOn())
-    check("a second read inside a minute asks nothing", cache.notificationsOn() && fetches.get() == 1)
+    check("the first read asks the agent and finds it on", cache.isOn())
+    check("a second read inside a minute asks nothing", cache.isOn() && fetches.get() == 1)
     body = cfg("""{"bridge":{"notifications":false}}""")
     now += 59_000
-    check("still cached just under a minute", cache.notificationsOn() && fetches.get() == 1)
+    check("still cached just under a minute", cache.isOn() && fetches.get() == 1)
     now += 2_000
-    check("after a minute it asks again and follows the change", !cache.notificationsOn() && fetches.get() == 2)
+    check("after a minute it asks again and follows the change", !cache.isOn() && fetches.get() == 2)
 
     cache.markOn()
-    check("markOn forgets an old 'off' at once", cache.notificationsOn())
+    check("markOn forgets an old 'off' at once", cache.isOn())
 
     // an agent that cannot be reached: unknown counts as on (try to send, the queue holds it), asked again after 10 s
     now += 500_000
     val unreachable = AtomicInteger()
     val c2 = BridgeConfigCache({ unreachable.incrementAndGet(); null }) { now }
-    check("when the agent cannot be asked, sending is tried", c2.notificationsOn())
+    check("when the agent cannot be asked, sending is tried", c2.isOn())
     now += 9_000
-    c2.notificationsOn()
+    c2.isOn()
     check("and it is not asked again before 10 s", unreachable.get() == 1)
     now += 2_000
-    c2.notificationsOn()
+    c2.isOn()
     check("but it is asked again after 10 s, not a minute", unreachable.get() == 2)
 
     // a known 'off' survives an unreachable agent
     now += 500_000
     var phase = 0
     val c3 = BridgeConfigCache({ if (phase++ == 0) cfg("""{"bridge":{"notifications":false}}""") else null }) { now }
-    check("an agent that says off is off", !c3.notificationsOn())
+    check("an agent that says off is off", !c3.isOn())
     now += 70_000
-    check("and stays off when the next ask fails", !c3.notificationsOn())
+    check("and stays off when the next ask fails", !c3.isOn())
 
     // markOff: a 403 from the agent turns it off at once, and it asks again after a minute
     now += 500_000
     val c4 = BridgeConfigCache({ cfg("""{"bridge":{"notifications":true}}""") }) { now }
-    check("on before a 403", c4.notificationsOn())
+    check("on before a 403", c4.isOn())
     c4.markOff()
-    check("a 403 (markOff) turns it off at once", !c4.notificationsOn())
+    check("a 403 (markOff) turns it off at once", !c4.isOn())
     now += 61_000
-    check("and a minute later it asks again and finds it on", c4.notificationsOn())
+    check("and a minute later it asks again and finds it on", c4.isOn())
 
     // a body that is not JSON counts as a failed ask
     now += 500_000
     val c5 = BridgeConfigCache({ "<html>not the agent</html>" }) { now }
-    check("an answer that is not JSON is unknown, so sending is tried", c5.notificationsOn())
+    check("an answer that is not JSON is unknown, so sending is tried", c5.isOn())
 }
 
 private fun cutChecks() {
@@ -333,5 +353,6 @@ fun main() {
     cutChecks()
     deliveryChecks()
     configCacheChecks()
+    bridgeFlagChecks()
     println("ALL $passed CHECKS PASSED")
 }

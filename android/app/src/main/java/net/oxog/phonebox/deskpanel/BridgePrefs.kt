@@ -47,7 +47,15 @@ object BridgePrefs {
     /** How the last notification went, for the screen. In memory only. */
     @Volatile var notificationOutcome: NotificationOutcome = NotificationOutcome.NONE
 
-    @Volatile var clipboardState: ClipboardState = ClipboardState.STOPPED
+    @Volatile private var state = ClipboardState.STOPPED
+
+    /** Where the clipboard service is. A change is logged as "clipboard: A -> B" (states only, never any text), for diagnosing a stream that does not recover. */
+    var clipboardState: ClipboardState
+        get() = state
+        set(value) {
+            if (value != state) android.util.Log.i("PhoneBoxBridge", "clipboard: $state -> $value")
+            state = value
+        }
 
     /** The last thing that went wrong starting the service (a class name, never clipboard text), shown on the screen. */
     @Volatile var lastError: String? = null

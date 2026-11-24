@@ -121,6 +121,21 @@ Last updated: 2026-11-20 (PhoneBox 0.9.6).
   messages** also on, a login code the agent finds in a message is put on this computer's clipboard, and is not sent on
   to your phones. Turning the setting off stops all of it at once, also
   for notifications that were waiting to be shown.
+- **Automatic copy from the phone, the phone bridge's helper** (off by default; it needs the clipboard switch on the phone and
+  on the computer, and USB or wireless debugging on the phone): the computer's agent starts a small helper on the phone
+  through adb. It runs as adb's shell user, which is the only way Android lets a program read the clipboard in the background.
+  It looks at the phone's clipboard about four times a second and hands each new plain-text copy (up to 64 KiB; nothing Android
+  marks sensitive) to the PhoneBox app on the same phone with `content call`, a command that runs for about a second as the shell user, with the copy
+  as one argument (Android does not let the shell user open an app's socket, and a broadcast would keep the text in the system's
+  broadcast history, which a bug report contains). The app's provider answers only calls from the shell user, whose identity an
+  app cannot fake; nothing keeps the text on the way, and while the command runs only the shell user and the system can see it.
+  Any other app that writes to the phone's clipboard has the same effect as a copy by you: its text reaches the Mac too, as with
+  Phone Link on Windows. The app then sends it to your paired computer like any other send. It does not store or log what it
+  reads, and it does nothing with it except that. It reads the clipboard of the phone's main user only. The app answers every call
+  with whether it still wants copies, and the helper leaves at the first "no": when the phone's clipboard switch is off or the
+  computer says its switch is off (it also asks every 15 seconds, so it leaves within that time when nothing is copied), and it
+  leaves when the app is updated or removed and when the phone restarts; the computer starts it only while a phone has the bridge stream open, which the phone does only while its own
+  clipboard switch is on.
 - **Phone notifications, on the phone side of the phone bridge** (off by default; the app's **Phone bridge** screen › Show
   notifications on the Mac, plus Android's Notification access): the app reads the notifications of the apps you switched
   on (their name, title, text and kind; for a call, who is calling) and sends them only to your paired computer over the
