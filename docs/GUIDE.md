@@ -318,7 +318,12 @@ Share what you copy between the Mac and the phone. It starts with the clipboard.
   last notification reached the Mac.
 - **Calls and delivery:** a call is sent once, when it starts ringing, and is not repeated when you answer or hang up; a
   missed call is sent as "Missed call". If the Mac is asleep or away, notifications are kept for two minutes and sent when it
-  is back, then dropped (a login code older than that is no use).
+  is back, then dropped (a login code older than that is no use). On a Samsung phone a ringing call is posted by the in-call
+  app rather than the dialer, so it is sent whenever the default dialer is on your app list (other apps' calls, such as
+  WhatsApp, follow your list like any notification); an outgoing call looks the same there and is sent too. When Android
+  shows only the number, it asks once for **Contacts**: allowed, the caller's name is shown on the Mac instead of the
+  number (one lookup of that number, nothing is read in bulk or kept), and a name that arrives a moment later replaces
+  the first notification.
 - **Notifications on the Mac:** turn on **Settings › Phone bridge › Show phone notifications on this Mac**. Calls (who is
   calling), messages and the apps you allow on the phone then appear as macOS notifications, with the text of the
   message. They carry the PhoneBox icon, with the phone app's own icon (Facebook, Messages) as the picture. The first time, the agent builds
