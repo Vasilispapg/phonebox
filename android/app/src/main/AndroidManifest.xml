@@ -9,6 +9,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- one lookup of the number of a call that rings, to show the contact's name on the Mac (asked only when notifications are on) -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Wake button only: names the Wi-Fi network so that the Wake-on-LAN packet cannot leave through mobile data -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />

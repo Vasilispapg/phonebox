@@ -19,9 +19,35 @@ import java.util.concurrent.atomic.AtomicBoolean
  * The text is never logged or stored.
  */
 class PhoneNotificationListener : NotificationListenerService() {
-    private val filter by lazy { NotificationFilter({ BridgePrefs.allowedApps(applicationContext) }, packageName) }
+    private val filter by lazy { NotificationFilter({ BridgePrefs.allowedApps(applicationContext) }, packageName, { defaultDialer() }) }
 
-    override fun onListenerConnected() { connected = true }
+    override fun onListenerConnected() {
+        connected = true
+        // a call that is already ringing or running when the listener (re)connects must not be sent again as a new call
+        try {
+            activeNotifications?.filter { isLifetimeCall(it.packageName, it.notification) }?.forEach {
+                callLifetimes.begin(it.key ?: "${it.packageName}|${it.id}|${it.tag}", System.currentTimeMillis())
+            }
+        } catch (_: Exception) {}
+    }
+
+    private fun isLifetimeCall(pkg: String, n: Notification?): Boolean =
+        n != null && pkg in NotificationFilter.IN_CALL_UIS && n.category == "call" &&
+            n.extras?.getString(Notification.EXTRA_TEMPLATE) == "android.app.Notification\$CallStyle"
+
+    override fun onNotificationRemoved(sbn: StatusBarNotification) {
+        callLifetimes.ended(sbn.key ?: "${sbn.packageName}|${sbn.id}|${sbn.tag}") // the call ended: the next one is a new call
+    }
+
+    /** The name Android's call notification carries for the caller (a CallStyle's person), when it has one. */
+    @Suppress("DEPRECATION")
+    private fun callPersonName(sbn: StatusBarNotification): String? = try {
+        if (Build.VERSION.SDK_INT >= 28) (sbn.notification?.extras?.getParcelable<android.app.Person>("android.callPerson"))?.name?.toString() else null
+    } catch (_: Exception) { null }
+
+    private fun defaultDialer(): String? = try {
+        if (Build.VERSION.SDK_INT >= 23) (getSystemService(Context.TELECOM_SERVICE) as? android.telecom.TelecomManager)?.defaultDialerPackage else null
+    } catch (_: Exception) { null }
 
     // Turning the switch off disables this component and Android unbinds it, not always through onListenerDisconnected (and
     // never below Android 7): without this the screen would say "allowed" after the switch comes back but before a rebind
@@ -32,6 +58,7 @@ class PhoneNotificationListener : NotificationListenerService() {
 
     override fun onListenerDisconnected() {
         connected = false
+        callLifetimes.clear()
         // Android may drop the listener; ask to be bound again while the switch is on
         if (Build.VERSION.SDK_INT >= 24 && BridgePrefs.notificationsEnabled(this))
             requestRebind(ComponentName(this, PhoneNotificationListener::class.java))
@@ -41,16 +68,35 @@ class PhoneNotificationListener : NotificationListenerService() {
         val app = applicationContext
         val mark = queue.mark()
         if (!BridgePrefs.notificationsEnabled(app)) return
-        val info = describe(sbn) ?: return
+        var info = describe(sbn) ?: return
         val decision = filter.decide(info)
+        // what decided a call (no title or text, only the app and the flags), once for each change: the call rule is the one that
+        // differs between makers, and a diagnostic that repeats at every update of a call would fill the log
+        if (info.category == "call" || info.category == "missed_call" || info.callStyle) {
+            val line = "call notification from ${info.pkg}: category=${info.category} callStyle=${info.callStyle} ongoing=${info.ongoing} " +
+                "callType=${sbn.notification?.extras?.getInt("android.callType", 0)} fullScreen=${sbn.notification?.fullScreenIntent != null} " +
+                "actions=${sbn.notification?.actions?.size ?: 0} answerIntent=${sbn.notification?.extras?.containsKey("android.answerIntent")} -> $decision"
+            if (line != lastDiagnostic) { lastDiagnostic = line; android.util.Log.i("PhoneBoxBridge", line) }
+        }
         if (decision == Decision.SKIP) return
         val incomingCall = decision == Decision.SEND && info.category == "call"
+        // the in-call UI's call stays posted for the whole call: sent once per notification, and again for the next call
+        val lifetimeCall = incomingCall && info.callStyle && info.pkg in NotificationFilter.IN_CALL_UIS
+        // the in-call UI first shows only the number: the person's name (from the notification, or the contacts) goes in its place, and a
+        // later update that finally carries the name is sent again for the same call (the Mac replaces the first one)
+        if (lifetimeCall) info = info.copy(title = CallerName.pick(info.title, callPersonName(sbn)) { ContactNames.lookup(app, it) })
+        val callStart = if (lifetimeCall) (callLifetimes.begin(info.key, System.currentTimeMillis(), info.title) ?: callLifetimes.renamed(info.key, info.title) ?: return) else null
         // one call is sent once: answering, updating or ending it posts the same notification again
-        if ((incomingCall || decision == Decision.SEND_AS_MISSED_CALL) && !callKeys.firstTime(info.key)) return
+        if (((incomingCall && !lifetimeCall) || decision == Decision.SEND_AS_MISSED_CALL) && !callKeys.firstTime(info.key)) return
         val category = when { decision == Decision.SEND_AS_MISSED_CALL -> "missed_call"; incomingCall -> "call"; else -> "message" }
         // cut here, as the agent does: a long email in a BigText notification must arrive shortened, not be refused whole
-        val body = BridgeClip.notificationBody(info.key, label(info.pkg), info.pkg, BridgeClip.cut(info.title, 200), BridgeClip.cut(info.text, 2000), category, sbn.postTime)
-        if (queue.addIfCurrent(NotificationDelivery.Pending(info.pkg, body), mark)) requestDrain(app)
+        // the next call from the same person must not look like a repeat to the Mac: its key carries the time this call began
+        val sendKey = if (callStart != null) "${info.key}|$callStart" else info.key
+        // the in-call UI is not on the list and has no launcher icon (so no name or icon the phone may look up): the default dialer
+        // stands for it, in what the Mac shows and in the check at send time
+        val shown = gatePackage(defaultDialer(), info.pkg)
+        val body = BridgeClip.notificationBody(sendKey, label(shown), shown, BridgeClip.cut(info.title, 200), BridgeClip.cut(info.text, 2000), category, sbn.postTime)
+        if (queue.addIfCurrent(NotificationDelivery.Pending(shown, body), mark)) requestDrain(app)
     }
 
     private fun describe(sbn: StatusBarNotification): NotificationInfo? {
@@ -65,13 +111,15 @@ class PhoneNotificationListener : NotificationListenerService() {
         val baseKey = sbn.key ?: "${sbn.packageName}|${sbn.id}|${sbn.tag}"
         // dialers post every call under one id and tag, so a call's key includes when it started: without that, only the first
         // call after the process started would ever be sent, here and on the agent (which de-duplicates by key and text)
-        val key = if (n.category == "call" || n.category == "missed_call") "$baseKey|${n.`when`}" else baseKey
+        val callStyle = extras.getString(Notification.EXTRA_TEMPLATE) == "android.app.Notification\$CallStyle"
+        val lifetimeCall = callStyle && n.category == "call" && sbn.packageName in NotificationFilter.IN_CALL_UIS
+        val key = if (!lifetimeCall && (n.category == "call" || n.category == "missed_call")) "$baseKey|${n.`when`}" else baseKey
         return NotificationInfo(
             pkg = sbn.packageName, key = key,
             ongoing = n.flags and Notification.FLAG_ONGOING_EVENT != 0,
             groupSummary = n.flags and Notification.FLAG_GROUP_SUMMARY != 0,
             category = n.category, callStyleIncoming = callStyleIncoming, hasAnswerAction = answerAction,
-            title = title, text = text, time = sbn.postTime,
+            title = title, text = text, time = sbn.postTime, callStyle = callStyle,
         )
     }
 
@@ -85,6 +133,8 @@ class PhoneNotificationListener : NotificationListenerService() {
 
         private val worker = Executors.newSingleThreadExecutor()
         private val callKeys = CallKeys()
+        private val callLifetimes = CallLifetimes()
+        @Volatile private var lastDiagnostic = ""
         private val queue = DeliveryQueue<NotificationDelivery.Pending>(clock = SystemClock::elapsedRealtime)
         private val draining = AtomicBoolean(false)
         private val retryPending = AtomicBoolean(false)

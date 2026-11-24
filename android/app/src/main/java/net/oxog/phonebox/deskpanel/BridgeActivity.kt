@@ -118,7 +118,15 @@ class BridgeActivity : Activity() {
         super.onResume()
         // Android may have stopped the service (the Task Manager, an update): opening the screen brings it back
         if (BridgePrefs.clipboardEnabled(this) && BridgePrefs.clipboardState == ClipboardState.STOPPED) ClipboardService.sync(this)
+        askForContactsOnce()
         handler.post(refresh)
+    }
+
+    /** With notifications on, Android's own question about Contacts, once: a ringing call then shows the contact's name on the Mac. */
+    private fun askForContactsOnce() {
+        if (Build.VERSION.SDK_INT < 23 || !BridgePrefs.notificationsEnabled(this) || ContactNames.allowed(this) || BridgePrefs.askedContacts(this)) return
+        BridgePrefs.setAskedContacts(this)
+        requestPermissions(arrayOf(Manifest.permission.READ_CONTACTS), 2)
     }
 
     override fun onPause() {

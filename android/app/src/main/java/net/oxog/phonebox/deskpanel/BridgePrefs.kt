@@ -33,6 +33,13 @@ object BridgePrefs {
         if (!on) PhoneNotificationListener.clearPending() // what was waiting for the Mac must not be sent after the switch is off
     }
 
+    /** Whether the phone has asked for Contacts already: it asks once, and the owner can still allow it in Android's settings. */
+    fun askedContacts(context: Context): Boolean = prefs(context).getBoolean("askedContacts", false)
+
+    fun setAskedContacts(context: Context) {
+        prefs(context).edit().putBoolean("askedContacts", true).apply()
+    }
+
     /** The apps whose notifications go to the Mac. */
     fun allowedApps(context: Context): Set<String> = prefs(context).getStringSet("apps", emptySet()) ?: emptySet()
 

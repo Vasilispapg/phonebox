@@ -14,6 +14,8 @@ data class NotificationInfo(
     val title: String,
     val text: String,
     val time: Long,
+    /** The notification uses the CallStyle template, whatever its type (Samsung's in-call UI posts a ringing call as type "ongoing"). */
+    val callStyle: Boolean = false,
 )
 
 enum class Decision { SKIP, SEND, SEND_AS_MISSED_CALL }
@@ -22,12 +24,23 @@ enum class Decision { SKIP, SEND, SEND_AS_MISSED_CALL }
  * Decides which notifications go to the Mac. Only apps on the owner's list are ever sent; PhoneBox's own, group summaries,
  * empty ones and ongoing ones (media, downloads, a call in progress) are not. A call is the exception to "ongoing": dialers
  * post an incoming call as ongoing, so an incoming one (CallStyle incoming, or an answer action) is sent.
- * The call rule is written from the documented Android model; how the owner's own dialer marks these is to be confirmed.
+ * Calls: an incoming one (CallStyle incoming, an answer action, or the Samsung in-call UI's CallStyle) is sent; see the checks.
+ * Outgoing calls look the same on Samsung (same CallStyle, same "ongoing" type), so they are sent too.
  */
-class NotificationFilter(private val allowed: () -> Set<String>, private val ownPackage: String) {
+class NotificationFilter(private val allowed: () -> Set<String>, private val ownPackage: String, private val dialer: () -> String? = { null }) {
+    companion object {
+        /** In-call apps that post a call for the default dialer: the dialer's own package is not the one that rings. */
+        val IN_CALL_UIS = setOf("com.samsung.android.incallui")
+    }
+
     fun decide(n: NotificationInfo): Decision {
         if (n.pkg == ownPackage || n.groupSummary) return Decision.SKIP
         if (n.title.isBlank() && n.text.isBlank()) return Decision.SKIP
+        // Samsung posts a call from its in-call UI (com.samsung.android.incallui), not from the dialer package, as a CallStyle
+        // notification of type "ongoing" with only a Hang up button (recorded on a Galaxy S25 Ultra); whoever put the default dialer
+        // on the list asked for calls. Only that in-call UI is let through on the dialer's say: any other app's CallStyle call
+        // (WhatsApp, Signal, Meet) follows the list like every other notification.
+        if (n.category == "call" && n.callStyle && n.pkg in IN_CALL_UIS && dialer()?.let { it in allowed() } == true) return Decision.SEND
         if (n.pkg !in allowed()) return Decision.SKIP
         return when (n.category) {
             "missed_call" -> Decision.SEND_AS_MISSED_CALL
@@ -47,4 +60,48 @@ class CallKeys(private val max: Int = 50) {
         while (seen.size > max) seen.remove(seen.first())
         return true
     }
+}
+
+/**
+ * The app the list is checked against again when the notification is sent (the owner may have switched it off meanwhile), and the
+ * one whose name and icon the Mac shows: for a call from the in-call UI that is the default dialer, which is what let the call
+ * through (the in-call UI is not on the list, has no launcher icon and so no name the phone may look up); for anything else the app itself.
+ */
+fun gatePackage(defaultDialer: String?, postingPackage: String): String =
+    if (postingPackage in NotificationFilter.IN_CALL_UIS) (defaultDialer ?: postingPackage) else postingPackage
+
+/**
+ * Who is calling. Samsung's in-call notification shows the number until it knows better, and the phone's contacts are the
+ * owner's own: a title that is only a number is replaced by the name the notification itself carries (its call person) or,
+ * failing that, by the contact with that number. Anything that already reads as a name is left alone.
+ */
+object CallerName {
+    /** Digits with the usual separators, at least three of them: "+30 694 093 1040", "(210) 555-1234", "6940931040". */
+    fun isNumberLike(s: String): Boolean {
+        val t = s.trim()
+        return t.count { it.isDigit() } >= 3 && t.all { it.isDigit() || it in "+-().#*" || it.isWhitespace() }
+    }
+
+    fun pick(title: String, personName: String?, lookup: (String) -> String?): String {
+        if (!isNumberLike(title)) return title
+        if (!personName.isNullOrBlank() && !isNumberLike(personName)) return personName.trim()
+        return lookup(title)?.takeIf { it.isNotBlank() } ?: title
+    }
+}
+
+/** A call notification stays posted for the whole call and is updated many times: it is sent once, and again for the next call. */
+class CallLifetimes {
+    private class Call(val start: Long, var title: String)
+    private val live = HashMap<String, Call>()
+    /** The time the call started (now) when this is its first update, null for the later ones. */
+    @Synchronized fun begin(key: String, now: Long, title: String = ""): Long? = if (key in live) null else { live[key] = Call(now, title); now }
+    /** The start of the call when [title] is not the one last sent for it (the caller was named after the first ring), else null. */
+    @Synchronized fun renamed(key: String, title: String): Long? {
+        val call = live[key] ?: return null
+        if (call.title == title) return null
+        call.title = title
+        return call.start
+    }
+    @Synchronized fun ended(key: String) { live.remove(key) }
+    @Synchronized fun clear() = live.clear()
 }
