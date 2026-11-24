@@ -97,6 +97,10 @@ if (OperatingSystem.IsMacOS())
     // files to the phone wait here (emptied when the agent starts and when the switch is off) until the phone fetches them
     builder.Services.AddSingleton(_ => new Outbox(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library", "Caches", "PhoneBox", "outbox"), TimeProvider.System));
     builder.Services.AddSingleton(_ => new LocalTransferKey(Path.Combine(configDir, "transfer.json"), Port));
+    // the Finder Quick Action "Send to phone", written while sending files is on
+    builder.Services.AddSingleton<IQuickActionInstaller>(sp => new QuickActionInstaller(
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library", "Services"),
+        sp.GetRequiredService<LocalTransferKey>().Path, QuickActionInstaller.RefreshServices));
     // the key file, the Finder Quick Action and the outbox follow the switch (started here: the outbox is emptied at every start)
     builder.Services.AddHostedService(sp => new TransferSwitchWatcher(sp.GetRequiredService<ConfigStore>(), sp.GetRequiredService<Outbox>(),
         sp.GetRequiredService<LocalTransferKey>(), sp.GetService<IQuickActionInstaller>() ?? NoQuickAction.Instance, TimeSpan.FromSeconds(5),
