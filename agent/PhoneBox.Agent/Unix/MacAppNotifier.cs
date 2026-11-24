@@ -123,7 +123,9 @@ internal sealed class MacAppNotifier : IMacNotifier, IWarmable, IDisposable
         {
             if (_inputs() is not { } inputs) { SetState(NotifierState.Unavailable, "its files are missing"); return; }
             var version = NotifierBundle.Version(inputs.Source, inputs.Icon);
-            Directory.CreateDirectory(_dir, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            // the mode overload throws on Windows, where the tests (with a fake runner) run this too; there is no notifier to protect there
+            if (OperatingSystem.IsWindows()) Directory.CreateDirectory(_dir);
+            else Directory.CreateDirectory(_dir, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             if (!NotifierBundle.DirectoryIsSafe(_dir)) { SetState(NotifierState.Unavailable, "its folder can be written by other users"); return; }
             var stamp = Path.Combine(_dir, "version");
             var built = File.Exists(ExecutablePath) && File.Exists(Path.Combine(_dir, "PhoneBox.app", "Contents", "Info.plist")) &&

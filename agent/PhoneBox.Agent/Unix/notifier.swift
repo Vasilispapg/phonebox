@@ -19,7 +19,7 @@ let finished = DispatchSemaphore(value: 0)
 var code: Int32 = 5
 var imageFile: URL?
 
-/// Ends the program; the phone app's icon never stays on disk, whatever happened.
+/// Ends the program; an icon file macOS did not take is deleted (one it took was moved into its own store, with the notification).
 func finish(_ status: Int32, _ message: String? = nil) -> Never {
     if let message = message { FileHandle.standardError.write(Data((message + "\n").utf8)) }
     if let index = CommandLine.arguments.firstIndex(of: "--result"), index + 1 < CommandLine.arguments.count {
