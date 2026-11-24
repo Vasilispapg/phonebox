@@ -52,7 +52,8 @@ object ClipHelper {
 
         fun sample(): ClipSample? = try {
             val clip = get.invoke(service, *ClipHelperRules.clipboardArgs(get.parameterTypes)) as ClipData?
-            if (clip == null || clip.itemCount == 0) ClipSample(null, false)
+            if (clip == null) ClipSample(null, false, unknown = true)
+            else if (clip.itemCount == 0) ClipSample(null, false)
             else ClipSample(clip.getItemAt(0).text?.toString(), isSensitive(clip))
         } catch (_: Exception) { // a refused call, a service that died: the caller counts these and gives up after a while
             null

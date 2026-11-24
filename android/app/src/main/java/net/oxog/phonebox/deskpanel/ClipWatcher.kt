@@ -3,7 +3,7 @@ package net.oxog.phonebox.deskpanel
 import java.security.MessageDigest
 
 /** What the clipboard holds at one moment: its text (null for an image, a file or nothing) and whether it is marked sensitive. */
-class ClipSample(val text: String?, val sensitive: Boolean)
+class ClipSample(val text: String?, val sensitive: Boolean, val unknown: Boolean = false)
 
 /**
  * Decides which clipboard changes the helper reports. The first look only notes what is there, so turning the feature on never
@@ -17,6 +17,9 @@ class ClipWatcher(private val read: () -> ClipSample?, private val emit: (String
 
     fun poll() {
         val sample = read() ?: return
+        // the clipboard service answered nothing at all (Android 16 does that while the phone is locked): not a change, not even to "empty",
+        // so what was copied before stays known and is not sent again after unlocking
+        if (sample.unknown) return
         val text = sample.text
         if (text == null) { last = null; primed = true; return }
         val hash = hash(text)

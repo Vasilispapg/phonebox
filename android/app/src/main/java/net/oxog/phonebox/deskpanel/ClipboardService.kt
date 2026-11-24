@@ -183,6 +183,7 @@ class ClipboardService : Service() {
         if (!BridgePrefs.clipboardEnabled(app)) return
         val mac = macCache(app)
         if (!mac.isOn()) { ClipRelay.macOff = true; return }
+        if (!BridgePrefs.clipboardEnabled(app)) return // the owner may have turned sharing off while the Mac's switch was being asked
         val link = AgentLink(app)
         try {
             when (BridgeClient(link).sendClipboard(text)) {

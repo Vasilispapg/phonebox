@@ -30,12 +30,12 @@ private fun echoChecks() {
     check("only the last four writes are kept", !echo.consumeIfEcho("one") && echo.consumeIfEcho("five"))
 }
 
-private class Clip(var text: String?, var sensitive: Boolean = false, var unreadable: Boolean = false)
+private class Clip(var text: String?, var sensitive: Boolean = false, var unreadable: Boolean = false, var locked: Boolean = false)
 
 private fun watcherChecks() {
     val clip = Clip("already on the clipboard")
     val seen = mutableListOf<String>()
-    val w = ClipWatcher({ if (clip.unreadable) null else ClipSample(clip.text, clip.sensitive) }) { seen.add(it) }
+    val w = ClipWatcher({ if (clip.unreadable) null else if (clip.locked) ClipSample(null, false, unknown = true) else ClipSample(clip.text, clip.sensitive) }) { seen.add(it) }
     w.poll()
     check("the first poll only notes what is there: nothing is sent", seen.isEmpty())
     w.poll()
@@ -62,6 +62,14 @@ private fun watcherChecks() {
     clip.text = "again"; w.poll()
     check("the same words copied again after something else are sent again", seen.takeLast(2) == listOf("again", "again"))
 
+    // Android 16 answers nothing while the phone is locked: after unlocking the same text must not be sent again as if copied anew
+    clip.text = "locked-in"; w.poll()
+    val sentBeforeLock = seen.size
+    clip.locked = true; w.poll(); w.poll()
+    clip.locked = false; w.poll()
+    check("a clipboard that answered nothing (a locked phone) does not make the same text new again", seen.size == sentBeforeLock)
+    clip.text = "copied after unlocking"; w.poll()
+    check("a copy made after that is still sent", seen.last() == "copied after unlocking")
     val before = seen.size
     clip.unreadable = true; w.poll()
     clip.unreadable = false; w.poll()
@@ -75,9 +83,11 @@ private fun watcherChecks() {
 private fun rulesChecks() {
     val greek = "Καλημέρα 🌍 -e 'x' \"y\" \$z\nline2"
     val call = ClipHelperRules.callCommand(greek)
-    check("a copy is one argument, whatever it holds", call.takeLast(2) == listOf("--arg", greek))
+    check("a copy is one argument, whatever it holds, behind the marker", call.takeLast(2) == listOf("--arg", ClipHelperRules.COPY_PREFIX + greek))
     check("the call goes to the app's own provider as user 0, by the content command", call.take(2) == listOf("content", "call") && call.containsAll(listOf("--uri", "content://net.oxog.phonebox.deskpanel.clip", "--method", "copy", "--user", "0")))
-    check("text that looks like an option stays the value of --arg", ClipHelperRules.callCommand("--uri").takeLast(2) == listOf("--arg", "--uri"))
+    check("text that looks like an option stays the value of --arg", ClipHelperRules.callCommand("--uri").takeLast(2) == listOf("--arg", "=--uri"))
+    check("no copy ever makes an argument that starts with a dash (the content tool refuses two)",
+        listOf("--help", "--uri", "---", "-rf", "--", "-", "=").all { ClipHelperRules.callCommand(it).last().startsWith("-").not() })
     check("no shell is involved: the command is a list of arguments", call.none { it == "sh" || it == "-c" || it == "su" })
     val ping = ClipHelperRules.callCommand(null)
     check("a still-there ping carries no text", ping.contains("ping") && !ping.contains("--arg") && ping.size == 8)
@@ -123,9 +133,11 @@ private fun rulesChecks() {
     val reset = ClipHelperRules.Streak(2)
     check("a good result starts the count again", !reset.hit(true) && !reset.hit(false) && !reset.hit(true) && reset.hit(true))
 
-    check("a copy is handed on while the app wants copies", ClipHelperRules.copyToRelay("active", "copy", "x") == "x")
-    check("a ping hands nothing on", ClipHelperRules.copyToRelay("active", "ping", null) == null && ClipHelperRules.copyToRelay("active", "ping", "x") == null)
-    check("an app that is off hands nothing on", ClipHelperRules.copyToRelay("off", "copy", "x") == null)
+    check("a copy is handed on while the app wants copies, without the marker", ClipHelperRules.copyToRelay("active", "copy", "=x") == "x")
+    check("a copy that keeps a leading marker of its own comes out whole", ClipHelperRules.copyToRelay("active", "copy", "==x") == "=x" && ClipHelperRules.copyToRelay("active", "copy", "=--help") == "--help")
+    check("a call without the marker hands nothing on", ClipHelperRules.copyToRelay("active", "copy", "x") == null)
+    check("a ping hands nothing on", ClipHelperRules.copyToRelay("active", "ping", null) == null && ClipHelperRules.copyToRelay("active", "ping", "=x") == null)
+    check("an app that is off hands nothing on", ClipHelperRules.copyToRelay("off", "copy", "=x") == null)
     check("a copy without text hands nothing on", ClipHelperRules.copyToRelay("active", "copy", null) == null)
 }
 

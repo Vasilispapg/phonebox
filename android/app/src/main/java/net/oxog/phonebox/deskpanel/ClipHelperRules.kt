@@ -26,7 +26,14 @@ object ClipHelperRules {
      */
     fun callCommand(text: String?): List<String> =
         listOf("content", "call", "--user", "0", "--uri", "content://$AUTHORITY", "--method", if (text == null) "ping" else "copy") +
-            (if (text == null) emptyList() else listOf("--arg", text))
+            (if (text == null) emptyList() else listOf("--arg", COPY_PREFIX + text))
+
+    /**
+     * Android's `content` tool refuses an argument value that starts with two dashes ("usage: adb shell content ...", tried on a Galaxy
+     * S25 Ultra), which would lose a copy such as "--help"; a copy that starts with one dash goes through. Every copy therefore starts
+     * with this marker, which [ClipProvider] takes off again.
+     */
+    const val COPY_PREFIX = "="
 
     enum class Reply { ACTIVE, OFF, NONE }
 
@@ -42,7 +49,8 @@ object ClipHelperRules {
         if (serviceRunning && phoneSwitchOn && !macOff) "active" else "off"
 
     /** The text a call hands on to the relay: only a "copy" with text, and only while the app wants copies; a ping hands on nothing. */
-    fun copyToRelay(state: String, method: String, arg: String?): String? = if (state == "active" && method == "copy") arg else null
+    fun copyToRelay(state: String, method: String, arg: String?): String? =
+        if (state == "active" && method == "copy" && arg != null && arg.startsWith(COPY_PREFIX)) arg.substring(COPY_PREFIX.length) else null
 
     /** Only the shell user may feed the Mac's clipboard; the provider checks the binder caller, which an app cannot fake. */
     fun callerAllowed(callingUid: Int): Boolean = callingUid == SHELL_UID
