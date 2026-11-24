@@ -5,7 +5,7 @@ const { test, expect } = require('@playwright/test');
 const config = (bridge) => ({
   display: { language: 'en', theme: 'default' },
   pages: [],
-  bridge: { clipboard: false, notifications: false, copyCodes: false, ...bridge },
+  bridge: { clipboard: false, notifications: false, copyCodes: false, filesFromPhone: false, filesToPhone: false, ...bridge },
 });
 
 async function open(page, cfg, os) {
@@ -71,4 +71,22 @@ test('the test button posts to the agent once the settings are saved, and asks t
   await page.locator('#bridgeTest').click();
   await expect(page.locator('#toast')).toContainText(/save/i);
   expect(await page.evaluate(() => window.__bridgeCalls)).toEqual(['POST']);
+});
+
+test('the two file switches are off by default and save one at a time', async ({ page }) => {
+  await open(page, config({}), 'macos');
+  await expect(page.locator('[data-bind="bridge.filesFromPhone"]')).not.toBeChecked();
+  await expect(page.locator('[data-bind="bridge.filesToPhone"]')).not.toBeChecked();
+  await page.locator('label.switch', { has: page.locator('[data-bind="bridge.filesFromPhone"]') }).click();
+  await expect(page.locator('[data-bind="bridge.filesFromPhone"]')).toBeChecked();
+  await expect(page.locator('[data-bind="bridge.filesToPhone"]')).not.toBeChecked();
+  const saved = await page.evaluate(() => cfg.bridge);
+  expect(saved.filesFromPhone).toBe(true);
+  expect(saved.filesToPhone).toBe(false);
+});
+
+test('saved file switches come back on', async ({ page }) => {
+  await open(page, config({ filesFromPhone: true, filesToPhone: true }), 'macos');
+  await expect(page.locator('[data-bind="bridge.filesFromPhone"]')).toBeChecked();
+  await expect(page.locator('[data-bind="bridge.filesToPhone"]')).toBeChecked();
 });

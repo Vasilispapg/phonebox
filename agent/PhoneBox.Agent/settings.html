@@ -848,6 +848,8 @@ nav a.on::before { color: var(--accent); }
         <div class="row" style="margin-bottom:8px"><label class="switch"><input type="checkbox" id="bridgeNotifications" data-bind="bridge.notifications" aria-labelledby="bridgeNotificationsLabel"><span></span></label> <span id="bridgeNotificationsLabel" data-i18n="s.bridge.notifications">Show phone notifications on this Mac (calls, messages and the apps you choose on the phone)</span></div>
         <label class="check"><input type="checkbox" id="bridgeCopyCodes" data-bind="bridge.copyCodes"> <span data-i18n="s.bridge.copyCodes">Copy one-time codes from messages to this Mac's clipboard</span></label>
         <div class="row" style="margin-top:8px"><button class="btn sm" id="bridgeTest" onclick="bridgeTest()" data-i18n="s.bridge.test">Send a test notification</button></div>
+        <div class="row" style="margin:12px 0 8px"><label class="switch"><input type="checkbox" id="bridgeFilesFromPhone" data-bind="bridge.filesFromPhone" aria-labelledby="bridgeFilesFromPhoneLabel"><span></span></label> <span id="bridgeFilesFromPhoneLabel" data-i18n="s.bridge.filesFromPhone">Receive files from the phone into Downloads/PhoneBox</span></div>
+        <div class="row" style="margin-bottom:8px"><label class="switch"><input type="checkbox" id="bridgeFilesToPhone" data-bind="bridge.filesToPhone" aria-labelledby="bridgeFilesToPhoneLabel"><span></span></label> <span id="bridgeFilesToPhoneLabel" data-i18n="s.bridge.filesToPhone">Send files to the phone (Finder Quick Action and drop zone)</span></div>
       </div>
 
       <div class="card">
