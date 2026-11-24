@@ -100,4 +100,13 @@ public sealed class OneTimeCodeTests
         Assert.Equal("123456", OneTimeCode.Find("Ο κωδικός επαλήθευσης είναι 123456"));
         Assert.Equal("123456", OneTimeCode.Find("123456 είναι ο κωδικός σου"));
     }
+
+    [Theory]
+    [InlineData("Verify: you paid $ 1500 today")]
+    [InlineData("Your code: € 4821")]
+    [InlineData("Your verification code is 1234…")]
+    public void AnAmountWithASpaceAfterItsSignAndACutOffCodeAreNotCodes(string text) => Assert.Null(OneTimeCode.Find(text));
+
+    [Fact]
+    public void ACodeStillCountsWhenADollarSignIsFarAway() => Assert.Equal("482913", OneTimeCode.Find("Paid $ 5. Your code is 482913"));
 }
