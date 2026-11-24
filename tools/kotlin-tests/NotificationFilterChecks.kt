@@ -442,6 +442,13 @@ private fun deliveryChecks() {
     now += 60_000
     check("the failed one and the rest are kept, in order", r.queue.take().map { it.item.body } == listOf("two", "three"))
 
+    for (lost in listOf(SendResult.UNKNOWN, SendResult.PAIR_AGAIN)) {
+        r = Rig { now }
+        r.add("com.msg", "one", now); r.add("com.msg", "two", now)
+        r.answers.add(lost)
+        check("$lost keeps the batch for a later try, like an unreachable Mac", r.delivery.drain() && r.sent == listOf("one") && r.queue.take().map { it.item.body } == listOf("one", "two"))
+    }
+
     now = 2_000_000L
     r = Rig { now }
     r.add("com.msg", "old", now)
