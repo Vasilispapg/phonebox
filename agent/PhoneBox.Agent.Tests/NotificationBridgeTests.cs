@@ -145,6 +145,31 @@ public sealed class NotificationBridgeTests : IDisposable
     }
 
     [Fact]
+    public async Task TheRunningWorkerForgetsTheIconsWhenTheSwitchGoesOffWithNoNotificationToWakeIt()
+    {
+        var bridge = new NotificationBridge(_notifier, _store, _clipboard, () => _now, _log, () => _phones) { IconCheck = TimeSpan.FromMilliseconds(20) };
+        await bridge.StartAsync(CancellationToken.None);
+        try
+        {
+            bridge.Receive(N("k1", "Facebook") with { IconPng = Png() }, "phoneA");
+            await WaitFor(() => _notifier.Posts.Count == 1);
+            SetBridge(notifications: false);              // nothing reaches the bridge while it is off
+            await Task.Delay(500);
+            SetBridge(notifications: true);
+            bridge.Receive(N("k2", "Facebook", text: "after"), "phoneA");
+            await WaitFor(() => _notifier.Posts.Count == 2);
+            Assert.Null(_notifier.Icons[^1]);
+        }
+        finally { await bridge.StopAsync(CancellationToken.None); bridge.Dispose(); }
+    }
+
+    private static async Task WaitFor(Func<bool> condition)
+    {
+        for (var i = 0; i < 200 && !condition(); i++) await Task.Delay(25);
+        Assert.True(condition());
+    }
+
+    [Fact]
     public async Task OnlyTheLastHundredAppsKeepTheirIcons()
     {
         for (var i = 0; i < 101; i++) await Send(N("k" + i, "App" + i) with { IconPng = Png() });

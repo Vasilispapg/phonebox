@@ -116,7 +116,9 @@ Last updated: 2026-11-20 (PhoneBox 0.9.6).
   link as other panel data. macOS shows them with the PhoneBox icon and the phone app's icon as the picture
   when the agent can build its small notifier program (PhoneBox.app, in the agent's folder: built on this Mac from source
   inside the agent with Apple's Swift compiler when Xcode or the command line tools are installed, nothing is downloaded,
-  and macOS asks once whether PhoneBox may show notifications); the icon is kept in memory only. Otherwise they appear
+  and macOS asks once whether PhoneBox may show notifications). The agent keeps the app icons in memory only and forgets
+  them within half a minute of the setting being turned off; to attach one, the notifier writes it to a temporary file, which macOS moves into
+  its own notification store and keeps with the notification (a file macOS does not take is deleted). Otherwise they appear
   under Script Editor's name, which is how a program without its own app shows a notification. macOS keeps them in
   Notification Center like any other. The agent does not store them or
   write their text to its log (the log never holds their words). With **Copy one-time codes from

@@ -211,6 +211,11 @@ public sealed class NotificationBridge : IHostedService, IDisposable
         }
     }
 
+    private bool HoldsIcons { get { lock (_gate) return _icons.Count > 0; } }
+
+    /// <summary>How often the worker looks at the switch while it remembers icons (tests make it short).</summary>
+    internal TimeSpan IconCheck { get; init; } = TimeSpan.FromSeconds(30);
+
     /// <summary>The same call keeps one notification: its key (which carries the time it began) names it, so a later post replaces the first.</summary>
     private static string ReplaceId(string? deviceId, string key) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes((deviceId ?? "") + "|" + key)))[..24].ToLowerInvariant();
@@ -234,7 +239,10 @@ public sealed class NotificationBridge : IHostedService, IDisposable
         {
             while (!token.IsCancellationRequested)
             {
-                try { await _wake.WaitAsync(NextSummaryDelay() ?? Timeout.InfiniteTimeSpan, token); await DrainAsync(); }
+                // Nothing wakes the worker when the switch goes off (the endpoints refuse without calling in), so while icons are
+                // remembered it looks now and then: DrainAsync forgets them once the switch is off, as PRIVACY.md says.
+                var wait = NextSummaryDelay() ?? (HoldsIcons ? IconCheck : Timeout.InfiniteTimeSpan);
+                try { await _wake.WaitAsync(wait, token); await DrainAsync(); }
                 catch (OperationCanceledException) { break; }
                 catch (Exception ex) { _log.LogWarning("the notification worker failed: {Error}", ex.GetType().Name); }
             }
