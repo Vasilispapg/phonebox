@@ -213,19 +213,12 @@ public sealed class ClipHelperLauncherTests
     }
 
     [Fact]
-    public void TheUidIsOnlyDigitsEvenWhenSeveralUsersAreListed()
-    {
-        // pm may print "uid:10234,1010234" (a work profile): everything after the first uid must go
-        Assert.Contains("s/.*uid://; s/[^0-9].*//", ClipHelperLauncher.StartCommand);
-    }
-
-    [Fact]
     public void TheStartCommandRunsTheHelperFromTheAppsOwnApkAndDetachesIt()
     {
         var c = ClipHelperLauncher.StartCommand;
         Assert.Contains("CLASSPATH=$(pm path net.oxog.phonebox.deskpanel", c);          // the app's own APK, wherever Android put it
         Assert.Contains("setsid nohup app_process /system/bin net.oxog.phonebox.deskpanel.ClipHelper", c);
-        Assert.Contains("pm list packages -U net.oxog.phonebox.deskpanel", c);          // the app's uid, so only the app can stop it
+        Assert.DoesNotContain("pm list packages", c);                                    // no uid is passed: the helper talks to the app by broadcast
         Assert.EndsWith(">/dev/null 2>&1 &", c);                                         // adb returns at once; the helper outlives it
         Assert.DoesNotContain("/data/app/", c);
         Assert.DoesNotContain("pkill", c);                                               // a pkill pattern would kill the shell it runs in
