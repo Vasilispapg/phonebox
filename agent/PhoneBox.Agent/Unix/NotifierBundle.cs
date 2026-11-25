@@ -86,11 +86,12 @@ internal static class NotifierBundle
     }
 
     /// <summary>The one request the program reads on its standard input. The text is data in a JSON document, never part of a command.</summary>
-    public static string RequestJson(string title, string subtitle, string body, byte[]? iconPng, string? replaceId = null)
+    public static string RequestJson(string title, string subtitle, string body, byte[]? iconPng, string? replaceId = null, string? revealPath = null)
     {
         var request = new Dictionary<string, string> { ["title"] = title, ["subtitle"] = subtitle, ["body"] = body };
         if (iconPng is { Length: > 0 }) request["image"] = Convert.ToBase64String(iconPng);
         if (!string.IsNullOrEmpty(replaceId)) request["id"] = replaceId;
+        if (!string.IsNullOrEmpty(revealPath)) request["open"] = revealPath; // a click shows this file in Finder
         return JsonSerializer.Serialize(request);
     }
 }

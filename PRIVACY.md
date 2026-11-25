@@ -121,6 +121,16 @@ Last updated: 2026-11-20 (PhoneBox 0.9.6).
   messages** also on, a login code the agent finds in a message is put on this computer's clipboard, and is not sent on
   to your phones. Turning the setting off stops all of it at once, also
   for notifications that were waiting to be shown.
+- **Files between the phone and the computer, the phone bridge** (macOS only, off by default; **Settings › Phone bridge ›
+  Receive files from the phone** and **Send files to the phone**, plus the phone app's own Phone bridge switches):
+  while receiving is on, a file you share from the phone with **Send to Mac** goes only to this computer over the same
+  USB / paired link as other panel data and is saved in `~/Downloads/PhoneBox` (marked as downloaded, never opened or run by
+  PhoneBox). While sending is on, a file you choose with the Finder Quick Action **Send to phone** or drop on the settings
+  page waits in a private folder on this computer (`~/Library/Caches/PhoneBox/outbox`) for up to one hour, until your phone
+  fetches it; it is then deleted, and the folder is emptied when the agent starts and when the setting is turned off. The
+  phone saves what it receives in its Pictures, Movies or Downloads folder. A small key file in the PhoneBox settings folder
+  (readable only by you) lets the Quick Action talk to the agent, and exists only while sending is on. File names and
+  contents are never written to the agent's log (it records counts only).
 - **Automatic copy from the phone, the phone bridge's helper** (off by default; it needs the clipboard switch on the phone and
   on the computer, and USB or wireless debugging on the phone): the computer's agent starts a small helper on the phone
   through adb. It runs as adb's shell user, which is the only way Android lets a program read the clipboard in the background.

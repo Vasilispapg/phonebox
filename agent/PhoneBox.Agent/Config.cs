@@ -365,6 +365,12 @@ public sealed class BridgeConfig
     /// <summary>Put a one-time code found in a message on this computer's clipboard. Does nothing unless <see cref="Notifications"/> is on.</summary>
     public bool CopyCodes { get; set; }
 
+    /// <summary>Save the files and images the phone sends into <c>~/Downloads/PhoneBox</c>. Off until the owner turns it on.</summary>
+    public bool FilesFromPhone { get; set; }
+
+    /// <summary>Let the Finder Quick Action and the settings page's drop zone send files to the phone. Off until the owner turns it on.</summary>
+    public bool FilesToPhone { get; set; }
+
     /// <summary>True when codes are really copied: both switches on. Computed, never written to the config file.</summary>
     [JsonIgnore]
     public bool CodesActive => CopyCodes && Notifications;

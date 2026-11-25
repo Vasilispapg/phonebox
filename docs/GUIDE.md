@@ -345,6 +345,19 @@ Share what you copy between the Mac and the phone. It starts with the clipboard.
   apps (System Settings › Privacy & Security). If macOS asks about PhoneBox, choose Allow there, or it asks again at each
   copy. If PhoneBox is denied, macOS gives it no text, nothing you copy reaches the phone, and the Phone bridge card says
   so (the log gets one line too, without the text).
+- **Sending files, both ways** (like AirDrop, over the same link): turn on **Settings › Phone bridge › Receive files from the
+  phone** and, on the phone, the Phone bridge screen's file switch. In any app, **Share › Send file to Mac** (after a short
+  confirmation) saves the file in `~/Downloads/PhoneBox` on the Mac; a notification shows when it arrives. The other way, turn on
+  **Send files to the phone** (and the phone's own switch): in Finder, right-click files › **Quick Actions › Send to phone**, or drop
+  them on the card in Settings. The first time, macOS keeps the Quick Action switched off: turn it on in **System Settings › General ›
+  Login Items & Extensions › Extensions › Finder (ⓘ) › Send to phone**. A problem (sending is off, the file is too large, PhoneBox is
+  not running) is shown in a small window; a file that went through gives a notification. A second way is the app **Send to phone** in
+  your Applications folder (`~/Applications`): drop files on its icon, drag it once to the Dock or the Finder toolbar to drop files on it
+  there, or open it to choose files. A file that arrives from the phone shows a notification on the Mac; clicking it shows the file in
+  Finder (the notification needs the PhoneBox notifier, which is built the first time; without it the notice has no click action). Photos and videos land in the phone's gallery (Pictures/PhoneBox, Movies/PhoneBox), other files in
+  Downloads/PhoneBox, with a notification that opens them. A file waits for a phone that is not connected for up to one hour; one file
+  is at most 2 GiB. The `/api/bridge/files/*` paths are on the Wi-Fi allow-list because the phone fetches and sends files with its own
+  key; `/api/transfer/*`, which the Quick Action and the drop zone use, is local only. See [PRIVACY.md](../PRIVACY.md).
 - Needs macOS: on Windows and Linux the card is hidden and the agent answers the phone with 501.
 
 ## AI agent permission prompts

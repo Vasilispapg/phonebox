@@ -11,7 +11,7 @@ namespace PhoneBox.Agent;
 /// the SHA-256 fingerprint of a self-signed TLS certificate. Afterwards it talks HTTPS to the LAN port and
 /// trusts only that exact certificate (pinning), so nobody on the network can read or impersonate the agent.
 /// </summary>
-public static class Lan
+public static partial class Lan
 {
     /// <summary>Loads the agent's TLS certificate, creating it on first use.</summary>
     public static X509Certificate2 Certificate(string? configDir = null)
@@ -99,7 +99,17 @@ public static class Lan
         // the Steam library widget: the list of installed games, an installed game's cover (the tiles' <img>), and starting a
         // game (off unless the asking widget, on an enabled page, allows it). /api/steam/games, the settings page's picker, stays local.
         || path == "/api/steam/library" || path == "/api/steam/cover" || path == "/api/steam/launch"
-        || path.StartsWithSegments("/api/widget") || path.StartsWithSegments("/api/calendar") || path.StartsWithSegments("/api/feeds") || path.StartsWithSegments("/api/photos") || path == "/api/camera" || path == "/api/spectrum" || path.StartsWithSegments("/api/docker") || path.StartsWithSegments("/api/obs") || path.StartsWithSegments("/api/discord") || path == "/api/steam" || path == "/api/steam/avatar" || path.StartsWithSegments("/api/batteries") || path.StartsWithSegments("/api/ha/states") || path.StartsWithSegments("/api/ha/toggle") || path.StartsWithSegments("/api/approvals") || path.StartsWithSegments("/api/rules/pause") || path.StartsWithSegments("/api/phone/battery") || path.StartsWithSegments("/api/stream") || path.StartsWithSegments("/api/trackpad") || path == "/api/pair/claim" || path == "/api/wake/macs" || path == "/api/bridge/clipboard" || path == "/api/bridge/stream" || path == "/api/bridge/notification" || IsWebhook(path);
+        || path.StartsWithSegments("/api/widget") || path.StartsWithSegments("/api/calendar") || path.StartsWithSegments("/api/feeds") || path.StartsWithSegments("/api/photos") || path == "/api/camera" || path == "/api/spectrum" || path.StartsWithSegments("/api/docker") || path.StartsWithSegments("/api/obs") || path.StartsWithSegments("/api/discord") || path == "/api/steam" || path == "/api/steam/avatar" || path.StartsWithSegments("/api/batteries") || path.StartsWithSegments("/api/ha/states") || path.StartsWithSegments("/api/ha/toggle") || path.StartsWithSegments("/api/approvals") || path.StartsWithSegments("/api/rules/pause") || path.StartsWithSegments("/api/phone/battery") || path.StartsWithSegments("/api/stream") || path.StartsWithSegments("/api/trackpad") || path == "/api/pair/claim" || path == "/api/wake/macs" || path == "/api/bridge/clipboard" || path == "/api/bridge/stream" || path == "/api/bridge/notification" || path == "/api/bridge/files/in" || IsBridgeFileOut(path) || IsWebhook(path);
+
+    /// <summary>
+    /// What the phone may ask for to fetch a file the Mac offers: the list, one file by its 32-character id, and its "done". Exact paths
+    /// only (a lower-case hex id), so nothing else under /api/bridge/files opens by accident.
+    /// </summary>
+    internal static bool IsBridgeFileOut(PathString path) =>
+        path == "/api/bridge/files/out" || (path.HasValue && FileOutPath().IsMatch(path.Value!));
+
+    [System.Text.RegularExpressions.GeneratedRegex("^/api/bridge/files/out/[0-9a-f]{32}(/done)?$")]
+    private static partial System.Text.RegularExpressions.Regex FileOutPath();
 
     /// <summary>
     /// The one Wi-Fi path that needs no key: a phone pairing without USB trades a one-time code for it (see

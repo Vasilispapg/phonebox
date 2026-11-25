@@ -11,7 +11,7 @@ public enum NotifierState { NotStarted, Preparing, Ready, NotAllowed, Undecided,
 /// icon as its picture. Nothing is downloaded or installed. Until it is ready, and wherever it cannot be built or macOS does not
 /// allow it, <see cref="PostAsync"/> says false and <see cref="FallbackNotifier"/> uses osascript instead.
 /// </summary>
-internal sealed class MacAppNotifier : IMacNotifier, IWarmable, IDisposable
+internal sealed class MacAppNotifier : IMacNotifier, IRevealingNotifier, IWarmable, IDisposable
 {
     internal delegate Task<(int Exit, string Output)> Run(string file, IReadOnlyList<string> args, string? stdin, TimeSpan timeout, CancellationToken ct);
 
@@ -52,7 +52,10 @@ internal sealed class MacAppNotifier : IMacNotifier, IWarmable, IDisposable
 
     public static MacAppNotifier Create(string dir, ILogger log) => new(dir, RunTool, FindSwiftc, EmbeddedInputs, () => Environment.TickCount64, log);
 
-    public async Task<bool> PostAsync(string title, string subtitle, string body, byte[]? iconPng, string? replaceId, CancellationToken ct)
+    public Task<bool> PostAsync(string title, string subtitle, string body, byte[]? iconPng, string? replaceId, CancellationToken ct) =>
+        PostAsync(title, subtitle, body, iconPng, replaceId, null, ct);
+
+    public async Task<bool> PostAsync(string title, string subtitle, string body, byte[]? iconPng, string? replaceId, string? revealPath, CancellationToken ct)
     {
         switch (_state)
         {
@@ -64,21 +67,21 @@ internal sealed class MacAppNotifier : IMacNotifier, IWarmable, IDisposable
                 StartPreparing();
                 return false;
             case NotifierState.Ready:
-                return await ShowAsync(title, subtitle, body, iconPng, replaceId, ct);
+                return await ShowAsync(title, subtitle, body, iconPng, replaceId, revealPath, ct);
             case NotifierState.NotAllowed when _clock() - _deniedAt >= RecheckDeniedEveryMs:
                 _deniedAt = _clock(); // looked at again now and then: the person may have allowed it in System Settings (this never asks)
-                if (await RunModeAsync("--status", TimeSpan.FromSeconds(10), ct) == 0) { SetState(NotifierState.Ready); return await ShowAsync(title, subtitle, body, iconPng, replaceId, ct); }
+                if (await RunModeAsync("--status", TimeSpan.FromSeconds(10), ct) == 0) { SetState(NotifierState.Ready); return await ShowAsync(title, subtitle, body, iconPng, replaceId, revealPath, ct); }
                 return false;
             default:
                 return false;
         }
     }
 
-    private async Task<bool> ShowAsync(string title, string subtitle, string body, byte[]? iconPng, string? replaceId, CancellationToken ct)
+    private async Task<bool> ShowAsync(string title, string subtitle, string body, byte[]? iconPng, string? replaceId, string? revealPath, CancellationToken ct)
     {
         try
         {
-            var (exit, _) = await _run(ExecutablePath, [], NotifierBundle.RequestJson(title, subtitle, body, iconPng, replaceId), PostTimeout, ct);
+            var (exit, _) = await _run(ExecutablePath, [], NotifierBundle.RequestJson(title, subtitle, body, iconPng, replaceId, revealPath), PostTimeout, ct);
             if (exit == 3) { _deniedAt = _clock(); SetState(NotifierState.NotAllowed); }
             else if (exit == 5) { _deniedAt = _clock(); SetState(NotifierState.Undecided, "macOS has not been told yet whether PhoneBox may show notifications"); }
             return exit == 0;
@@ -210,14 +213,24 @@ internal sealed class MacAppNotifier : IMacNotifier, IWarmable, IDisposable
 }
 
 /// <summary>Tries the PhoneBox notifier first and the plain osascript notification when it is not ready or fails, so a notification is never lost.</summary>
-internal sealed class FallbackNotifier(IMacNotifier primary, IMacNotifier fallback) : IMacNotifier, IWarmable, IDisposable
+internal sealed class FallbackNotifier(IMacNotifier primary, IMacNotifier fallback) : IMacNotifier, IRevealingNotifier, IWarmable, IDisposable
 {
     public void Warm() => (primary as IWarmable)?.Warm();
     public void Dispose() { (primary as IDisposable)?.Dispose(); (fallback as IDisposable)?.Dispose(); }
 
-    public async Task<bool> PostAsync(string title, string subtitle, string body, byte[]? iconPng, string? replaceId, CancellationToken ct)
+    public Task<bool> PostAsync(string title, string subtitle, string body, byte[]? iconPng, string? replaceId, CancellationToken ct) =>
+        PostAsync(title, subtitle, body, iconPng, replaceId, null, ct);
+
+    /// <summary>The path goes to the notifier that can show it; the plain osascript notification has no click action and drops it.</summary>
+    public async Task<bool> PostAsync(string title, string subtitle, string body, byte[]? iconPng, string? replaceId, string? revealPath, CancellationToken ct)
     {
-        try { if (await primary.PostAsync(title, subtitle, body, iconPng, replaceId, ct)) return true; }
+        try
+        {
+            var shown = primary is IRevealingNotifier revealing
+                ? await revealing.PostAsync(title, subtitle, body, iconPng, replaceId, revealPath, ct)
+                : await primary.PostAsync(title, subtitle, body, iconPng, replaceId, ct);
+            if (shown) return true;
+        }
         catch (OperationCanceledException) { throw; }
         catch { }
         return await fallback.PostAsync(title, subtitle, body, iconPng, replaceId, ct);

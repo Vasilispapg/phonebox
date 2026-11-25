@@ -49,6 +49,8 @@ object BridgeSend {
                     // the request went out and no answer came back: the text may be on the Mac, so this is not called a failure
                     SendResult.UNKNOWN -> R.string.bridge_send_unknown
                     SendResult.PAIR_AGAIN -> R.string.bridge_pair_again
+                    SendResult.NO_SPACE -> R.string.files_send_no_space // only the file endpoint answers these two
+                    SendResult.BUSY -> R.string.files_send_busy
                 }
             } finally {
                 // a request also queues a pairing / MAC refresh on the link's own thread, which saves this link's copy of the

@@ -167,6 +167,22 @@ class BridgeActivity : Activity() {
             label(getString(R.string.bridge_clipboard_help), 13f, mutedColor),
         ), 16)
 
+        // ---- files to the Mac (Share › Send file to Mac)
+        add(card(
+            switchRow(getString(R.string.bridge_files_from_phone_switch), BridgePrefs.filesFromPhoneEnabled(this)) { on ->
+                BridgePrefs.setFilesFromPhoneEnabled(this, on)
+                if (on && Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
+                    requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+                BridgeEntryPoints.update(this) // the Share sheet entry appears (or goes) now
+            },
+            switchRow(getString(R.string.bridge_files_to_phone_switch), BridgePrefs.filesToPhoneEnabled(this)) { on ->
+                BridgePrefs.setFilesToPhoneEnabled(this, on)
+                if (on && Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
+                    requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+                ClipboardService.sync(this) // the connection to the Mac follows this switch too
+            },
+        ), 12)
+
         // ---- notifications on the Mac
         restrictedHelp = label(getString(R.string.bridge_restricted_help), 13f, mutedColor)
         appInfoButton = secondaryButton(getString(R.string.bridge_app_info_button)) {
@@ -202,7 +218,7 @@ class BridgeActivity : Activity() {
     override fun onResume() {
         super.onResume()
         // Android may have stopped the service (the Task Manager, an update): opening the screen brings it back
-        if (BridgePrefs.clipboardEnabled(this)) {
+        if (BridgePrefs.streamWanted(this)) {
             if (BridgePrefs.clipboardState == ClipboardState.STOPPED) ClipboardService.sync(this) else ClipboardService.repostNotification(this)
         }
         askForContactsOnce()

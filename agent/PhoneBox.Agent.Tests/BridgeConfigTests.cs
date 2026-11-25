@@ -29,6 +29,37 @@ public sealed class BridgeConfigTests : IDisposable
     }
 
     [Fact]
+    public void FileSwitchesAreOffByDefault()
+    {
+        var bridge = new BridgeConfig();
+        Assert.False(bridge.FilesFromPhone);
+        Assert.False(bridge.FilesToPhone);
+    }
+
+    [Theory]
+    [InlineData("config.default.json")]
+    [InlineData("config.default.linux.json")]
+    [InlineData("config.default.macos.json")]
+    public void EveryDefaultConfigDeclaresTheFileSwitchesOff(string name)
+    {
+        using var stream = typeof(AgentConfig).Assembly.GetManifestResourceStream(name);
+        Assert.NotNull(stream);
+        using var doc = JsonDocument.Parse(stream, new() { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
+        var bridge = doc.RootElement.GetProperty("bridge");
+        Assert.Equal(JsonValueKind.False, bridge.GetProperty("filesFromPhone").ValueKind);
+        Assert.Equal(JsonValueKind.False, bridge.GetProperty("filesToPhone").ValueKind);
+    }
+
+    [Fact]
+    public void FileSwitchesReadAsCamelCase()
+    {
+        var bridge = JsonSerializer.Deserialize<BridgeConfig>("""{"filesFromPhone":true,"filesToPhone":true}""",
+            new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        Assert.True(bridge.FilesFromPhone);
+        Assert.True(bridge.FilesToPhone);
+    }
+
+    [Fact]
     public void NotificationsAndCodesAreOffByDefault()
     {
         var bridge = new BridgeConfig();

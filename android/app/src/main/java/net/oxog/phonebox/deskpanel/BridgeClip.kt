@@ -1,8 +1,9 @@
 package net.oxog.phonebox.deskpanel
 
-/** [UNKNOWN]: the text was sent but no answer came back (the link's 504), so it may well be on the Mac already.
+/** [NO_SPACE] (507) and [BUSY] (429) only come from the file endpoint: the Mac's disk is too full, or it is already receiving two files.
+ *  [UNKNOWN]: the text was sent but no answer came back (the link's 504), so it may well be on the Mac already.
  *  [PAIR_AGAIN]: the Mac refused this phone's key (401): it was paired again or got a new key. */
-enum class SendResult { OK, OFF, TOO_LARGE, UNREACHABLE, UNKNOWN, PAIR_AGAIN }
+enum class SendResult { OK, OFF, TOO_LARGE, UNREACHABLE, UNKNOWN, PAIR_AGAIN, NO_SPACE, BUSY }
 
 /** How the last notification went, for the screen. */
 enum class NotificationOutcome { NONE, OK, MAC_OFF, UNREACHABLE }
@@ -106,6 +107,10 @@ object BridgeClip {
         401 -> SendResult.PAIR_AGAIN
         403 -> SendResult.OFF
         413 -> SendResult.TOO_LARGE
+        507 -> SendResult.NO_SPACE
+        429 -> SendResult.BUSY
+        // a file whose size does not match what arrived: the Mac stored nothing, but the phone cannot tell a lost answer from this
+        409 -> SendResult.UNKNOWN
         // AgentLink's answer when the request went out and the reply was lost: the Mac may have the text already
         504 -> SendResult.UNKNOWN
         else -> SendResult.UNREACHABLE

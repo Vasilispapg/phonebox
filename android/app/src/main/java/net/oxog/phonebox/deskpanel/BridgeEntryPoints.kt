@@ -25,7 +25,8 @@ object BridgeEntryPoints {
         if (Build.VERSION.SDK_INT >= 24) names += "net.oxog.phonebox.deskpanel.SendClipboardTile"
         apply(context, names, clipboard)
         apply(context, listOf(PhoneNotificationListener::class.java.name), notifications)
-        apply(context, listOf(BridgeBootReceiver::class.java.name), clipboard || notifications)
+        apply(context, listOf(SendFilesToMacActivity::class.java.name), BridgePrefs.filesFromPhoneEnabled(context))
+        apply(context, listOf(BridgeBootReceiver::class.java.name), clipboard || notifications || BridgePrefs.filesToPhoneEnabled(context))
     }
 
     /**

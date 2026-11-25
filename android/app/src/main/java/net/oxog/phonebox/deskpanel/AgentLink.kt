@@ -162,6 +162,31 @@ class AgentLink(private val context: Context) {
         return Reply(503, "application/json", ByteArrayInputStream("""{"error":"offline"}""".toByteArray()))
     }
 
+    /** A body that is read while it is sent: [length] null means chunked. [cancelledSeen] says the caller cancelled (no other route is tried). */
+    private class StreamBody(val contentType: String, val length: Long?, val open: () -> InputStream,
+                             val onProgress: (Long) -> Unit, val cancelled: () -> Boolean) {
+        @Volatile var cancelledSeen = false
+    }
+
+    /**
+     * Streams a file with PUT over the best route, like [request] but the body is read from [open] while it is sent, in 64 KiB chunks
+     * ([onProgress] gets the bytes so far, [cancelled] is asked before each chunk; a cancel gives a 499 reply and no other route is
+     * tried). A body that failed while being written is sent again over the next route, from the start ([open] is called again): the
+     * agent deletes a part file it did not finish. A body that was fully written is never sent again: when only the answer is lost
+     * the reply is 504, as for a POST, because the file may already be on the computer.
+     */
+    fun upload(pathAndQuery: String, contentType: String, length: Long?, open: () -> InputStream, onProgress: (Long) -> Unit,
+               cancelled: () -> Boolean): Reply {
+        val body = StreamBody(contentType, length, open, onProgress, cancelled)
+        fun cancelledReply() = Reply(499, "application/json", ByteArrayInputStream("""{"error":"cancelled"}""".toByteArray()))
+        usb("PUT", pathAndQuery, 60_000, null, null, upload = body)?.let { route = Route.USB; return it }
+        if (body.cancelledSeen) return cancelledReply()
+        wifi("PUT", pathAndQuery, 60_000, null, null, upload = body)?.let { route = Route.WIFI; return it }
+        if (body.cancelledSeen) return cancelledReply()
+        route = Route.NONE
+        return Reply(503, "application/json", ByteArrayInputStream("""{"error":"offline"}""".toByteArray()))
+    }
+
     val trackpadSocket = TrackpadSocket(this)
 
     private class TrackpadEvent(val type: String, var dx: Float, var dy: Float, var delta: Float)
@@ -228,11 +253,11 @@ class AgentLink(private val context: Context) {
         usb(method, pathAndQuery, readTimeout, null, null)
 
     private fun usb(method: String, pathAndQuery: String, readTimeout: Int, body: ByteArray?, contentType: String?,
-                    headers: Map<String, String> = emptyMap()): Reply? = try {
+                    headers: Map<String, String> = emptyMap(), upload: StreamBody? = null): Reply? = try {
         val c = usbConnection(pathAndQuery)
         c.connectTimeout = 400 // refused instantly when no adb reverse tunnel exists
         headers.forEach { (name, value) -> c.setRequestProperty(name, value) }
-        val r = send(c, method, readTimeout, body, contentType)
+        val r = send(c, method, readTimeout, body, contentType, upload)
         if (r.code == 401) {
             // the agent doesn't know this app's key yet (it reads it over adb within seconds): nothing ran, try Wi-Fi
             try { r.body.close() } catch (_: Exception) {}
@@ -258,7 +283,7 @@ class AgentLink(private val context: Context) {
 
     /** Over Wi-Fi to the active computer, or to [target] when a caller must reach one particular computer. */
     private fun wifi(method: String, pathAndQuery: String, readTimeout: Int, body: ByteArray?, contentType: String?, target: Pc? = null,
-                     headers: Map<String, String> = emptyMap()): Reply? {
+                     headers: Map<String, String> = emptyMap(), upload: StreamBody? = null): Reply? {
         val pc = target ?: activePc() ?: return null
         val hosts = pc.hosts
         val token = pc.token
@@ -278,7 +303,7 @@ class AgentLink(private val context: Context) {
                 c.connectTimeout = 1500
                 c.setRequestProperty("Authorization", "Bearer $token")
                 headers.forEach { (name, value) -> c.setRequestProperty(name, value) }
-                val r = send(c, method, readTimeout, body, contentType)
+                val r = send(c, method, readTimeout, body, contentType, upload)
                 if (target == null) preferredHost = i
                 return r
             } catch (e: Exception) {
@@ -291,8 +316,9 @@ class AgentLink(private val context: Context) {
     private fun send(c: HttpURLConnection, method: String, readTimeout: Int = 4000): Reply =
         send(c, method, readTimeout, null, null)
 
-    private fun send(c: HttpURLConnection, method: String, readTimeout: Int, body: ByteArray?, contentType: String?): Reply = try {
-        exchange(c, method, readTimeout, body, contentType)
+    private fun send(c: HttpURLConnection, method: String, readTimeout: Int, body: ByteArray?, contentType: String?,
+                     upload: StreamBody? = null): Reply = try {
+        exchange(c, method, readTimeout, body, contentType, upload)
     } catch (e: Exception) {
         // A failed request frees its socket now instead of when the garbage collector gets to it: on Android 6 each
         // TLS socket also holds two pipe descriptors, and the system's TLS code aborts the app once 1024 are open (#389).
@@ -300,9 +326,11 @@ class AgentLink(private val context: Context) {
         throw e
     }
 
-    private fun exchange(c: HttpURLConnection, method: String, readTimeout: Int, body: ByteArray?, contentType: String?): Reply {
-        // every POST acts on the computer (a container restart, a Home Assistant switch, a macro): none may run twice
-        val controlPost = method == "POST"
+    private fun exchange(c: HttpURLConnection, method: String, readTimeout: Int, body: ByteArray?, contentType: String?,
+                         upload: StreamBody? = null): Reply {
+        // every POST acts on the computer (a container restart, a Home Assistant switch, a macro): none may run twice. A file
+        // upload is the same once its body was written: the computer may already have it, and sending it again makes a copy.
+        val controlPost = method == "POST" || upload != null
         c.instanceFollowRedirects = false
         c.requestMethod = method
         c.setRequestProperty("X-PhoneBox-App", appVersion) // lets the agent offer updates
@@ -322,6 +350,25 @@ class AgentLink(private val context: Context) {
                 c.setFixedLengthStreamingMode(0)
             }
             c.outputStream.close()
+        }
+        if (upload != null) {
+            c.doOutput = true
+            c.setRequestProperty("Content-Type", upload.contentType)
+            if (upload.length != null) c.setFixedLengthStreamingMode(upload.length) else c.setChunkedStreamingMode(64 * 1024)
+            try {
+                c.outputStream.use { out ->
+                    upload.open().use { input ->
+                        if (FileTransferRules.copy(input, out, upload.onProgress, upload.cancelled) == null) upload.cancelledSeen = true
+                    }
+                }
+            } catch (e: java.io.IOException) {
+                // closing a fixed-length body that was cut short throws; that is the cancel itself, not a failed route
+                if (!upload.cancelledSeen) throw e
+            }
+            if (upload.cancelledSeen) {
+                c.disconnect()
+                return Reply(499, "application/json", ByteArrayInputStream("""{"error":"cancelled"}""".toByteArray()))
+            }
         }
         val code = try { c.responseCode } catch (e: java.io.IOException) {
             if (!controlPost) throw e

@@ -26,6 +26,13 @@ values before the merge and sets them again after it (`<upstream version>.1`, or
 not moved). Any other conflict stops it and puts everything back (the tag `personal/before-update-<time>`); then merge by
 hand as described below. `--skip-tests` leaves out the slow checks. Without `--publish` nothing leaves this Mac.
 
+## Files between the phone and the Mac
+
+`0.9.29.2` adds sending files both ways (Settings › Phone bridge › the two file switches, and the phone's Phone bridge
+screen): the share sheet's **Send file to Mac**, the Finder Quick Action **Send to phone** and the settings page's drop
+zone. The design is in `docs/GUIDE.md` (Phone bridge) and `PRIVACY.md`. Received files are saved with the quarantine mark.
+An update of the agent can change its signature (always with an ad hoc one), so macOS may ask again for access to the Downloads folder.
+
 ## Keeping it up to date
 
 ```bash

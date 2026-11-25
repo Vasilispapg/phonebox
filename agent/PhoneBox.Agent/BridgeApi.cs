@@ -38,6 +38,31 @@ internal static class BridgeApi
         app.MapPost("/api/bridge/notification/test", (HttpRequest req) =>
             PostTestNotification(req.HttpContext.RequestServices.GetService<NotificationBridge>(),
                 gate.IsLocalPort(req.HttpContext.Connection.LocalPort), DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()));
+        // A file from the phone: the body is the raw file, streamed to disk. Takes the request for the same reason as the notification endpoint.
+        app.MapPut("/api/bridge/files/in", (HttpRequest req) =>
+        {
+            var services = req.HttpContext.RequestServices;
+            return PutFileAsync(req.HttpContext, services.GetService<FileReceiver>(), services.GetService<IMacNotifier>(),
+                services.GetRequiredService<ConfigStore>(), () => Authorized(gate, req.HttpContext));
+        });
+        // What the Mac offers the phone: the waiting files, one file (range requests resume it), and the phone's "I have it".
+        // {id} is only taken as 32 lower-case hex characters: Outbox answers null (404) for anything else.
+        app.MapGet("/api/bridge/files/out", (HttpRequest req) =>
+            ListOutbox(req.HttpContext.RequestServices.GetService<Outbox>(), req.HttpContext.RequestServices.GetRequiredService<ConfigStore>(),
+                () => Authorized(gate, req.HttpContext)));
+        app.MapGet("/api/bridge/files/out/{id}", (HttpRequest req, string id) =>
+            GetOutboxFile(id, req.HttpContext.RequestServices.GetService<Outbox>(), req.HttpContext.RequestServices.GetRequiredService<ConfigStore>(),
+                () => Authorized(gate, req.HttpContext)));
+        app.MapPost("/api/bridge/files/out/{id}/done", (HttpRequest req, string id) =>
+            DoneOutboxFile(id, req.HttpContext.RequestServices.GetService<Outbox>(), req.HttpContext.RequestServices.GetRequiredService<ConfigStore>(),
+                () => Authorized(gate, req.HttpContext)));
+        // The question before the upload: would a file of this size be taken now? (the same checks, no body, no upload slot taken)
+        app.MapGet("/api/bridge/files/in", (HttpRequest req) =>
+        {
+            var services = req.HttpContext.RequestServices;
+            return CheckFile(req.HttpContext, services.GetService<FileReceiver>(), services.GetRequiredService<ConfigStore>(),
+                () => Authorized(gate, req.HttpContext));
+        });
         app.MapGet("/api/bridge/stream", async (HttpContext ctx, ConfigStore cfg, BridgeStream bridge, IHostApplicationLifetime life) =>
         {
             // what the request came with, so the open stream can be checked again with exactly that (see StreamAsync)
@@ -79,6 +104,113 @@ internal static class BridgeApi
         if (error is not null) return BodyError(error);
         return PostNotification(bridge, notification, DeviceId(ctx.Request.Headers["X-PhoneBox-Device"]));
     }
+
+    /// <summary>
+    /// PUT /api/bridge/files/in?name=&lt;file name&gt;[&amp;size=&lt;bytes&gt;]: in the cheapest order: who is asking (403), the platform (501),
+    /// the switch (403), the name and size (400), the size, the disk and the number of uploads (413, 507, 429), and only then
+    /// the body, which is streamed to disk and never held in memory. The name is data; the answer carries the name it was stored under.
+    /// </summary>
+    public static async Task<IResult> PutFileAsync(HttpContext ctx, FileReceiver? receiver, IMacNotifier? notifier, ConfigStore cfg, Func<bool> authorized)
+    {
+        if (!authorized()) return Results.Json(new { error = "not allowed here" }, statusCode: 403);
+        if (receiver is null) return Results.Json(new { error = "not supported on this system" }, statusCode: 501);
+        if (!cfg.Get().Bridge.FilesFromPhone) return Results.Json(new { error = "off" }, statusCode: 403);
+        if (FileQuery(ctx.Request, out var name, out var size) is { } bad) return bad;
+        if (receiver.Precheck(size) is { } refused) return FileRefusal(refused);
+        // this request only: the server's own limit (about 30 MB) stays for every other endpoint
+        if (ctx.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } limit)
+            limit.MaxRequestBodySize = FileLimits.MaxFileBytes;
+        var result = await receiver.ReceiveAsync(name, size, ctx.Request.Body, ctx.RequestAborted);
+        if (result.Status != ReceiveStatus.Stored) return FileRefusal(result.Status);
+        if (notifier is not null)
+        {
+            // never awaited: osascript can take seconds, and the phone's answer must not wait for it
+            // a click on it shows the file in Finder (a notifier that cannot do that just shows the notice)
+            try
+            {
+                var where = Path.Combine(receiver.Folder, result.Name!);
+                _ = notifier is IRevealingNotifier revealing
+                    ? revealing.PostAsync("PhoneBox", "From your phone", $"Received {result.Name}", null, null, where, CancellationToken.None)
+                    : notifier.PostAsync("PhoneBox", "From your phone", $"Received {result.Name}", null, null, CancellationToken.None);
+            }
+            catch (Exception) { /* a notification that cannot be shown is not a failed transfer */ }
+        }
+        return Results.Ok(new { ok = true, name = result.Name, size = result.Bytes });
+    }
+
+    /// <summary>Who is asking (403), the platform (501) and the switch (403) for the three outbox calls; null when the call may go on.</summary>
+    private static IResult? OutboxGate(Outbox? outbox, ConfigStore cfg, Func<bool> authorized) =>
+        !authorized() ? Results.Json(new { error = "not allowed here" }, statusCode: 403)
+        : outbox is null ? Results.Json(new { error = "not supported on this system" }, statusCode: 501)
+        : !cfg.Get().Bridge.FilesToPhone ? Results.Json(new { error = "off" }, statusCode: 403)
+        : null;
+
+    /// <summary>GET /api/bridge/files/out: the files that wait for the phone (metadata only).</summary>
+    public static IResult ListOutbox(Outbox? outbox, ConfigStore cfg, Func<bool> authorized)
+    {
+        if (OutboxGate(outbox, cfg, authorized) is { } refused) return refused;
+        var files = outbox!.List().Where(e => e.State is OutboxState.Waiting or OutboxState.Sending)
+            .Select(e => new { id = e.Item.Id, name = e.Item.Name, size = e.Item.Size, mime = e.Item.Mime });
+        return Results.Ok(new { files });
+    }
+
+    /// <summary>GET /api/bridge/files/out/{id}: the file's bytes, with range requests so an interrupted download resumes.</summary>
+    public static IResult GetOutboxFile(string id, Outbox? outbox, ConfigStore cfg, Func<bool> authorized)
+    {
+        if (OutboxGate(outbox, cfg, authorized) is { } refused) return refused;
+        var mime = outbox!.List().FirstOrDefault(e => e.Item.Id == id)?.Item.Mime;
+        var stream = outbox.Open(id);
+        if (stream is null || mime is null) { stream?.Dispose(); return Results.Json(new { error = "not found" }, statusCode: 404); }
+        return Results.Stream(stream, mime, enableRangeProcessing: true);
+    }
+
+    /// <summary>POST /api/bridge/files/out/{id}/done: the phone has the whole file, so the Mac deletes its copy.</summary>
+    public static IResult DoneOutboxFile(string id, Outbox? outbox, ConfigStore cfg, Func<bool> authorized)
+    {
+        if (OutboxGate(outbox, cfg, authorized) is { } refused) return refused;
+        return outbox!.Done(id) ? Results.Ok(new { ok = true }) : Results.Json(new { error = "not found" }, statusCode: 404);
+    }
+
+    /// <summary>The name and the optional size of a file request, or the 400 to answer when they do not fit.</summary>
+    private static IResult? FileQuery(HttpRequest request, out string name, out long? size)
+    {
+        var query = request.Query;
+        name = query["name"].ToString();
+        size = null;
+        if (name.Length is 0 or > 1024) return Results.Json(new { error = "give a name" }, statusCode: 400);
+        if (query.ContainsKey("size"))
+        {
+            var text = query["size"].ToString();
+            if (text.Length is 0 or > 19 || !long.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed))
+                return Results.Json(new { error = "size is not a number" }, statusCode: 400);
+            size = parsed;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// GET /api/bridge/files/in?name=&amp;size=: the checks of the upload in the same order, answered before the phone sends the body
+    /// (200 when the file would be taken now). A refusal of the PUT itself comes while the phone is still writing a large body, which it
+    /// sees as a broken connection and cannot tell from a network failure; this answer is clean.
+    /// </summary>
+    public static IResult CheckFile(HttpContext ctx, FileReceiver? receiver, ConfigStore cfg, Func<bool> authorized)
+    {
+        if (!authorized()) return Results.Json(new { error = "not allowed here" }, statusCode: 403);
+        if (receiver is null) return Results.Json(new { error = "not supported on this system" }, statusCode: 501);
+        if (!cfg.Get().Bridge.FilesFromPhone) return Results.Json(new { error = "off" }, statusCode: 403);
+        if (FileQuery(ctx.Request, out _, out var size) is { } bad) return bad;
+        return receiver.Check(size) is { } refused ? FileRefusal(refused) : Results.Ok(new { ok = true });
+    }
+
+    private static IResult FileRefusal(ReceiveStatus status) => status switch
+    {
+        ReceiveStatus.TooLarge => Results.Json(new { error = "too large" }, statusCode: 413),
+        ReceiveStatus.NoSpace => Results.Json(new { error = "no space" }, statusCode: 507),
+        ReceiveStatus.Busy => Results.Json(new { error = "busy" }, statusCode: 429),
+        ReceiveStatus.SizeMismatch => Results.Json(new { error = "size does not match" }, statusCode: 409),
+        ReceiveStatus.Aborted => Results.StatusCode(499), // the phone went away: nobody reads the answer
+        _ => Results.Json(new { error = "could not save the file" }, statusCode: 500),
+    };
 
     /// <summary>The test button's endpoint: only from the local port, then the same 501 and switch checks, and no body.</summary>
     public static IResult PostTestNotification(NotificationBridge? bridge, bool local, long now) =>
@@ -199,8 +331,16 @@ internal static class BridgeApi
         header.Count == 1 && header[0] is { Length: > 0 and <= 19 } value
         && long.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var id) ? id : null;
 
-    /// <summary>The bridge stream follows the clipboard switch: when it is off a new connection is refused and an open one ends.</summary>
-    public static bool StreamAllowed(ConfigStore config) => config.Get().Bridge.Clipboard;
+    /// <summary>The bridge stream is open while the clipboard switch or the files-to-phone switch is on: when both are off a new connection is refused and an open one ends.</summary>
+    public static bool StreamAllowed(ConfigStore config) => config.Get().Bridge is { Clipboard: true } or { FilesToPhone: true };
+
+    /// <summary>Each kind of event follows its own switch: a phone that only wants files hears no clipboard, and the reverse.</summary>
+    public static bool EventAllowed(BridgeConfig bridge, string eventName) => eventName switch
+    {
+        "clipboard" => bridge.Clipboard,
+        "file" => bridge.FilesToPhone,
+        _ => false,
+    };
 
     /// <summary>How often an open stream looks at the switch and the phone's key on its own, apart from every pass of its loop.</summary>
     private const int SwitchCheckMs = 500;
@@ -239,6 +379,7 @@ internal static class BridgeApi
             await ctx.Response.WriteAsync(PingFrame, ct); // lets the phone see the connection is up
             foreach (var e in replay)
             {
+                if (!EventAllowed(cfg.Get().Bridge, e.Name)) continue;
                 if (!Open()) return;
                 await ctx.Response.WriteAsync(EventFrame(e), ct);
             }
@@ -248,9 +389,10 @@ internal static class BridgeApi
             {
                 foreach (var e in bridge.Since(seq, device))
                 {
+                    seq = e.Seq; // an event this phone's switches do not want is passed over, not asked for again
+                    if (!EventAllowed(cfg.Get().Bridge, e.Name)) continue;
                     if (!Open()) return; // the switch was turned off (or the key revoked) during this batch: nothing more is written
                     await ctx.Response.WriteAsync(EventFrame(e), ct);
-                    seq = e.Seq;
                 }
                 if (Environment.TickCount64 >= nextPing)
                 {
