@@ -24,6 +24,13 @@ public sealed class MacPasteboardTests : IDisposable
     }
 
     [Fact]
+    public void NativeExceptionsAreConvertedBeforeReturningToManagedCode()
+    {
+        if (!OperatingSystem.IsMacOS()) return;
+        Assert.Throws<InvalidOperationException>(MacPasteboard.ReadOutsideNativeArrayForTest);
+    }
+
+    [Fact]
     public void ATextAtTheBridgeLimitIsReadAndOneFarOverItIsNotConverted()
     {
         if (Fresh() is not { } pb) return;
