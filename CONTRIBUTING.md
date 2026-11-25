@@ -22,7 +22,9 @@ page lists what reviews keep asking for; following it gets a pull request merged
   paired key. Settings, pairing and tests stay local. **Adding a path to that allow-list is a security decision**:
   say in the pull request why the phone needs it.
 - **The phone sends ids, never commands, paths or URLs.** Shortcuts, command widgets, apps and calendars are defined
-  on the computer; the phone asks for one by id, and the agent looks it up in its own settings.
+  on the computer; the phone asks for one by id, and the agent looks it up in its own settings. The one exception is
+  the Terminal widget (a shell as the user), which works only while both its switches are on: Settings › General ›
+  Terminal and the widget's own option.
 - **Anything that controls the computer goes through a per-widget option** (like Docker's `control` or the processes
   widget's `allowKill`) that the agent checks with `Widgets(enabledPagesOnly: true)`, so removing or hiding the
   widget turns it off. New features that start programs, record or send data are off by default.

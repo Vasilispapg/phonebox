@@ -661,6 +661,14 @@ nav a.on::before { color: var(--accent); }
         <button class="btn sm" id="consoleAdd" data-i18n="s.console.add">＋ Add an app</button>
       </div>
 
+      <div class="card" id="terminalCard">
+        <h3 data-i18n="s.terminal.title">Terminal</h3>
+        <div class="row" style="margin-bottom:8px"><label class="switch"><input type="checkbox" data-bind="terminal.enabled" aria-labelledby="terminalEnabledLabel"><span></span></label> <span id="terminalEnabledLabel" data-i18n="s.terminal.enabled">Allow terminals on this computer</span></div>
+        <p class="hint" style="margin:0 0 12px" data-i18n="s.terminal.hint">Off by default. When on, a paired phone can run any command as you on this computer, but only while a Terminal widget with “Allow a shell on the computer” turned on is on an enabled page. Only this settings page can change this switch, never the phone. macOS only.</p>
+        <div class="field" style="max-width:420px"><label data-i18n="s.terminal.idle">Close an idle terminal after (minutes)</label><input type="number" min="0" max="120" data-bind="terminal.idleMinutes" data-type="int">
+          <span class="hint" data-i18n="s.terminal.idleHint">0 closes it 30 seconds after the phone leaves the terminal screen. Default 10, at most 120.</span></div>
+      </div>
+
       <div class="card">
         <h3 data-i18n="s.ha.title">Home Assistant</h3>
         <p class="hint" style="margin:0 0 12px" data-i18n-html="s.ha.tokenHint">For the <b>Home Assistant</b> widget. Create a token in Home Assistant › your profile › Security ›
@@ -2854,7 +2862,7 @@ const RULE_PRESETS = [
 let activeRules = [];
 
 function renderRules() {
-  cfg.rules ??= []; cfg.calendars ??= []; cfg.feeds ??= []; cfg.cameras ??= { ffmpeg: '', sources: [] }; cfg.photos ??= { source: 'folder', folder: '', subfolders: true, immichUrl: '', immichKey: '', immichAlbum: '', immichAlbumName: '' }; cfg.console ??= { profiles: [] }; cfg.phones ??= []; cfg.homeAssistant ??= {}; cfg.obs ??= { enabled: false, url: 'ws://127.0.0.1:4455' }; cfg.phoneMic ??= { enabled: false, source: 'mic-camcorder', endpoint: 'CABLE Input', latencyMs: 50, maxBufferMs: 150, gain: 1, serverPath: null, startMuted: false }; cfg.discord ??= { enabled: false }; cfg.steam ??= { enabled: false };
+  cfg.rules ??= []; cfg.calendars ??= []; cfg.feeds ??= []; cfg.cameras ??= { ffmpeg: '', sources: [] }; cfg.photos ??= { source: 'folder', folder: '', subfolders: true, immichUrl: '', immichKey: '', immichAlbum: '', immichAlbumName: '' }; cfg.console ??= { profiles: [] }; cfg.terminal ??= { enabled: false, idleMinutes: 10 }; cfg.phones ??= []; cfg.homeAssistant ??= {}; cfg.obs ??= { enabled: false, url: 'ws://127.0.0.1:4455' }; cfg.phoneMic ??= { enabled: false, source: 'mic-camcorder', endpoint: 'CABLE Input', latencyMs: 50, maxBufferMs: 150, gain: 1, serverPath: null, startMuted: false }; cfg.discord ??= { enabled: false }; cfg.steam ??= { enabled: false };
   $('rulePresets').replaceChildren(...RULE_PRESETS.map(([label, make]) => h('button', { class: 'btn', onclick: () => {
     cfg.rules.push({ id: '', enabled: true, ...make() });
     renderRules(); changed();

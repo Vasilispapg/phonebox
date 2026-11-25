@@ -375,6 +375,25 @@ public class ConfigTests
         Assert.Equal("info", c.Rules[0].Level);
     }
 
+    [Theory]
+    [InlineData("config.default.json")]
+    [InlineData("config.default.linux.json")]
+    [InlineData("config.default.macos.json")]
+    public void EveryDefaultFileCarriesTheTerminalSectionOffWithTenIdleMinutes(string resource)
+    {
+        using var stream = typeof(ConfigStore).Assembly.GetManifestResourceStream(resource)!;
+        using var reader = new StreamReader(stream);
+        var text = reader.ReadToEnd();
+        // The section is written in the file, not left to the class default.
+        using var doc = JsonDocument.Parse(text, new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
+        Assert.True(doc.RootElement.TryGetProperty("terminal", out var section), resource + " has no terminal section");
+        Assert.False(section.GetProperty("enabled").GetBoolean());
+        Assert.Equal(10, section.GetProperty("idleMinutes").GetInt32());
+        var cfg = JsonSerializer.Deserialize<AgentConfig>(text, ConfigStore.ReadOpts)!;
+        Assert.False(cfg.Terminal.Enabled);
+        Assert.Equal(10, cfg.Terminal.IdleMinutes);
+    }
+
     [Fact]
     public void SavingAConfigNeverWritesADerivedEffectiveIdleMinutes()
     {
@@ -432,6 +451,9 @@ public class LanTests
     [InlineData("/api/pair/claim/x", false)]
     [InlineData("/api/shortcuts/test", false)]
     [InlineData("/api/shortcuts/icon", true)]
+    [InlineData("/api/terminal/out", true)]
+    [InlineData("/api/terminal/in", true)]
+    [InlineData("/api/terminalx", false)]
     [InlineData("/api/settings/shortcut-icon", false)]
     [InlineData("/api/claude/hook", false)]
     [InlineData("/api/codex/hook", false)]
@@ -450,6 +472,8 @@ public class LanTests
     [InlineData("/api/refresh", true)]
     [InlineData("/api/state", false)]
     [InlineData("/api/run/x", false)]
+    [InlineData("/api/terminal/in", false)]
+    [InlineData("/api/terminal/out", false)]
     public void TheWebhookKeyOpensOnlyWebhooks(string path, bool webhook) => Assert.Equal(webhook, Lan.IsWebhook(new PathString(path)));
 
     [Fact]

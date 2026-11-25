@@ -434,7 +434,19 @@ switchable ports). The panel keeps running over Wi-Fi while the USB power is off
 - The optional Wi-Fi port (8766) only serves the panel API, only over TLS pinned to the paired certificate, and only
   with the paired key. Settings, shortcut tests and pairing stay local. **New key** in the settings unpairs all phones.
 - The phone only ever sends a shortcut **id**; commands are defined on the PC. Command widgets work the same way:
-  the phone asks for a widget's output and never sees the command.
+  the phone asks for a widget's output and never sees the command. The one exception is the **Terminal** widget, which
+  is off by default and works only while it is switched on in two places (the Terminal switch in Settings › General and
+  the widget's own option): then what you type on the phone is run in a shell on the computer.
+- **The Terminal widget is a remote shell as your user.** Read this before switching it on:
+  - Every phone paired with the agent can use it, over USB or over Wi-Fi, once both switches are on.
+  - Separate phones are not a security boundary. The phone's device id is a header the phone states itself, so anyone
+    who holds the Wi-Fi key can name another phone's device id and attach to that phone's shell.
+  - The settings port on `127.0.0.1` has no key. Once both switches are on, any program that runs as you on the
+    computer can open a shell through it, the same trust as the rest of the local API.
+  - A shell started from the phone keeps running after the phone leaves, until the idle time in Settings › General ›
+    Terminal runs out, another terminal needs its place, a switch is turned off, or a new Wi-Fi key is saved.
+  - The shell inherits the agent's environment variables, and your own shell may keep a history file of what you type.
+  - It runs on macOS only. The Windows build contains a stub, and the agent answers that the terminal needs macOS.
 - `config.json` (with the Wi-Fi, webhook and Home Assistant keys), its backup and the pushed data are readable only by
   your user on macOS and Linux (0600); on Windows they live in your profile folder.
 - Webhooks from other machines need the separate webhook key, which cannot open the phone API and can be replaced

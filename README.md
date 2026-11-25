@@ -198,6 +198,9 @@ The desktop settings server listens on `127.0.0.1:8765`. USB reaches the agent t
 port of its own, over TLS pinned like Wi-Fi, with a key the phone app makes and the agent reads over adb.
 Optional Wi-Fi uses HTTPS on port 8766 with a pinned certificate and a paired key. Settings and pairing endpoints
 stay local. The phone requests configured actions by ID; commands and integration credentials stay on the computer.
+The one exception is the macOS-only **Terminal** widget, a remote shell as your user that is off by default and works
+only while it is switched on in two places (Settings › General › Terminal and the widget's own option); see
+[Security & privacy](docs/GUIDE.md#security--privacy).
 
 PhoneBox has no telemetry, analytics or accounts of its own. Optional widgets and integrations contact external
 services for weather, quotas, GitHub and other data, and the agent checks GitHub for updates.

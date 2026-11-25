@@ -32,6 +32,9 @@
   "opencode": { "phoneApprovals": false, "sessions": false, "timeoutSec": 90, "alwaysCountdownSec": 10, "watchWsl": false, "shareSessionTitles": false },
   // App console widget (Windows): keys and dial bindings per app, matched by the focused window's process name
   "console": { "profiles": [] },
+  // Terminal widget (macOS only): a shell on this computer for the phone. Off by default. Only this settings page can turn it on
+  // (Settings › General › Terminal); "idleMinutes" closes an idle terminal after that long (0 = 30 s after the phone leaves it, max 120).
+  "terminal": { "enabled": false, "idleMinutes": 10 },
   // Phone mic (Windows, off by default): the phone's microphone played into a virtual cable ("endpoint", e.g. VB-CABLE's CABLE Input),
   // so apps pick the cable's other end as their microphone. Settings › General › Phone mic › Set up turns it on and fetches
   // scrcpy-server 5.0.1 from GitHub if it is missing ("serverPath": null = the copy next to this file)

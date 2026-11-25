@@ -56,6 +56,9 @@
   reporting success, and `xdotool` is used on Wayland only when neither of the others is installed, since there it
   exits without an error having typed nothing. Setup is in [docs/SETUP.md](docs/SETUP.md) (#544,
   [denis-nd](https://github.com/denis-nd)).
+- Settings › General › **Terminal**: the master switch for the Terminal widget (off by default, changeable only from
+  this settings page, never from the phone) and **Close an idle terminal after (minutes)**: 10 by default, 0 to 120, where
+  0 closes it 30 seconds after the phone leaves the terminal screen.
 - Settings › General › **Sleep the phone with the Lock shortcut**, off by default: running the built-in Lock shortcut
   also turns the connected phone's screen off over USB (#520, #521, [sanjai4334](https://github.com/sanjai4334)).
 - macOS and Linux: Now Playing is read every second only while a **Now playing** or **Synced lyrics** widget is on the

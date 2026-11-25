@@ -56,6 +56,8 @@ builder.WebHost.ConfigureKestrel(k =>
 });
 builder.Logging.ClearProviders();
 builder.Logging.AddFilter("Microsoft", LogLevel.Warning);
+// typed terminal text (and other secrets) can be in a query string: ASP.NET Core's URL-printing categories stay silent
+RequestLog.KeepQueriesOut(builder.Logging);
 builder.Logging.AddProvider(new FileLoggerProvider());
 builder.Logging.AddSimpleConsole(o => { o.SingleLine = true; o.TimestampFormat = "HH:mm:ss "; });
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase);
@@ -77,6 +79,11 @@ builder.Services.AddSingleton<CommandRunner>();
 builder.Services.AddSingleton<ApprovalStore>();
 builder.Services.AddSingleton<HomeAssistant>();
 builder.Services.AddSingleton<AppConsole>();
+// Terminal widget: at most two shells, closed when idle or when a switch goes off (swept every second, all closed on stop)
+builder.Services.AddSingleton(sp => new TerminalSessions(sp.GetRequiredService<ConfigStore>(), Pty.Start, () => Environment.TickCount64,
+    sp.GetRequiredService<ILogger<TerminalSessions>>()));
+builder.Services.AddSingleton<TerminalService>();
+builder.Services.AddHostedService<TerminalSweeper>();
 builder.Services.AddSingleton<Dictation>();
 builder.Services.AddSingleton<SpectrumAnalyzer>();
 AddMonitor<SystemMonitor>(builder.Services);
@@ -713,6 +720,9 @@ app.MapPost("/api/console/{profile}/{slot}", async (string profile, string slot,
     var (status, error) = await console.Act(req.Headers["X-PhoneBox-Device"].ToString(), widget, profile, slot, times ?? 1, ct);
     return error is null ? Results.Ok(new { ok = true }) : Results.Json(new { error }, statusCode: status);
 });
+
+// Terminal (widget): a shell on this computer, only with the master switch and the widget's control on (see TerminalService).
+TerminalRoutes.Map(app);
 
 // OBS Studio (widget): state, scenes and the widget's buttons (only if a widget allows control).
 app.MapGet("/api/obs", (ObsMonitor obs, ConfigStore cfg) => Results.Json(new
