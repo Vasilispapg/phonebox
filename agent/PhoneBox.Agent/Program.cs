@@ -73,6 +73,20 @@ builder.Services.AddSingleton<PlexControl>();
 builder.Services.AddSingleton<ControlDeck>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ControlDeck>());
 builder.Services.AddSingleton<PushStore>();
+// Phone bridge (macOS only): clipboard sharing with the paired phone. Every switch is off until Settings turns it on.
+builder.Services.AddSingleton<BridgeStream>();
+#if !WINDOWS
+if (OperatingSystem.IsMacOS())
+{
+    // created on first use: a Mac whose pasteboard cannot be reached (no window server) must still start the agent, and a
+    // switch that is off never touches the pasteboard at all
+    builder.Services.AddSingleton<ITextPasteboard>(sp => new LazyPasteboard(() => new MacPasteboard(), sp.GetRequiredService<ILogger<LazyPasteboard>>()));
+    // internal constructor, so the container cannot pick it: build it here
+    builder.Services.AddSingleton(sp => new ClipboardBridge(sp.GetRequiredService<ITextPasteboard>(), sp.GetRequiredService<ConfigStore>(),
+        sp.GetRequiredService<BridgeStream>(), sp.GetRequiredService<ILogger<ClipboardBridge>>()));
+    builder.Services.AddHostedService(sp => sp.GetRequiredService<ClipboardBridge>());
+}
+#endif
 builder.Services.AddSingleton<CommandRunner>();
 builder.Services.AddSingleton<ApprovalStore>();
 builder.Services.AddSingleton<HomeAssistant>();
@@ -214,7 +228,7 @@ app.Use((ctx, next) =>
 var timings = new RequestTimings();
 app.Use(async (ctx, next) =>
 {
-    if (!ctx.Request.Path.StartsWithSegments("/api") || ctx.Request.Path.StartsWithSegments("/api/stream")) { await next(ctx); return; }
+    if (!ctx.Request.Path.StartsWithSegments("/api") || ctx.Request.Path.StartsWithSegments("/api/stream") || ctx.Request.Path == "/api/bridge/stream") { await next(ctx); return; }
     var started = System.Diagnostics.Stopwatch.GetTimestamp();
     try { await next(ctx); }
     finally
@@ -230,79 +244,15 @@ app.Use(async (ctx, next) =>
 });
 app.MapGet("/api/latency", () => Results.Json(timings.Summary()));
 
-// Security:
-//  - Local port 8765 listens on 127.0.0.1 only; the Host check blocks DNS rebinding. From browsers only the settings
-//    page itself (same origin) is accepted (no CSRF).
-//  - The phone's USB tunnel ends on a port of its own (UsbLink): every app on the phone can reach the tunnel, so it
-//    is TLS with the certificate the app pins (handed over adb), needs the key the PhoneBox app made (read over adb),
-//    and serves only the phone API.
-//  - The optional Wi-Fi port only serves the phone API, only over TLS, and only with the paired token.
+// Security: who may reach what, by the port a request came in on (local, the phone's USB tunnel, the optional Wi-Fi
+// port). See RequestGate.
+var gate = new RequestGate(Port, SameOrigins, usb, lanCert is not null ? lanCfg.Port : null, configStore,
+    ctx => ctx.Request.Method == "GET" && ctx.Request.Path == "/api/controls/spotify/callback"
+        && app.Services.GetRequiredService<SpotifyControl>().HasPendingState(ctx.Request.Query["state"]),
+    app.Logger);
 app.UseWebSockets();
 app.UseRouting();
-app.Use(async (ctx, next) =>
-{
-    var origin = ctx.Request.Headers.Origin.ToString();
-    if (ctx.Connection.LocalPort == usb.Port && ctx.Request.IsHttps)
-    {
-        // the phone over USB: only with its app's key, and only the paths the phone uses
-        var access = usb.Authorize(ctx.Request.Method, ctx.Request.Path, origin, ctx.Request.Headers.Authorization);
-        if (access != UsbLink.Access.Allowed)
-        {
-            ctx.Response.StatusCode = access == UsbLink.Access.Unauthorized ? StatusCodes.Status401Unauthorized : StatusCodes.Status403Forbidden;
-            return;
-        }
-    }
-    else if (lanCert is not null && ctx.Connection.LocalPort == lanCfg.Port && ctx.Request.IsHttps)
-    {
-        // The phone's key opens the panel API; the separate webhook key opens only the webhook endpoints, in a header
-        // or, for senders that cannot set headers, in ?token= (URLs end up in logs, so it must not be the phone's key).
-        var lan = configStore.Get().Lan;
-        var access = Lan.AuthorizeRequest(lan, ctx.Request.Method, ctx.Request.Path, origin,
-            ctx.Request.Headers.Authorization, ctx.Request.Query["token"]);
-        if (access == Lan.LanAccess.Denied)
-        {
-            ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
-            return;
-        }
-        if (access is Lan.LanAccess.PairingClaim or Lan.LanAccess.Webhook)
-        {
-            // pairing claims and webhooks must not touch phone registry, app version or "phone connected" updates
-            if (access == Lan.LanAccess.PairingClaim)
-                ctx.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>()!.MaxRequestBodySize = 1024;
-            ctx.Response.Headers.CacheControl = "no-store";
-            await next();
-            return;
-        }
-    }
-    else
-    {
-        var host = ctx.Request.Host.Host;
-        var spotifyCallback = ctx.Request.Method == "GET" && ctx.Request.Path == "/api/controls/spotify/callback"
-            && app.Services.GetRequiredService<SpotifyControl>().HasPendingState(ctx.Request.Query["state"]);
-        if ((host != "127.0.0.1" && host != "localhost") || (origin != "" && !SameOrigins.Contains(origin))
-            || (!spotifyCallback && BrowserGuard.IsForeign(ctx.Request.Headers["Sec-Fetch-Site"], ctx.Request.Headers["Sec-Fetch-Mode"], ctx.Request.Method, ctx.Request.Path)))
-        {
-            ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
-            return;
-        }
-    }
-    // any request from the app shows the phone is there, not only a state poll: an app on the live stream polls
-    // nothing, and a stream that is not yet (or no longer) open must not hide the phone from a permission prompt (#497)
-    if (ctx.Request.Headers.ContainsKey("X-PhoneBox-App"))
-        Interlocked.Exchange(ref ApprovalStore.PhoneLastSeen, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
-    if (ctx.Request.Headers.TryGetValue("X-PhoneBox-Device", out var device))
-    {
-        var problem = PhoneRegistry.Touch(device.ToString(), ctx.Request.Headers["X-PhoneBox-Model"].ToString(),
-            ctx.Connection.LocalPort == usb.Port ? "USB" : ctx.Connection.LocalPort == Port ? "local" : "Wi-Fi", ctx.Request.Headers["X-PhoneBox-WebView"].ToString());
-        if (problem is not null) app.Logger.LogWarning("WebView: {Problem}", problem);
-    }
-    if (ctx.Request.Headers.TryGetValue("X-PhoneBox-App", out var appVersion) && appVersion.ToString().Length is > 0 and < 32)
-        UpdateService.AppVersion = appVersion.ToString();
-    ctx.Response.Headers.CacheControl = "no-store";
-    // only the panel may be framed, and only by the settings page itself (the live preview)
-    ctx.Response.Headers["X-Frame-Options"] = ctx.Request.Path.StartsWithSegments("/panel") ? "SAMEORIGIN" : "DENY";
-    await next();
-});
+app.Use(gate.InvokeAsync);
 
 app.Map("/api/trackpad", TrackpadHandler.HandleEndpoint);
 
@@ -538,6 +488,8 @@ app.MapGet("/api/info", (AdbReverse adb, ConfigStore cfg) => Results.Json(new
     appMissing = adb.MissingApp,
     usbProblem = adb.UsbProblem,
     webviewProblem = WebViewDoctor.DiagnoseRecent(PhoneRegistry.All(), DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()),
+    // the clipboard bridge is on but macOS gives the agent no text (its paste privacy setting): the card says so
+    bridgeRefused = app.Services.GetService<ClipboardBridge>()?.Refused ?? false,
 }));
 
 // Phone mic status for the settings page and scripts (local port only: not a phone path, see Lan.AllowedOverLan).
@@ -824,6 +776,11 @@ app.MapPost("/api/rules/test", (RuleConfig rule, RuleEngine rules) =>
     rules.Test(rule);
     return Results.Ok(new { ok = true });
 });
+
+// Phone bridge: clipboard text from the phone, and the stream of text copied on this computer. Only through the USB
+// tunnel or the Wi-Fi port, with the phone's key (RequestGate refuses them on the local port); 403 while the switch in
+// Settings is off, and 501 where the bridge does not exist (everything but macOS).
+BridgeApi.Map(app, gate);
 
 // The phone reports its battery (charge guard); the settings show the guard's state and can switch the power to test it.
 app.MapPost("/api/phone/battery", (HttpRequest request, int level, bool plugged, double? temp, string? source, string? usb, int? viewWidth, int? viewHeight) =>

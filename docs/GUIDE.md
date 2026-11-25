@@ -314,6 +314,30 @@ packet, it carries no password, so anyone on the same network who knows a MAC ad
 4. Waking from sleep or hibernate works most reliably. Waking from a full shutdown depends on the board, and
    Windows *Fast startup* can interfere: turn it off if a shut-down machine does not wake.
 
+## Phone bridge (macOS)
+
+Share what you copy between the Mac and the phone. It starts with the clipboard.
+
+- Turn on **Settings › Phone bridge › Share the clipboard with the phone**. It is off by default, and while it is off
+  the agent refuses everything the phone sends for it.
+- **Mac to phone:** copy plain text on the Mac and the paired phone's clipboard has it within about a second. Text over
+  64 KiB is not sent, and neither is anything a password manager marked as not to be shared (concealed, transient or
+  auto-generated, the markers 1Password, Bitwarden, KeePassXC and Strongbox use). A copy is read only once the clipboard
+  has stayed the same for a moment. A password manager can omit a marker or add it after the bridge has read the copy.
+  Turn off sharing before copying sensitive text.
+- **Phone to Mac:** the phone sends text to the Mac, which puts it on the Mac's clipboard. Android does not let an app
+  read the clipboard in the background, so the phone's side is one tap (the Android app adds the ways to send).
+- The text goes only to your own paired phones over the PhoneBox link (USB or paired Wi-Fi / Tailscale), with the
+  phone's key. Enable the bridge only on a computer where users and software with access to the local agent API are
+  trusted. The text is kept in memory and never stored
+  or logged. A phone whose connection drops for a moment is sent what it missed when it reconnects (at most the last 20
+  copies, and only those from the last two minutes). See [PRIVACY.md](../PRIVACY.md).
+- **macOS asking before an app reads the clipboard:** newer macOS versions can ask whether an app may paste from other
+  apps (System Settings › Privacy & Security). If macOS asks about PhoneBox, choose Allow there, or it asks again at each
+  copy. If PhoneBox is denied, macOS gives it no text, nothing you copy reaches the phone, and the Phone bridge card says
+  so (the log gets one line too, without the text).
+- Needs macOS: on Windows and Linux the card is hidden and the agent answers the phone with 501.
+
 ## AI agent permission prompts
 
 When Codex asks for permission (run a command, edit a file, use an MCP tool…), the phone shows the project, tool and

@@ -867,6 +867,13 @@ nav a.on::before { color: var(--accent); }
         <label class="check"><input type="checkbox" data-bind="antigravity.shareSessionTitles"> <span data-i18n="s.antigravity.shareSessionTitles">Show Antigravity chat titles on the phone (Antigravity draws them from the conversation)</span></label>
       </div>
 
+      <div class="card" id="bridgeCard" style="display:none">
+        <h3 data-i18n="s.bridge.title">Phone bridge</h3>
+        <p class="hint" style="margin:0 0 12px" data-i18n="s.bridge.hint">Share what you copy between this Mac and the paired phone (off by default). The text goes only to your own phone over the PhoneBox link and is not stored. The PhoneBox app has its own Phone bridge switch, and both must be on.</p>
+        <div class="row" style="margin-bottom:8px"><label class="switch"><input type="checkbox" data-bind="bridge.clipboard" aria-labelledby="bridgeClipboardLabel"><span></span></label> <span id="bridgeClipboardLabel" data-i18n="s.bridge.clipboard">Share the clipboard with the phone (plain text, both ways)</span></div>
+        <p id="bridgeRefused" hidden style="margin:4px 0 0;font-size:13px;color:var(--warn)" data-i18n="s.bridge.refused">macOS gave PhoneBox no text from the clipboard, so what you copy is not reaching the phone. Allow PhoneBox to paste in System Settings › Privacy &amp; Security.</p>
+      </div>
+
       <div class="card">
         <h3 data-i18n="s.approvals.title">AI coding agent permission prompts</h3>
         <p class="hint" style="margin:0 0 12px" data-i18n-html="s.approvals.hint">When Codex or Claude Code asks for permission, the phone shows the request with <b>Allow</b> and <b>Deny</b>. Install the hook for each agent you use; existing hook files are preserved and backed up.</p>
@@ -3971,6 +3978,8 @@ async function loadInfo() {
     osName = i.os || 'windows';
     if ($('phoneMicCard')) { $('phoneMicCard').hidden = osName !== 'windows'; if (osName === 'windows') renderPhoneMicState(); }
     $('followComputerLockOption').style.display = osName === 'macos' ? '' : 'none';
+    $('bridgeCard').style.display = osName === 'macos' ? '' : 'none';
+    $('bridgeRefused').hidden = !(osName === 'macos' && i.bridgeRefused);
     $('adbFound').textContent = i.adb ? t('s.conn.adbFound', { path: i.adb }) : t('s.conn.adbNotFound') + ' — ' + ({ linux: 'sudo apt install adb', macos: 'brew install android-platform-tools' }[osName] || 'winget install Google.PlatformTools');
     $('appMissing').hidden = !(i.appMissing && i.appMissing.length);
     $('usbProblem').hidden = !i.usbProblem;

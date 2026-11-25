@@ -25,6 +25,8 @@ public sealed class AgentConfig
     public ClaudeConfig Claude { get; set; } = new();
     /// <summary>Cursor agent-transcript sessions on the AI sessions widget (off by default).</summary>
     public CursorConfig Cursor { get; set; } = new();
+    /// <summary>Clipboard sharing with the paired phone (macOS only; off by default).</summary>
+    public BridgeConfig Bridge { get; set; } = new();
     /// <summary>Antigravity chats on the AI sessions widget (off by default).</summary>
     public AntigravityConfig Antigravity { get; set; } = new();
     /// <summary>OpenCode prompts and sessions on the phone; everything is off until the settings page turns it on.</summary>
@@ -81,8 +83,10 @@ public sealed class AgentConfig
     /// <param name="wallpaperRev">The uploaded wallpaper's revision (null without one): the panel loads the picture
     /// with it in the URL, so a new upload is fetched and an unchanged one comes from the cache. Sent as text: a 64-bit
     /// value loses its last digits as a JavaScript number, and two pictures could then share a cached URL.</param>
+    /// <param name="standbyForPhone">Whether an ignored or unselected USB phone should use standby mode.</param>
+    /// <param name="bridgeExists">Whether this computer has a phone bridge at all (null uses the platform default).</param>
     public object ToPublic(string? deviceId = null, Func<Shortcut, (long? Rev, bool Upload)>? shortcutIcon = null,
-        long? wallpaperRev = null, bool standbyForPhone = false) => new
+        long? wallpaperRev = null, bool standbyForPhone = false, bool? bridgeExists = null) => new
     {
         weather = Weather,
         codexBar = CodexBar,
@@ -113,6 +117,9 @@ public sealed class AgentConfig
         charge = new { Charge.Enabled, Charge.Min, Charge.Max },
         // OpenCode prompts: how long the Allow always button waits before it can be pressed (it saves a pattern)
         opencode = new { OpenCode.AlwaysCountdownSec },
+        // the bridge switches: the phone's Phone bridge screen follows them (nothing here is a secret). "supported" is what the
+        // panel's Phone bridge button waits for: on Windows and Linux there is no bridge, and the screen could only say so.
+        bridge = new { Bridge.Clipboard, supported = bridgeExists ?? BridgeConfig.PlatformHasBridge },
     };
 
 
@@ -413,6 +420,23 @@ public sealed class OpenCodeConfig
     /// <summary>Show each OpenCode session's title on the phone. OpenCode draws the titles from the conversation,
     /// so they stay off the phone until you turn this on, like Claude's shareSessionTitles.</summary>
     public bool ShareSessionTitles { get; set; }
+}
+
+/// <summary>
+/// The phone bridge shares the clipboard's text between this computer and the phone, so its switch stays off until the
+/// owner turns it on. The agent enforces it (the bridge endpoints answer 403 while it is off); the phone reads it from the
+/// public config and stops sending.
+/// </summary>
+public sealed class BridgeConfig
+{
+    /// <summary>Share copied text with the phone, both ways (plain text, up to 64 KiB).</summary>
+    public bool Clipboard { get; set; }
+
+    /// <summary>
+    /// Whether this system has a bridge: macOS, where Program.cs creates it. A fact about the system, not a setting: it is
+    /// not read from the config file, so editing the file cannot make a Windows or Linux agent claim one.
+    /// </summary>
+    public static bool PlatformHasBridge => OperatingSystem.IsMacOS();
 }
 
 public sealed class PageConfig
@@ -868,6 +892,7 @@ public sealed partial class ConfigStore(string path)
         c.Cursor ??= new();
         c.Antigravity ??= new();
         c.OpenCode ??= new();
+        c.Bridge ??= new(); // a hand-edited "bridge": null must not break /api/config or the clipboard poll
         c.OpenCode.TimeoutSec = Math.Clamp(c.OpenCode.TimeoutSec, 10, 3600);
         c.OpenCode.AlwaysCountdownSec = Math.Clamp(c.OpenCode.AlwaysCountdownSec, 0, 60);
         if (string.IsNullOrWhiteSpace(c.Updates.Repo)) c.Updates.Repo = "ersinkoc/phonebox";
