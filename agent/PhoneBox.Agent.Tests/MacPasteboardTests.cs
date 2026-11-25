@@ -28,9 +28,9 @@ public sealed class MacPasteboardTests : IDisposable
     {
         if (Fresh() is not { } pb) return;
         var atLimit = new string('a', ClipboardBridge.MaxBytes);
-        Assert.True(pb.WriteText(atLimit));
+        Assert.NotNull(pb.WriteText(atLimit));
         Assert.Equal(atLimit, pb.ReadShareableText());
-        Assert.True(pb.WriteText(new string('a', ClipboardBridge.MaxBytes + 1)));
+        Assert.NotNull(pb.WriteText(new string('a', ClipboardBridge.MaxBytes + 1)));
         Assert.Null(pb.ReadShareableText());   // a huge copy is dropped before it is turned into a managed string
     }
 
@@ -38,7 +38,7 @@ public sealed class MacPasteboardTests : IDisposable
     public void WriteThenReadRoundTripsUnicodeText()
     {
         if (Fresh() is not { } pb) return;
-        Assert.True(pb.WriteText("Καλημέρα 🌍\nsecond line"));
+        Assert.NotNull(pb.WriteText("Καλημέρα 🌍\nsecond line"));
         Assert.Equal("Καλημέρα 🌍\nsecond line", pb.ReadShareableText());
     }
 
@@ -46,7 +46,7 @@ public sealed class MacPasteboardTests : IDisposable
     public void ATextWithANulIsWrittenAndReadBackWhole()
     {
         if (Fresh() is not { } pb) return;
-        Assert.True(pb.WriteText("left\0right"));
+        Assert.NotNull(pb.WriteText("left\0right"));
         Assert.Equal("left\0right", pb.ReadShareableText());     // not cut at the NUL, which "stringWithUTF8String:" would do
     }
 
@@ -55,7 +55,7 @@ public sealed class MacPasteboardTests : IDisposable
     {
         if (Fresh() is not { } pb) return;
         var before = pb.ChangeCount;
-        Assert.True(pb.WriteText("one"));
+        Assert.NotNull(pb.WriteText("one"));
         Assert.True(pb.ChangeCount > before);
     }
 

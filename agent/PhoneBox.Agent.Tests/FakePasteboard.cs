@@ -26,14 +26,13 @@ internal sealed class FakePasteboard : ITextPasteboard
         AfterRead?.Invoke();
         return Marked ? null : text; // the marks are checked again after the text, as MacPasteboard does
     }
-    public bool WriteText(string text)
+    public long? WriteText(string text)
     {
-        if (Fail) return false;
+        if (Fail) return null;
         Writes++;
         Text = text;
         Marked = false;
-        Count++;
-        return true;
+        return ++Count;
     }
     /// <summary>Somebody copies something on the Mac (null: an item the bridge must not read).</summary>
     public void Copy(string? text) { Text = text; Marked = false; Count++; }

@@ -234,6 +234,29 @@ public sealed class ClipboardBridgeTests : IDisposable
         Assert.Equal(["phone1", null], _stream.Since(0, null).Select(e => e.Origin));
     }
 
+    [Fact]
+    public void ADeliberateCopyOfTheSameTextBeforeTheFirstPollIsStillShared()
+    {
+        _bridge.PollOnce();
+        _bridge.ReceiveFromPhone("same", "phone1");
+        _pb.Copy("same");
+        Settle();
+        Assert.Equal(["phone1", null], _stream.Since(0, null).Select(e => e.Origin));
+    }
+
+    [Fact]
+    public void ATransientReadFailureDoesNotDiscardTheCopy()
+    {
+        _bridge.PollOnce();
+        _pb.Copy("new text");
+        _bridge.PollOnce();
+        _pb.AfterRead = () => throw new InvalidOperationException();
+        Assert.Throws<InvalidOperationException>(_bridge.PollOnce);
+        _pb.AfterRead = null;
+        _bridge.PollOnce();
+        Assert.Equal("new text", Assert.Single(_stream.Since(0, null)).Text);
+    }
+
     // ---- the switch ----
 
     [Fact]

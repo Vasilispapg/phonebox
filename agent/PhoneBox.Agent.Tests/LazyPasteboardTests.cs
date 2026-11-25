@@ -40,7 +40,7 @@ public sealed class LazyPasteboardTests : IDisposable
         {
             Assert.Equal(0, pb.ChangeCount);
             Assert.Null(pb.ReadShareableText());
-            Assert.False(pb.WriteText("x"));
+            Assert.Null(pb.WriteText("x"));
         }
         Assert.Equal(1, created);   // asked once, not on every poll
         Assert.Equal(1, log.Warnings);
@@ -52,7 +52,7 @@ public sealed class LazyPasteboardTests : IDisposable
         var created = 0;
         var fake = new FakePasteboard();
         var pb = new LazyPasteboard(() => { created++; return fake; }, new CountingLogger());
-        Assert.True(pb.WriteText("hello"));
+        Assert.NotNull(pb.WriteText("hello"));
         Assert.Equal("hello", pb.ReadShareableText());
         Assert.Equal(fake.Count, pb.ChangeCount);
         Assert.Equal(1, created);

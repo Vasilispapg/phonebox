@@ -162,7 +162,7 @@ internal static class BridgeApi
             foreach (var e in replay)
             {
                 if (!Open()) return;
-                await ctx.Response.WriteAsync(EventFrame(e), ct);
+                if (bridge.StillQueued(e.Seq)) await ctx.Response.WriteAsync(EventFrame(e), ct);
             }
             await ctx.Response.Body.FlushAsync(ct);
             // the switch and the key are checked every pass (at least once a second), so either one ends the stream
@@ -171,7 +171,7 @@ internal static class BridgeApi
                 foreach (var e in bridge.Since(seq, device))
                 {
                     if (!Open()) return; // the switch was turned off (or the key revoked) during this batch: nothing more is written
-                    await ctx.Response.WriteAsync(EventFrame(e), ct);
+                    if (bridge.StillQueued(e.Seq)) await ctx.Response.WriteAsync(EventFrame(e), ct);
                     seq = e.Seq;
                 }
                 if (Environment.TickCount64 >= nextPing)
