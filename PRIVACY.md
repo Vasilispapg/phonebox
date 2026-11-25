@@ -134,12 +134,13 @@ Last updated: 2026-11-20 (PhoneBox 0.9.6).
   same USB / paired Wi-Fi link, together with the posting app's icon (a small PNG, so the computer can show it as the
   notification's picture). The **All apps** switch on the Phone bridge screen (off until you turn it on) sends every app's
   notifications instead of the list, which includes banking, security and other private ones. Opening the Phone bridge
-  screen while forwarding is on can prompt once for **Contacts**. With permission, PhoneBox looks up a number shown on a
-  call notification and uses the matching name as its title. Samsung's in-call UI can also forward outgoing calls because
-  its notifications use the same format. If the caller's name changes later, PhoneBox sends an updated notification with
-  its title, text, app metadata and icon when available. PhoneBox always excludes its own notifications and ongoing media.
-  It also excludes apps outside the selected list unless **All apps** is enabled. If the computer is unreachable, up to 20 notifications stay
-  in memory for two minutes. Notification contents stay out of the phone's log and storage. If you enable
+  screen while forwarding is on can prompt once for **Contacts**. With permission, PhoneBox can look up the number shown
+  in a Samsung in-call UI notification and use a matching contact name as its title. Selecting the default dialer also
+  allows Samsung's in-call UI call notifications because that app posts calls for the dialer. Its incoming and outgoing
+  calls use the same format, so either can be forwarded. If PhoneBox learns the name later for a Samsung call, it sends
+  an update with the title, text, app metadata and icon when available. PhoneBox always excludes its own notifications
+  and ongoing media. The app holds up to 20 unsent notifications in memory. At the next delivery attempt, it discards
+  entries at least two minutes old. Notification contents stay out of the phone's log and storage. If you enable
   `PhoneBoxBridge` debug logging with adb, the phone can log app package names and call flags, including for skipped calls.
   Until you turn the switch on, the app does not even appear in Android's Notification access list.
 - **Sound for the Spectrum bars widget** (Windows): while an enabled page with the widget is on the phone's screen,
