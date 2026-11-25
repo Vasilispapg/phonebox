@@ -245,6 +245,17 @@ public sealed class ClipboardBridgeTests : IDisposable
     }
 
     [Fact]
+    public void APrivacyMarkerAppliedAfterReadingTheTextPreventsPublication()
+    {
+        _bridge.PollOnce();
+        _pb.Copy("fixture text");
+        _bridge.PollOnce();
+        _pb.BeforeShare = _pb.Mark;
+        _bridge.PollOnce();
+        Assert.Empty(_stream.Since(0, null));
+    }
+
+    [Fact]
     public void ATransientReadFailureDoesNotDiscardTheCopy()
     {
         _bridge.PollOnce();

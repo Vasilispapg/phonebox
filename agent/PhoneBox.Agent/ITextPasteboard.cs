@@ -17,6 +17,9 @@ internal interface ITextPasteboard
     /// </summary>
     string? ReadShareableText();
 
+    /// <summary>Rechecks the same item's change count and privacy markers immediately before releasing its text.</summary>
+    bool CanShare(long changeCount);
+
     /// <summary>
     /// True when the last <see cref="ReadShareableText"/> found plain text among the item's types but the system gave none
     /// for it: what a read that macOS's paste privacy denied looks like (see MacPasteboard).

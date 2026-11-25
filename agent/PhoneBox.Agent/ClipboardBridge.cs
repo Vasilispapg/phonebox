@@ -96,18 +96,14 @@ public sealed class ClipboardBridge : IHostedService, IDisposable
             // a copy during the read (the types and the text are separate calls) makes it a mixture, so nothing is shared from it;
             // the next pass sees the new count and reads that copy once it has settled
             if (_pasteboard.ChangeCount != count) return;
+            if (text is not null && Encoding.UTF8.GetByteCount(text) <= MaxBytes &&
+                !(_lastReceived is { } echo && echo.Count == count && Hash(text).AsSpan().SequenceEqual(echo.Hash)) &&
+                _pasteboard.CanShare(count))
+                _stream.Publish("clipboard", text, null);
             _settling = false;
-            var echo = _lastReceived;
             _lastReceived = null;
-            if (text is null)
-            {
-                if (refused) WarnRefused("the clipboard holds text but macOS gave PhoneBox none (Privacy & Security, Paste from Other Apps may deny it)");
-                return;
-            }
-            _refused = false;
-            if (Encoding.UTF8.GetByteCount(text) > MaxBytes) return;
-            if (echo is { } expected && expected.Count == count && Hash(text).AsSpan().SequenceEqual(expected.Hash)) return;
-            _stream.Publish("clipboard", text, null);
+            if (text is not null) _refused = false;
+            else if (refused) WarnRefused("the clipboard holds text but macOS gave PhoneBox none (Privacy & Security, Paste from Other Apps may deny it)");
         }
     }
 

@@ -26,6 +26,13 @@ internal sealed class FakePasteboard : ITextPasteboard
         AfterRead?.Invoke();
         return Marked ? null : text; // the marks are checked again after the text, as MacPasteboard does
     }
+    public Action? BeforeShare;
+    public bool CanShare(long changeCount)
+    {
+        BeforeShare?.Invoke();
+        return changeCount == Count && !Marked;
+    }
+
     public long? WriteText(string text)
     {
         if (Fail) return null;
