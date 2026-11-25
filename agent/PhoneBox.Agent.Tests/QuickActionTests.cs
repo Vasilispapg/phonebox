@@ -54,6 +54,59 @@ public sealed class QuickActionTests : IDisposable
         return (process.ExitCode, File.Exists(CurlLog) ? File.ReadAllText(CurlLog) : "", File.Exists(NoteLog) ? File.ReadAllText(NoteLog) : "");
     }
 
+    private (int Exit, string Out, string Notes) RunApplet(string status, params string[] files)
+    {
+        var scriptPath = Path.Combine(_root, "applet.sh");
+        File.WriteAllText(scriptPath, Script);
+        var info = new ProcessStartInfo("/bin/bash") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+        info.ArgumentList.Add(scriptPath);
+        foreach (var f in files) info.ArgumentList.Add(f);
+        info.Environment["PATH"] = Bin + ":/usr/bin:/bin";
+        info.Environment["CURL_LOG"] = CurlLog;
+        info.Environment["NOTE_LOG"] = NoteLog;
+        info.Environment["FAKE_STATUS"] = status;
+        info.Environment["PHONEBOX_UI"] = "applet";
+        using var process = Process.Start(info)!;
+        var output = process.StandardOutput.ReadToEnd();
+        process.StandardError.ReadToEnd();
+        Assert.True(process.WaitForExit(20_000));
+        return (process.ExitCode, output, File.Exists(NoteLog) ? File.ReadAllText(NoteLog) : "");
+    }
+
+    [Theory]
+    [InlineData("403", "off")]
+    [InlineData("413", "large")]
+    [InlineData("507", "full")]
+    [InlineData("000", "running")]
+    public void ForTheAppletAProblemIsPrintedForItToShowNotShownByTheScript(string status, string word)
+    {
+        var result = RunApplet(status, Make("a.txt"));
+        Assert.Equal(0, result.Exit);
+        Assert.StartsWith("ALERT:", result.Out);
+        Assert.Contains(word, result.Out, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("", result.Notes); // osascript was not asked to show anything
+    }
+
+    [Fact]
+    public void ForTheAppletASuccessIsAPrintedNote()
+    {
+        var result = RunApplet("202", Make("a.txt"), Make("b.txt"));
+        Assert.Equal(0, result.Exit);
+        Assert.StartsWith("NOTE:", result.Out);
+        Assert.Contains("2", result.Out);
+        Assert.Equal("", result.Notes);
+    }
+
+    [Fact]
+    public void ForTheAppletAMissingKeyFileIsAPrintedProblem()
+    {
+        _key.Delete();
+        var result = RunApplet("202", Make("a.txt"));
+        Assert.Equal(0, result.Exit);
+        Assert.StartsWith("ALERT:", result.Out);
+        Assert.False(File.Exists(CurlLog)); // nothing was sent
+    }
+
     private string Make(string name, string content = "x")
     {
         var path = Path.Combine(Files, name);

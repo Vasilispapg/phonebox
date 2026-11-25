@@ -65,10 +65,11 @@ internal sealed class QuickActionInstaller(string servicesDir, string keyFilePat
         #!/bin/bash
         # "Send to phone" (PhoneBox): sends the files selected in Finder to the paired phone through the local PhoneBox agent.
         KEYFILE='{{keyFilePath.Replace("'", "'\\''")}}'
-        say() { osascript -e 'on run argv' -e 'display notification (item 1 of argv) with title "PhoneBox"' -e 'end run' -- "$1" >/dev/null 2>&1; }
+        # PHONEBOX_UI=applet: the droplet app shows the result itself (in front); the lines it reads start with NOTE: or ALERT:
+        say() { if [ "$PHONEBOX_UI" = applet ]; then printf 'NOTE:%s\n' "$1"; else osascript -e 'on run argv' -e 'display notification (item 1 of argv) with title "PhoneBox"' -e 'end run' -- "$1" >/dev/null 2>&1; fi; }
         # A problem is shown here, in a window that closes itself, and the script still ends with 0: a non-zero end makes Automator
         # put its own dialog ("The action Run Shell Script encountered an error: ") on top, which says nothing.
-        alert() { osascript -e 'on run argv' -e 'display alert "PhoneBox" message (item 1 of argv) giving up after 20' -e 'end run' -- "$1" >/dev/null 2>&1; }
+        alert() { if [ "$PHONEBOX_UI" = applet ]; then printf 'ALERT:%s\n' "$1"; else osascript -e 'on run argv' -e 'display alert "PhoneBox" message (item 1 of argv) giving up after 20' -e 'end run' -- "$1" >/dev/null 2>&1; fi; }
         if [ ! -r "$KEYFILE" ]; then alert "Sending files to the phone is off"; exit 0; fi
         port=$(sed -n 's/.*"port":\([0-9][0-9]*\).*/\1/p' "$KEYFILE")
         key=$(sed -n 's/.*"key":"\([^"]*\)".*/\1/p' "$KEYFILE")

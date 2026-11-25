@@ -29,11 +29,18 @@ internal sealed class DropletInstaller(string appsDir, string keyFilePath) : IQu
 
         on sendAll(theFiles)
         	set sendScript to POSIX path of (path to resource "send.sh")
-        	set command to "/bin/bash " & quoted form of sendScript
+        	set command to "PHONEBOX_UI=applet /bin/bash " & quoted form of sendScript
         	repeat with oneFile in theFiles
         		set command to command & " " & quoted form of POSIX path of oneFile
         	end repeat
-        	do shell script command
+        	set answer to do shell script command
+        	-- the result is shown here, by the app itself and in front: a window made by a faceless osascript can open behind Finder
+        	if answer starts with "ALERT:" then
+        		activate
+        		display alert "PhoneBox" message (text 7 thru -1 of answer) giving up after 30
+        	else if answer starts with "NOTE:" then
+        		display notification (text 6 thru -1 of answer) with title "PhoneBox"
+        	end if
         end sendAll
         """;
 

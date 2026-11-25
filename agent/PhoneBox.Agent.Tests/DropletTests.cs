@@ -62,6 +62,11 @@ public sealed class DropletTests : IDisposable
         Assert.Contains("quoted form of POSIX path of", source);
         Assert.Contains("path to resource \"send.sh\"", source);
         Assert.DoesNotContain("do shell script \"/bin/bash -c", source);
+        // the result is shown by the applet itself, in front: a window from a faceless osascript can open behind Finder
+        Assert.Contains("PHONEBOX_UI=applet", source);
+        Assert.Contains("activate", source);
+        Assert.Contains("display alert", source);
+        Assert.Contains("display notification", source);
     }
 
     [Fact]
