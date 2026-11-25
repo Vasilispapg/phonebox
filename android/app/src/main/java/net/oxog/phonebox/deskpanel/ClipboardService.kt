@@ -79,6 +79,10 @@ class ClipboardService : Service() {
         // a new TLS handshake each time); one that is not connected starts over at once instead of finishing a long back-off.
         // Pairing changes restart it through [pairingChanged].
         if (stream == null || BridgePrefs.clipboardState != ClipboardState.RUNNING) restartStream()
+        // A stream that is already open sends no "open" again, so a file the Mac offered before this switch was turned on (or while an
+        // event was missed) would wait for the next reconnect: ask what waits on every start (the panel does this on every resume;
+        // one small request, and a file already taken is not downloaded twice).
+        else incoming.onStreamOpen()
         return START_STICKY
     }
 
