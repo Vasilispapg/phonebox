@@ -51,8 +51,6 @@ object BridgeSend {
                     SendResult.PAIR_AGAIN -> R.string.bridge_pair_again
                 }
             } finally {
-                // a request also queues a pairing / MAC refresh on the link's own thread, which saves this link's copy of the
-                // computer list: a computer forgotten in the panel meanwhile would come back. close() cancels it and frees the thread.
                 link.close()
             }
             // the two messages that ask the owner to look or act get the long toast

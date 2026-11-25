@@ -382,6 +382,11 @@ private fun rotationChecks() {
 }
 
 fun main() {
+    check("definitive USB refusals should allow Wi-Fi",
+        BridgeClip.canFallBackFromUsb(403) && BridgeClip.canFallBackFromUsb(501))
+    check("delivered, ambiguous or invalid clipboard writes must not be repeated",
+        listOf(200, 409, 413, 500, 502, 504).none(BridgeClip::canFallBackFromUsb))
+
     shouldSendChecks()
     parseEventChecks()
     requestBodyChecks()
