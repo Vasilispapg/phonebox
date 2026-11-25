@@ -3,20 +3,9 @@ using System.Runtime.InteropServices;
 namespace PhoneBox.Agent;
 
 /// <summary>
-/// NSPasteboard through the Objective-C runtime, in this process: the bridge polls the change counter every 400 ms, and
-/// spawning pbpaste or osascript that often would be slow (osascript takes seconds when the Mac is busy) and wasteful.
-/// Every call runs inside its own autorelease pool because the callers are timer and request threads, which have none.
+/// NSPasteboard calls run inside a native exception boundary. Each poll or write also has
+/// its own autorelease pool because the agent's timer and request threads do not provide one.
 /// </summary>
-/// <remarks>
-/// An Objective-C exception (AppKit declares NSPasteboardCommunicationException for a pasteboard server that cannot be reached)
-/// cannot be caught by managed code: it unwinds into .NET frames and ends the agent. <c>writeObjects:</c>, which reports failure
-/// with a BOOL, was considered instead of <c>setString:forType:</c> and does not change that: its BOOL covers items the
-/// pasteboard would not take, while the exception comes from the connection to the pasteboard server that every call here
-/// (writeObjects:, setString:forType:, types, stringForType:) goes through alike, and neither method documents catching it.
-/// Containing it would take an @try/@catch, that is a native library of our own built and shipped for each architecture.
-/// What keeps the risk small instead: the calls here are the plain getters and setters AppKit documents for any app, they
-/// run only while the owner has the bridge on, and the pasteboard is created on first use so a Mac without one never gets here.
-/// </remarks>
 internal sealed class MacPasteboard : ITextPasteboard
 {
     private const string ObjC = "/usr/lib/libobjc.A.dylib";
@@ -44,16 +33,36 @@ internal sealed class MacPasteboard : ITextPasteboard
     [DllImport(ObjC)] private static extern nint sel_registerName(string name);
     [DllImport(ObjC)] private static extern nint objc_autoreleasePoolPush();
     [DllImport(ObjC)] private static extern void objc_autoreleasePoolPop(nint pool);
-    [DllImport(ObjC, EntryPoint = "objc_msgSend")] private static extern nint Send(nint receiver, nint selector);
-    [DllImport(ObjC, EntryPoint = "objc_msgSend")] private static extern nint Send(nint receiver, nint selector, nint a);
-    [DllImport(ObjC, EntryPoint = "objc_msgSend")] private static extern nint SendBytes(nint receiver, nint selector, nint bytes, nuint length, nuint encoding);
-    [DllImport(ObjC, EntryPoint = "objc_msgSend")] private static extern nuint SendLength(nint receiver, nint selector, nuint encoding);
-    [DllImport(ObjC, EntryPoint = "objc_msgSend")] private static extern nint SendAt(nint receiver, nint selector, nuint index);
-    [DllImport(ObjC, EntryPoint = "objc_msgSend")] private static extern long SendLong(nint receiver, nint selector);
-    [DllImport(ObjC, EntryPoint = "objc_msgSend")] [return: MarshalAs(UnmanagedType.I1)]
-    private static extern bool SendBool(nint receiver, nint selector, nint a, nint b);
-    [DllImport(ObjC, EntryPoint = "objc_msgSend")] [return: MarshalAs(UnmanagedType.I1)]
-    private static extern bool SendBool(nint receiver, nint selector, nint a);
+    private const string Native = "PhoneBoxPasteboard";
+    private enum Call { Pointer, PointerWithArgument, PointerWithThreeArguments, Integer, Size, BooleanOne, BooleanTwo }
+
+    [DllImport(Native, EntryPoint = "phonebox_pasteboard_invoke")]
+    private static extern int InvokeNative(nint receiver, nint selector, nuint a, nuint b, nuint c, Call call, out nuint value);
+
+    private static nuint Invoke(nint receiver, nint selector, Call call, nuint a = 0, nuint b = 0, nuint c = 0)
+    {
+        if (InvokeNative(receiver, selector, a, b, c, call, out var value) == 0)
+            throw new InvalidOperationException("The macOS pasteboard did not complete the operation.");
+        return value;
+    }
+
+    private static nint Send(nint receiver, nint selector) => (nint)Invoke(receiver, selector, Call.Pointer);
+    private static nint Send(nint receiver, nint selector, nint a) => (nint)Invoke(receiver, selector, Call.PointerWithArgument, (nuint)a);
+    private static nint SendAt(nint receiver, nint selector, nuint index) => (nint)Invoke(receiver, selector, Call.PointerWithArgument, index);
+    private static nint SendBytes(nint receiver, nint selector, nint bytes, nuint length, nuint encoding) =>
+        (nint)Invoke(receiver, selector, Call.PointerWithThreeArguments, (nuint)bytes, length, encoding);
+    private static nuint SendLength(nint receiver, nint selector, nuint encoding) => Invoke(receiver, selector, Call.Size, encoding);
+    private static long SendLong(nint receiver, nint selector) => (long)Invoke(receiver, selector, Call.Integer);
+    private static bool SendBool(nint receiver, nint selector, nint a) => Invoke(receiver, selector, Call.BooleanOne, (nuint)a) != 0;
+    private static bool SendBool(nint receiver, nint selector, nint a, nint b) => Invoke(receiver, selector, Call.BooleanTwo, (nuint)a, (nuint)b) != 0;
+
+    internal static void ReadOutsideNativeArrayForTest()
+    {
+        if (!Loaded.Value) throw new PlatformNotSupportedException("Foundation is unavailable.");
+        var pool = objc_autoreleasePoolPush();
+        try { SendAt(Send(objc_getClass("NSArray"), Sel("array")), Sel("objectAtIndex:"), 0); }
+        finally { objc_autoreleasePoolPop(pool); }
+    }
 
     private static readonly Lazy<bool> Loaded = new(() => NativeLibrary.TryLoad(AppKit, out _));
     private static nint Sel(string name) => sel_registerName(name);
@@ -103,16 +112,15 @@ internal sealed class MacPasteboard : ITextPasteboard
             AfterTextRead?.Invoke();
             // Again after the text: the change counter moves on clearContents, not on setString:forType:, so a password manager
             // that writes the text and then its concealed marker can add the marker after the first look without a new count.
-            if (Marks().Withheld) return null;
             // The types promised text but none came. On macOS 15.4 and later that is how a read looks that the owner's paste
             // privacy setting denied (Apple documents nil for data that "cannot be obtained"); the bridge warns about it.
-            if (item == 0) { LastReadRefused = hasText; return null; }
+            if (item == 0) { LastReadRefused = hasText && !Marks().Withheld; return null; }
             // A copy far over the bridge's limit (a whole log file) is not converted: the bridge would drop it anyway, after the UTF-8
             // and managed copies (hundreds of MB) had been made while it holds its lock. Its UTF-16 length alone is enough to tell,
             // since UTF-8 never takes fewer bytes than the text has UTF-16 units.
             if (SendLong(item, Sel("length")) > ClipboardBridge.MaxBytes) return null;
             var text = Managed(item);
-            return string.IsNullOrEmpty(text) ? null : text;
+            return string.IsNullOrEmpty(text) || Marks().Withheld ? null : text;
         }
         finally { objc_autoreleasePoolPop(pool); }
     }
@@ -164,6 +172,7 @@ internal sealed class MacPasteboard : ITextPasteboard
             var count = SendLong(_pasteboard, Sel("clearContents"));
             return SendBool(_pasteboard, Sel("setString:forType:"), NSString(text), NSString(PlainText)) ? count : null;
         }
+        catch (InvalidOperationException) { return null; }
         finally { objc_autoreleasePoolPop(pool); }
     }
 

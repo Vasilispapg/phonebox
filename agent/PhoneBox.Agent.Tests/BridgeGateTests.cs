@@ -253,11 +253,20 @@ public sealed class BridgeGateTests : IAsyncLifetime
     {
         using var res = await OpenStream("wifi", WifiKey);
         await Opened(res);
-        await Task.Delay(1200);                 // a few passes of the key check
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(6));
+        await using var body = await res.Content.ReadAsStreamAsync(timeout.Token);
+        using var reader = new StreamReader(body);
         _stream.Publish("clipboard", "copied on the Mac", null);
-        await Task.Delay(300);
-        WriteConfig(wifiOn: true, wifiKey: WifiKey, clipboard: false); // the switch ends it, after the copy went out
-        var text = await UntilEnded(res);
-        Assert.Contains("id: 1\nevent: clipboard\ndata: {\"seq\":1,\"text\":\"copied on the Mac\"}\n\n", text);
+        var lines = new List<string>();
+        while (await reader.ReadLineAsync(timeout.Token) is { } line)
+        {
+            lines.Add(line);
+            if (line.StartsWith("data:", StringComparison.Ordinal)) break;
+        }
+        Assert.Contains("id: 1", lines);
+        Assert.Contains("event: clipboard", lines);
+        Assert.Contains("data: {\"seq\":1,\"text\":\"copied on the Mac\"}", lines);
+        WriteConfig(wifiOn: true, wifiKey: WifiKey, clipboard: false);
+        await reader.ReadToEndAsync(timeout.Token); // the switch must close the connection
     }
 }

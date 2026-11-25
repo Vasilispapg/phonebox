@@ -220,6 +220,27 @@ public sealed class BridgeApiTests : IDisposable
         return ctx;
     }
 
+    private sealed class RunningStream(CancellationTokenSource stop, Task run) : IAsyncDisposable
+    {
+        public Task Completion => run;
+
+        public async ValueTask DisposeAsync()
+        {
+            try
+            {
+                await stop.CancelAsync();
+                await run.WaitAsync(TimeSpan.FromSeconds(5));
+            }
+            finally { stop.Dispose(); }
+        }
+    }
+
+    private RunningStream StartStream(DefaultHttpContext ctx, Func<bool> authorized, CancellationToken stopping = default)
+    {
+        var stop = CancellationTokenSource.CreateLinkedTokenSource(stopping);
+        return new(stop, BridgeApi.StreamAsync(ctx, _store, _stream, authorized, stop.Token));
+    }
+
     private static async Task Until(Func<bool> condition)
     {
         for (var i = 0; i < 500 && !condition(); i++) await Task.Delay(10);
@@ -230,13 +251,13 @@ public sealed class BridgeApiTests : IDisposable
     public async Task TheStreamSendsWhatOthersCausedSkipsThePhonesOwnAndEndsWhenTheSwitchIsTurnedOff()
     {
         var body = new PhoneBody();
-        var run = BridgeApi.StreamAsync(StreamContext(body, "phoneA"), _store, _stream, () => true, CancellationToken.None);
+        await using var run = StartStream(StreamContext(body, "phoneA"), () => true, CancellationToken.None);
         await Until(() => body.Text.StartsWith(BridgeApi.PingFrame, StringComparison.Ordinal));
         _stream.Publish("clipboard", "sent by phoneA", "phoneA");
         _stream.Publish("clipboard", "copied on the Mac", null);
         await Until(() => body.Text.Contains("copied on the Mac"));
         SetSwitch(false);
-        await run.WaitAsync(TimeSpan.FromSeconds(5));
+        await run.Completion.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.DoesNotContain("sent by phoneA", body.Text);
     }
 
@@ -246,22 +267,22 @@ public sealed class BridgeApiTests : IDisposable
         // otherwise a restart, an update or Quit waits for the server's shutdown timeout while a phone has the stream open
         using var stopping = new CancellationTokenSource();
         var body = new PhoneBody();
-        var run = BridgeApi.StreamAsync(StreamContext(body, "phoneA"), _store, _stream, () => true, stopping.Token);
+        await using var run = StartStream(StreamContext(body, "phoneA"), () => true, stopping.Token);
         await Until(() => body.Writes > 0);
         stopping.Cancel();
-        await run.WaitAsync(TimeSpan.FromSeconds(5));
+        await run.Completion.WaitAsync(TimeSpan.FromSeconds(5));
     }
 
     [Fact]
     public async Task AWriteStuckOnAPhoneThatStoppedReadingEndsWhenTheSwitchIsTurnedOff()
     {
         var body = new PhoneBody(blockAfter: 1);    // the first ping goes through, then the phone takes nothing more
-        var run = BridgeApi.StreamAsync(StreamContext(body, "phoneA"), _store, _stream, () => true, CancellationToken.None);
+        await using var run = StartStream(StreamContext(body, "phoneA"), () => true, CancellationToken.None);
         await Until(() => body.Writes == 1);
         _stream.Publish("clipboard", "copied on the Mac", null);
         await Until(() => body.Writes == 2);        // that write is now stuck
         SetSwitch(false);
-        await run.WaitAsync(TimeSpan.FromSeconds(5));
+        await run.Completion.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.DoesNotContain("copied on the Mac", body.Text);
     }
 
@@ -279,12 +300,12 @@ public sealed class BridgeApiTests : IDisposable
         // a lost phone keeps its stream alive with the pings: a new Wi-Fi key, Wi-Fi turned off or an unplugged USB phone must end it
         var valid = true;
         var body = new PhoneBody();
-        var run = BridgeApi.StreamAsync(StreamContext(body, "phoneA"), _store, _stream, () => Volatile.Read(ref valid), CancellationToken.None);
+        await using var run = StartStream(StreamContext(body, "phoneA"), () => Volatile.Read(ref valid), CancellationToken.None);
         await Until(() => body.Writes > 0);
         _stream.Publish("clipboard", "before", null);
         await Until(() => body.Text.Contains("before"));
         Volatile.Write(ref valid, false);
-        await run.WaitAsync(TimeSpan.FromSeconds(5));
+        await run.Completion.WaitAsync(TimeSpan.FromSeconds(5));
         _stream.Publish("clipboard", "after", null);
         Assert.DoesNotContain("after", body.Text);
     }
@@ -294,12 +315,12 @@ public sealed class BridgeApiTests : IDisposable
     {
         var valid = true;
         var body = new PhoneBody(blockAfter: 1);
-        var run = BridgeApi.StreamAsync(StreamContext(body, "phoneA"), _store, _stream, () => Volatile.Read(ref valid), CancellationToken.None);
+        await using var run = StartStream(StreamContext(body, "phoneA"), () => Volatile.Read(ref valid), CancellationToken.None);
         await Until(() => body.Writes == 1);
         _stream.Publish("clipboard", "copied on the Mac", null);
         await Until(() => body.Writes == 2);        // that write is now stuck: only the timer can end it
         Volatile.Write(ref valid, false);
-        await run.WaitAsync(TimeSpan.FromSeconds(5));
+        await run.Completion.WaitAsync(TimeSpan.FromSeconds(5));
     }
 
     // ---- reconnecting with Last-Event-ID ----
@@ -312,12 +333,12 @@ public sealed class BridgeApiTests : IDisposable
         _stream.Publish("clipboard", "its own", "phoneA");               // id 3, sent by this phone: never back to it
         var body = new PhoneBody();
         using var stop = new CancellationTokenSource();
-        var run = BridgeApi.StreamAsync(StreamContext(body, "phoneA", "1"), _store, _stream, () => true, stop.Token);
+        await using var run = StartStream(StreamContext(body, "phoneA", "1"), () => true, stop.Token);
         await Until(() => body.Text.Contains("copied while it reconnected"));
         _stream.Publish("clipboard", "live", null);
         await Until(() => body.Text.Contains("live"));
         stop.Cancel();
-        await run.WaitAsync(TimeSpan.FromSeconds(5));
+        await run.Completion.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.DoesNotContain("heard before the drop", body.Text);
         Assert.DoesNotContain("its own", body.Text);
         Assert.Contains("id: 2\nevent: clipboard\n", body.Text);
@@ -334,12 +355,12 @@ public sealed class BridgeApiTests : IDisposable
         _stream.Publish("clipboard", "earlier", null);
         var body = new PhoneBody();
         using var stop = new CancellationTokenSource();
-        var run = BridgeApi.StreamAsync(StreamContext(body, "phoneA", header), _store, _stream, () => true, stop.Token);
+        await using var run = StartStream(StreamContext(body, "phoneA", header), () => true, stop.Token);
         await Until(() => body.Writes > 0);
         _stream.Publish("clipboard", "now", null);
         await Until(() => body.Text.Contains("now"));
         stop.Cancel();
-        await run.WaitAsync(TimeSpan.FromSeconds(5));
+        await run.Completion.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.DoesNotContain("earlier", body.Text);
     }
 
