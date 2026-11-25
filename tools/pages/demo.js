@@ -52,7 +52,7 @@
     const action = (id, label, kind, target, value = 0) => ({ id, label, kind, target, argument: null, value, device: null });
     // every section the agent serves, with its defaults (Config.cs), so the settings page shows what a real one does
     c = {
-      codexBar: { providers: ['claude', 'codex', 'antigravity'], rotate: true, pageSize: 2, rotateInterval: 8 },
+      codexBar: { providers: ['claude', 'codex', 'antigravity', 'grok'], rotate: true, pageSize: 2, rotateInterval: 8 },
       controls: { allowListening: false, allowPower: false, actions: [
         action('build', 'Build', 'task', 'npm run build'), action('tests', 'Run tests', 'task', 'npm test'),
         action('web', 'Web dev server', 'server', 'npm run dev'), action('api', 'API dev server', 'server', 'dotnet watch'),
@@ -216,7 +216,7 @@
       pc: {
         cpu: Math.max(1, wave(37, 8, 46, 0, 6)), cpuName: 'AMD Ryzen 9 7950X 16-Core Processor', cpuTemp: wave(60, 52, 68), cpuPower: wave(41, 38, 96, 2, 4),
         ramUsedGb: wave(120, 21, 24), ramTotalGb: 64, netDownBps: Math.max(0, wave(23, 0.2e6, 9e6, 0, 1e6)), netUpBps: Math.max(0, wave(17, 40e3, 600e3, 1, 50e3)),
-        uptimeSec: 3 * 86400 + 5 * 3600 + Math.floor((now() - START) / 1000),
+        uptimeSec: 3 * 86400 + 5 * 3600 + Math.floor((now() - START) / 1000), seq: Math.floor(now() / 1000),
         disks: [{ name: 'C:', usedGb: 612, totalGb: 1000 }, { name: 'D:', usedGb: 1450, totalGb: 2000 }, { name: 'E:', usedGb: 310, totalGb: 4000 }],
         ...(() => {
           const gpus = [
@@ -316,6 +316,8 @@
         codex: { model: 'Demo coding model', effort: 'high', totalTokens: 187000, totalInput: 150000, totalOutput: 37000, totalCached: 90000, totalReasoning: 12000, lastInput: 42000, contextWindow: 256000 }, limits: [
         { label: '5-hour session', percent: 12, resetsAt: n + 4.1 * 3600e3, windowSec: 18000 },
         { label: 'Weekly', percent: 27, resetsAt: n + 5.5 * 86400e3, windowSec: 604800 }] },
+      { id: 'grok', name: 'Grok', plan: 'SuperGrok', updatedAt: n - 90e3, extra: 'Grok Build 28% · Grok Chat 13%', error: null, codex: null, source: 'local', limits: [
+        { label: 'Weekly', percent: 41, resetsAt: n + 4.2 * 86400e3, windowSec: 604800 }] },
     ] };
   }
 
@@ -324,12 +326,12 @@
     const s = (i, tool, name, status, mins, waitingFor = null) => ({ id: `${tool}:${i}`, tool, name, project: name, status, waitingFor, since: n - mins * 60e3, startedAt: n - 3 * 3600e3,
       pid: 4000 + i * 211, outcome: null, model: null, effort: null, totalTokens: null, inputTokens: null, outputTokens: null, cachedInputTokens: null, reasoningTokens: null,
       lastInputTokens: null, contextWindow: null, lastTool: null, turnStartedAt: null,
-      ...(tool === 'codex' ? { model: 'Demo coding model', effort: 'high', totalTokens: 187000, inputTokens: 150000, outputTokens: 37000, cachedInputTokens: 90000, reasoningTokens: 12000, lastInputTokens: 42000, contextWindow: 256000, lastTool: 'read', turnStartedAt: n - 45000 } : {}) });
+      ...(tool === 'codex' || tool === 'grok' ? { model: tool === 'grok' ? 'grok-demo' : 'Demo coding model', effort: 'high', totalTokens: 187000, inputTokens: 150000, outputTokens: 37000, cachedInputTokens: 90000, reasoningTokens: 12000, lastInputTokens: 42000, contextWindow: 256000, lastTool: 'read', turnStartedAt: n - 45000 } : {}) });
     const pr = (repo, number, title, ci = null, review = null, draft = false, author = null) => ({ repo, number, title, ci, review, draft, author, updated: n - (number % 9 + 1) * 3600e3 });
     return {
       sessions: [s(1, 'claude', 'api-gateway', 'busy', 4), s(2, 'claude', 'docs-site', 'waiting', 2, 'approve a file edit'), s(3, 'codex', 'mobile-app', 'busy', 11),
         s(4, 'claude', 'infra', 'shell', 1), s(5, 'claude', 'blog-engine', 'idle', 38), s(6, 'codex', 'data-pipeline', 'idle', 74), s(7, 'claude', 'design-system', 'idle', 125),
-        s(8, 'cursor', 'phonebox', 'busy', 3), s(9, 'cursor', 'fueltrack', 'idle', 1), s(10, 'antigravity', 'phonebox', 'busy', 2)],
+        s(8, 'cursor', 'phonebox', 'busy', 3), s(9, 'cursor', 'fueltrack', 'idle', 1), s(10, 'antigravity', 'phonebox', 'busy', 2), s(11, 'grok', 'desk-widget', 'busy', 6)],
       github: { user: 'octocat', notifications: 7, error: null, updatedAt: n - 90e3,
         reviewRequests: [pr('acme/api', 412, 'Rate limiter for public endpoints', null, null, false, 'hubot'), pr('acme/web', 1288, 'Dark mode for the dashboard', null, null, false, 'monalisa'),
           pr('acme/infra', 77, 'Move staging to a new region', null, null, false, 'hubot')],
@@ -947,7 +949,12 @@
     if (path === '/api/lan') return json({ configured: true, active: true, port: 8766, restartNeeded: false, hosts: ['192.168.1.20', '100.101.102.103'], fingerprint: 'demo' });
     if (path === '/api/update') return json({ status: { agentVersion: VERSION, appVersion: VERSION, latest: VERSION, releaseUrl: 'https://github.com/ersinkoc/phonebox/releases/latest', agentUpdate: false, appUpdate: false,
       lastCheck: now() - 3600e3, state: 'idle', error: null }, auto: (await config()).updates?.auto !== false, installed: true });
-    if (path === '/api/claude/hook') return json({ installed: false, path: '~/.claude/settings.json' });
+    if (path === '/api/claude/hook') {
+      // the extra accounts' settings.json files too, so the settings show where Install would write
+      const extra = (await config()).claude?.extraCredentialDirs || [];
+      return json({ installed: false, path: '~/.claude/settings.json', paths: [{ label: null, path: '~/.claude/settings.json', exists: true, installed: false },
+        ...extra.map((d) => ({ label: d.label, path: d.dir.replace(/\/$/, '') + '/settings.json', exists: true, installed: false }))] });
+    }
     if (method !== 'GET') return json({ ok: true });
     return json({ error: 'not in the demo' }, 404);
   }

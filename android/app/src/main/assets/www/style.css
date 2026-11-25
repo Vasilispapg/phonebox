@@ -585,6 +585,7 @@ html.beat-3 .sess.busy .st, html.beat-4 .sess.shell .st, html.beat-2 .sess.waiti
 .sess .tl.cursor { color: #67e8f9; }
 .sess .tl.opencode { color: #a78bfa; }
 .sess .tl.antigravity { color: #38bdf8; }
+.sess .tl.grok { color: #f8fafc; }
 .sess-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .sess .nm { min-width: 0; font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sess-meta { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -888,6 +889,39 @@ html.beat-3 .sess.busy .st, html.beat-4 .sess.shell .st, html.beat-2 .sess.waiti
 .chip-btn { font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 9px; background: rgba(255, 255, 255, .08); }
 .chip-btn:active { background: var(--q); color: #06080b; }
 .ct-n { flex: 1; display: flex; align-items: center; font-size: min(48cqh, 30cqw); font-weight: 300; color: var(--q); line-height: 1; }
+
+.timer-layout { display: contents; }
+@container (min-aspect-ratio: 3/2) {
+  .timer-layout {
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: repeat(3, auto);
+    align-content: center;
+    align-items: center;
+    justify-items: center;
+    column-gap: 6px;
+  }
+  .timer-layout > * { grid-column: 1; }
+  .timer-layout > :is(.pomo-btns, .tm-btns) {
+    grid-area: 1 / 2 / span 3;
+    flex-direction: column;
+    margin: 0;
+    gap: 3px;
+  }
+  .timer-layout > .tm-btns.presets {
+    display: grid;
+    grid-auto-flow: column;
+    grid-template-rows: repeat(3, auto);
+  }
+  .timer-layout .pb { width: min(20cqh, 42px); height: min(20cqh, 42px); }
+  .timer-layout .chip-btn { padding: 2px 4px; }
+  .w-timer .timer-layout .g-dial { height: min(60cqh, 45cqw); }
+  .timer-layout > :is(.w-title, .sw-laps) { justify-self: stretch; }
+  .timer-layout .sw-laps { max-height: 25cqh; overflow-y: auto; }
+}
 
 /* ---------- breathe ---------- */
 .w-breathe { cursor: pointer; }

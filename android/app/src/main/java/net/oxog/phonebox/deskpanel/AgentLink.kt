@@ -144,13 +144,28 @@ class AgentLink(private val context: Context) {
      */
     fun stream(path: String, readTimeoutMs: Int = STREAM_READ_TIMEOUT, resumeFor: (String) -> String? = { null }): Stream? {
         fun resume(computer: String) = resumeFor(computer)?.let { mapOf("Last-Event-ID" to it) } ?: emptyMap()
+        val wifiPc = activePc()
+        var usbRefusal: Stream? = null
         UsbKey.pin(context)?.let { pin ->
-            usb("GET", path, readTimeoutMs, null, null, resume(pin))?.let { route = Route.USB; return Stream(Route.USB, it, pin) }
+            usb("GET", path, readTimeoutMs, null, null, resume(pin))?.let { reply ->
+                val attempt = Stream(Route.USB, reply, pin)
+                if (reply.code == 200 || path != "/api/bridge/stream" || wifiPc == null || wifiPc.id == pin) {
+                    route = Route.USB
+                    return attempt
+                }
+                usbRefusal = attempt
+            }
         }
-        activePc()?.id?.let { pin ->
-            wifi("GET", path, readTimeoutMs, null, null, headers = resume(pin))?.let { route = Route.WIFI; return Stream(Route.WIFI, it, pin) }
+        if (wifiPc != null) {
+            val reply = wifi("GET", path, readTimeoutMs, null, null, target = wifiPc, headers = resume(wifiPc.id))
+            if (reply != null) {
+                usbRefusal?.reply?.body?.close()
+                route = Route.WIFI
+                return Stream(Route.WIFI, reply, wifiPc.id)
+            }
         }
-        return null
+        if (usbRefusal != null) route = Route.USB
+        return usbRefusal
     }
 
     /** Forwards a request (method + path with query) to the agent over the best available route. */
