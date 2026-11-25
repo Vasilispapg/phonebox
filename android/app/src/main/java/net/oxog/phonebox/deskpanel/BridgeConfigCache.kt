@@ -5,12 +5,12 @@ package net.oxog.phonebox.deskpanel
  * Not knowing counts as on: a notification is tried, the agent refuses it with 403 if the switch is off, and if the computer
  * cannot be reached the short delivery queue holds it. A known "off" stays off through an unreachable agent.
  */
-class BridgeConfigCache(private val fetch: () -> String?, private val clock: () -> Long) {
+class BridgeConfigCache(private val clock: () -> Long) {
     private var known: Boolean? = null
     private var nextAsk = 0L
 
     @Synchronized
-    fun notificationsOn(): Boolean {
+    fun notificationsOn(fetch: () -> String?): Boolean {
         val now = clock()
         if (now >= nextAsk) {
             val answer = try { fetch()?.let { BridgeClip.notificationsOn(it) } } catch (_: Exception) { null }

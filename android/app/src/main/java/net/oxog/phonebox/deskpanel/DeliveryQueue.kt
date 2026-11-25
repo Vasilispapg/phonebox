@@ -29,6 +29,23 @@ class DeliveryQueue<T>(private val max: Int = 20, private val ttlMs: Long = 120_
     @Synchronized
     fun clear() { items.clear(); clears++ }
 
+    @Synchronized
+    fun mark(): Int = clears
+
+    @Synchronized
+    fun clearIfCurrent(mark: Int): Boolean {
+        if (!isCurrent(mark)) return false
+        clear()
+        return true
+    }
+
+    @Synchronized
+    fun addIfCurrent(item: T, mark: Int): Boolean {
+        if (!isCurrent(mark)) return false
+        add(item)
+        return true
+    }
+
     /** Whether an entry taken earlier is still inside its time limit (a slow send can make later ones of a batch too old). */
     fun isFresh(entry: Entry<T>): Boolean = clock() - entry.at < ttlMs
 
@@ -44,6 +61,9 @@ class DeliveryQueue<T>(private val max: Int = 20, private val ttlMs: Long = 120_
     /** [take], with a mark for [isCurrent] and [restore]: taken in one step, so no clear can fall between the two. */
     @Synchronized
     fun takeBatch(): Pair<Int, List<Entry<T>>> = clears to take()
+
+    @Synchronized
+    fun takeIfCurrent(mark: Int): List<Entry<T>>? = if (isCurrent(mark)) take() else null
 
     /** False once the queue was cleared after the batch with this [mark] was taken. */
     @Synchronized

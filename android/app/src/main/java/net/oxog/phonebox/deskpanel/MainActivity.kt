@@ -914,7 +914,7 @@ class MainActivity : Activity(), SensorEventListener {
         /** Switches to another paired computer and reloads the panel from it. */
         @JavascriptInterface
         fun selectPc(key: String, id: String) {
-            if (!ok(key) || !link.select(id)) return
+            if (!ok(key) || !PhoneNotificationListener.changeComputer { link.select(id) }) return
             bridgeFollowsComputer()
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
@@ -925,7 +925,7 @@ class MainActivity : Activity(), SensorEventListener {
         @JavascriptInterface
         fun forgetPc(key: String, id: String) {
             if (!ok(key)) return
-            link.forget(id)
+            PhoneNotificationListener.changeComputer { link.forget(id); true }
             bridgeFollowsComputer()
         }
 
@@ -935,7 +935,6 @@ class MainActivity : Activity(), SensorEventListener {
          */
         private fun bridgeFollowsComputer() {
             ClipboardService.sync(applicationContext) // restarts the stream with a new link when the clipboard switch is on
-            PhoneNotificationListener.computerChanged()
         }
 
         /** True when the Wake button can work: the active computer's MACs are known and the phone is on a local network. */

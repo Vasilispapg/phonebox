@@ -6,6 +6,7 @@ import android.content.Context
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import java.util.concurrent.Executors
@@ -38,6 +39,7 @@ class PhoneNotificationListener : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val app = applicationContext
+        val mark = queue.mark()
         if (!BridgePrefs.notificationsEnabled(app)) return
         val info = describe(sbn) ?: return
         val decision = filter.decide(info)
@@ -48,8 +50,7 @@ class PhoneNotificationListener : NotificationListenerService() {
         val category = when { decision == Decision.SEND_AS_MISSED_CALL -> "missed_call"; incomingCall -> "call"; else -> "message" }
         // cut here, as the agent does: a long email in a BigText notification must arrive shortened, not be refused whole
         val body = BridgeClip.notificationBody(info.key, label(info.pkg), info.pkg, BridgeClip.cut(info.title, 200), BridgeClip.cut(info.text, 2000), category, sbn.postTime)
-        queue.add(NotificationDelivery.Pending(info.pkg, body))
-        requestDrain(app)
+        if (queue.addIfCurrent(NotificationDelivery.Pending(info.pkg, body), mark)) requestDrain(app)
     }
 
     private fun describe(sbn: StatusBarNotification): NotificationInfo? {
@@ -84,10 +85,10 @@ class PhoneNotificationListener : NotificationListenerService() {
 
         private val worker = Executors.newSingleThreadExecutor()
         private val callKeys = CallKeys()
-        private val queue = DeliveryQueue<NotificationDelivery.Pending>(clock = System::currentTimeMillis)
+        private val queue = DeliveryQueue<NotificationDelivery.Pending>(clock = SystemClock::elapsedRealtime)
         private val draining = AtomicBoolean(false)
         private val retryPending = AtomicBoolean(false)
-        @Volatile private var cache: BridgeConfigCache? = null
+        private var cache: Pair<String?, BridgeConfigCache>? = null
 
         /** Forgets what waits for the Mac: called when the switch is turned off, so nothing is sent afterwards. */
         fun clearPending() = queue.clear()
@@ -96,14 +97,13 @@ class PhoneNotificationListener : NotificationListenerService() {
          * Another computer was chosen or one was forgotten in the panel: what waited was meant for the old one, and the
          * cached state of its switch says nothing about the new one (a cached "off" would drop notifications for a minute).
          */
-        fun computerChanged() {
-            queue.clear()
+        fun changeComputer(change: () -> Boolean): Boolean = synchronized(queue) {
+            if (!change()) return@synchronized false
             cache = null
+            queue.clear()
+            BridgePrefs.notificationOutcome = NotificationOutcome.NONE
+            true
         }
-
-        private fun configCache(app: Context): BridgeConfigCache =
-            cache ?: BridgeConfigCache({ val link = AgentLink(app); try { BridgeClient(link).fetchConfig() } finally { link.close() } },
-                System::currentTimeMillis).also { cache = it }
 
         /**
          * One drain at a time on one thread: a burst of notifications is one pass over the queue, and the queue's two-minute
@@ -123,20 +123,28 @@ class PhoneNotificationListener : NotificationListenerService() {
         }
 
         private fun drainOnce(app: Context): Boolean {
-            val config = configCache(app)
-            var link: AgentLink? = null // created only when something is really sent
+            if (queue.isEmpty()) return false
+            val mark = queue.mark()
+            val link = AgentLink(app)
             try {
+                val target = link.notificationTarget()
+                val client = BridgeClient(link)
+                val config = synchronized(queue) {
+                    if (!queue.isCurrent(mark)) return false
+                    cache?.takeIf { it.first == target.identity }?.second
+                        ?: BridgeConfigCache(SystemClock::elapsedRealtime).also { cache = target.identity to it }
+                }
                 return NotificationDelivery(
                     queue,
                     phoneSwitchOn = { BridgePrefs.notificationsEnabled(app) },
                     appAllowed = { BridgePrefs.allowedApps(app).contains(it) },
-                    macSwitchOn = { config.notificationsOn() },
-                    send = { body -> BridgeClient(link ?: AgentLink(app).also { link = it }).sendNotification(body) },
+                    macSwitchOn = { config.notificationsOn { client.fetchConfig(target) } },
+                    send = { body -> client.sendNotification(target, body) },
                     onOutcome = { BridgePrefs.notificationOutcome = it },
                     markMacOff = config::markOff,
                     markMacOn = config::markOn,
-                ).drain()
-            } finally { link?.close() }
+                ).drain(mark)
+            } finally { link.close() }
         }
 
         private fun scheduleRetry(app: Context) {

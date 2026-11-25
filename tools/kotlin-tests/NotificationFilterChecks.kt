@@ -142,51 +142,55 @@ private fun configCacheChecks() {
     var now = 5_000_000L
     val fetches = AtomicInteger()
     var body: String? = cfg("""{"bridge":{"notifications":true}}""")
-    val cache = BridgeConfigCache({ fetches.incrementAndGet(); body }) { now }
-    check("the first read asks the agent and finds it on", cache.notificationsOn())
-    check("a second read inside a minute asks nothing", cache.notificationsOn() && fetches.get() == 1)
+    val cache = BridgeConfigCache { now }
+    fun on() = cache.notificationsOn { fetches.incrementAndGet(); body }
+    check("the first read asks the agent and finds it on", on())
+    check("a second read inside a minute asks nothing", on() && fetches.get() == 1)
     body = cfg("""{"bridge":{"notifications":false}}""")
     now += 59_000
-    check("still cached just under a minute", cache.notificationsOn() && fetches.get() == 1)
+    check("still cached just under a minute", on() && fetches.get() == 1)
     now += 2_000
-    check("after a minute it asks again and follows the change", !cache.notificationsOn() && fetches.get() == 2)
+    check("after a minute it asks again and follows the change", !on() && fetches.get() == 2)
 
     cache.markOn()
-    check("markOn forgets an old 'off' at once", cache.notificationsOn())
+    check("markOn forgets an old 'off' at once", on())
 
     // an agent that cannot be reached: unknown counts as on (try to send, the queue holds it), asked again after 10 s
     now += 500_000
     val unreachable = AtomicInteger()
-    val c2 = BridgeConfigCache({ unreachable.incrementAndGet(); null }) { now }
-    check("when the agent cannot be asked, sending is tried", c2.notificationsOn())
+    val c2 = BridgeConfigCache { now }
+    fun readUnreachable() = c2.notificationsOn { unreachable.incrementAndGet(); null }
+    check("when the agent cannot be asked, sending is tried", readUnreachable())
     now += 9_000
-    c2.notificationsOn()
+    readUnreachable()
     check("and it is not asked again before 10 s", unreachable.get() == 1)
     now += 2_000
-    c2.notificationsOn()
+    readUnreachable()
     check("but it is asked again after 10 s, not a minute", unreachable.get() == 2)
 
     // a known 'off' survives an unreachable agent
     now += 500_000
     var phase = 0
-    val c3 = BridgeConfigCache({ if (phase++ == 0) cfg("""{"bridge":{"notifications":false}}""") else null }) { now }
-    check("an agent that says off is off", !c3.notificationsOn())
+    val c3 = BridgeConfigCache { now }
+    fun readOff() = c3.notificationsOn { if (phase++ == 0) cfg("""{"bridge":{"notifications":false}}""") else null }
+    check("an agent that says off is off", !readOff())
     now += 70_000
-    check("and stays off when the next ask fails", !c3.notificationsOn())
+    check("and stays off when the next ask fails", !readOff())
 
     // markOff: a 403 from the agent turns it off at once, and it asks again after a minute
     now += 500_000
-    val c4 = BridgeConfigCache({ cfg("""{"bridge":{"notifications":true}}""") }) { now }
-    check("on before a 403", c4.notificationsOn())
+    val c4 = BridgeConfigCache { now }
+    fun readOn() = c4.notificationsOn { cfg("""{"bridge":{"notifications":true}}""") }
+    check("on before a 403", readOn())
     c4.markOff()
-    check("a 403 (markOff) turns it off at once", !c4.notificationsOn())
+    check("a 403 (markOff) turns it off at once", !readOn())
     now += 61_000
-    check("and a minute later it asks again and finds it on", c4.notificationsOn())
+    check("and a minute later it asks again and finds it on", readOn())
 
     // a body that is not JSON counts as a failed ask
     now += 500_000
-    val c5 = BridgeConfigCache({ "<html>not the agent</html>" }) { now }
-    check("an answer that is not JSON is unknown, so sending is tried", c5.notificationsOn())
+    val c5 = BridgeConfigCache { now }
+    check("an answer that is not JSON is unknown, so sending is tried", c5.notificationsOn { "<html>not the agent</html>" })
 }
 
 private fun cutChecks() {
@@ -260,6 +264,20 @@ private fun deliveryChecks() {
     flippingDelivery.drain()
     check("a switch turned off and on again during a send voids the rest of the batch",
         flipping.sent == listOf("first") && flipping.queue.take().map { it.item.body } == listOf("posted-after"))
+
+    for (duringConfig in listOf(true, false)) {
+        val changed = Rig { now }
+        changed.add("com.msg", "old")
+        fun switchComputer() { changed.queue.clear(); changed.add("com.msg", "new") }
+        var notifiedOff = false
+        val delivery = NotificationDelivery(changed.queue, { true }, { true },
+            { if (duringConfig) switchComputer(); !duringConfig },
+            { switchComputer(); SendResult.OFF },
+            { notifiedOff = it == NotificationOutcome.MAC_OFF }, { }, { })
+        delivery.drain()
+        check("the old computer's OFF response keeps the new queue and status (config=$duringConfig)",
+            !notifiedOff && changed.queue.take().map { it.item.body } == listOf("new"))
+    }
 
     // the switch goes off while a request that fails is out: nothing is put back
     val offDuringFailure = Rig { now }
