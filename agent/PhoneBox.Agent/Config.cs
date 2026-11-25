@@ -79,7 +79,9 @@ public sealed class AgentConfig
     /// <param name="wallpaperRev">The uploaded wallpaper's revision (null without one): the panel loads the picture
     /// with it in the URL, so a new upload is fetched and an unchanged one comes from the cache. Sent as text: a 64-bit
     /// value loses its last digits as a JavaScript number, and two pictures could then share a cached URL.</param>
-    public object ToPublic(string? deviceId = null, Func<Shortcut, (long? Rev, bool Upload)>? shortcutIcon = null, long? wallpaperRev = null) => new
+    /// <param name="bridgeExists">Whether this computer has a phone bridge at all (null: whether the system is one that does,
+    /// <see cref="BridgeConfig.PlatformHasBridge"/>). The phone shows its Phone bridge button only where there is one.</param>
+    public object ToPublic(string? deviceId = null, Func<Shortcut, (long? Rev, bool Upload)>? shortcutIcon = null, long? wallpaperRev = null, bool? bridgeExists = null) => new
     {
         weather = Weather,
         codexBar = CodexBar,
@@ -110,8 +112,9 @@ public sealed class AgentConfig
         charge = new { Charge.Enabled, Charge.Min, Charge.Max },
         // OpenCode prompts: how long the Allow always button waits before it can be pressed (it saves a pattern)
         opencode = new { OpenCode.AlwaysCountdownSec },
-        // the bridge switches: the phone's Phone bridge screen follows them (nothing here is a secret)
-        bridge = new { Bridge.Clipboard },
+        // the bridge switches: the phone's Phone bridge screen follows them (nothing here is a secret). "supported" is what the
+        // panel's Phone bridge button waits for: on Windows and Linux there is no bridge, and the screen could only say so.
+        bridge = new { Bridge.Clipboard, supported = bridgeExists ?? BridgeConfig.PlatformHasBridge },
     };
 
     /// <summary>Ending processes is allowed when an enabled page has a processes widget that allows it.</summary>
@@ -363,6 +366,12 @@ public sealed class BridgeConfig
 {
     /// <summary>Share copied text with the phone, both ways (plain text, up to 64 KiB).</summary>
     public bool Clipboard { get; set; }
+
+    /// <summary>
+    /// Whether this system has a bridge: macOS, where Program.cs creates it. A fact about the system, not a setting: it is
+    /// not read from the config file, so editing the file cannot make a Windows or Linux agent claim one.
+    /// </summary>
+    public static bool PlatformHasBridge => OperatingSystem.IsMacOS();
 }
 
 public sealed class PageConfig
