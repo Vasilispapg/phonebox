@@ -136,7 +136,6 @@ public sealed class QuickActionTests : IDisposable
         Assert.Contains("full", Run(Script, "507", f).Notes, StringComparison.OrdinalIgnoreCase);
         File.Delete(NoteLog);
         var down = Run(Script, "000", f);
-        Assert.NotEqual(0, down.Exit);
         Assert.Contains("running", down.Notes, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -145,9 +144,39 @@ public sealed class QuickActionTests : IDisposable
     {
         _key.Delete();
         var result = Run(Script, "202", Make("a.txt"));
-        Assert.NotEqual(0, result.Exit);
         Assert.Equal("", result.Curl);
         Assert.Contains("off", result.Notes, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("403")]
+    [InlineData("413")]
+    [InlineData("507")]
+    [InlineData("000")]
+    public void AProblemIsShownByTheScriptAndNeverAsAnAutomatorErrorDialog(string status)
+    {
+        // a non-zero exit makes Automator show its own dialog ("The action Run Shell Script encountered an error: "") on top
+        var result = Run(Script, status, Make("a.txt"));
+        Assert.Equal(0, result.Exit);
+        Assert.Contains("alert", result.Notes);
+    }
+
+    [Fact]
+    public void AMissingKeyFileIsAlsoShownByTheScriptWithExitZero()
+    {
+        _key.Delete();
+        var result = Run(Script, "202", Make("a.txt"));
+        Assert.Equal(0, result.Exit);
+        Assert.Contains("alert", result.Notes);
+    }
+
+    [Fact]
+    public void ASuccessIsAQuietNotificationNotAnAlert()
+    {
+        var result = Run(Script, "202", Make("a.txt"));
+        Assert.Equal(0, result.Exit);
+        Assert.Contains("display notification", result.Notes);
+        Assert.DoesNotContain("alert", result.Notes);
     }
 
     // ---- the real curl, against a real listener: curl itself must not read a name as a pattern ----

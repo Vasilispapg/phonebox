@@ -66,10 +66,13 @@ internal sealed class QuickActionInstaller(string servicesDir, string keyFilePat
         # "Send to phone" (PhoneBox): sends the files selected in Finder to the paired phone through the local PhoneBox agent.
         KEYFILE='{{keyFilePath.Replace("'", "'\\''")}}'
         say() { osascript -e 'on run argv' -e 'display notification (item 1 of argv) with title "PhoneBox"' -e 'end run' -- "$1" >/dev/null 2>&1; }
-        if [ ! -r "$KEYFILE" ]; then say "Sending files to the phone is off"; exit 1; fi
+        # A problem is shown here, in a window that closes itself, and the script still ends with 0: a non-zero end makes Automator
+        # put its own dialog ("The action Run Shell Script encountered an error: ") on top, which says nothing.
+        alert() { osascript -e 'on run argv' -e 'display alert "PhoneBox" message (item 1 of argv) giving up after 20' -e 'end run' -- "$1" >/dev/null 2>&1; }
+        if [ ! -r "$KEYFILE" ]; then alert "Sending files to the phone is off"; exit 0; fi
         port=$(sed -n 's/.*"port":\([0-9][0-9]*\).*/\1/p' "$KEYFILE")
         key=$(sed -n 's/.*"key":"\([^"]*\)".*/\1/p' "$KEYFILE")
-        if [ -z "$port" ] || [ -z "$key" ]; then say "Sending files to the phone is off"; exit 1; fi
+        if [ -z "$port" ] || [ -z "$key" ]; then alert "Sending files to the phone is off"; exit 0; fi
         encode() {
           local h out=""
           for h in $(printf '%s' "$1" | od -An -v -tx1); do
@@ -94,7 +97,7 @@ internal sealed class QuickActionInstaller(string servicesDir, string keyFilePat
             *) problem="PhoneBox is not running"; break ;;
           esac
         done
-        if [ -n "$problem" ]; then say "$problem"; exit 1; fi
+        if [ -n "$problem" ]; then alert "$problem"; exit 0; fi
         if [ "$sent" -gt 0 ]; then say "Sent $sent file(s) to the phone"; fi
         exit 0
         """;
