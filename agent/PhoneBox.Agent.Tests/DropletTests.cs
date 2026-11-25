@@ -52,6 +52,25 @@ public sealed class DropletTests : IDisposable
     }
 
     [Fact]
+    public void TheAppWearsThePhoneBoxIconNotTheGenericDropletOne()
+    {
+        if (!OnMac) return;
+        new DropletInstaller(Apps, KeyFile).Install();
+        var resources = Path.Combine(Bundle, "Contents", "Resources");
+        var icon = File.ReadAllBytes(Path.Combine(resources, "droplet.icns"));
+        Assert.Equal("icns", System.Text.Encoding.ASCII.GetString(icon, 0, 4));
+        // the same icon the installer makes from the PhoneBox icon, not the default one osacompile puts in
+        var expected = Path.Combine(_root, "expected.icns");
+        DropletInstaller.MakeIcns(expected);
+        Assert.Equal(File.ReadAllBytes(expected), icon);
+        // an asset catalog or an icon name would win over the file: neither is left
+        Assert.False(File.Exists(Path.Combine(resources, "Assets.car")));
+        Assert.DoesNotContain("CFBundleIconName", File.ReadAllText(Path.Combine(Bundle, "Contents", "Info.plist")));
+        var verify = Tool("/usr/bin/codesign", "--verify", "--deep", "--strict", Bundle);
+        Assert.True(verify.Exit == 0, verify.Output);
+    }
+
+    [Fact]
     public void TheAppletPassesFilesAsQuotedArgumentsToTheScript()
     {
         if (!OnMac) return;

@@ -58,7 +58,8 @@ internal sealed class DropletInstaller(string appsDir, string keyFilePath) : IQu
             var script = Path.Combine(app, "Contents", "Resources", "send.sh");
             File.WriteAllText(script, QuickActionInstaller.BuildScript(keyFilePath));
             File.SetUnixFileMode(script, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute | UnixFileMode.GroupRead | UnixFileMode.OtherRead);
-            // the script was added after compiling: sign last, so the seal covers it
+            WearThePhoneBoxIcon(app);
+            // the script and the icon were added after compiling: sign last, so the seal covers them
             Run("/usr/bin/codesign", "--force", "--deep", "-s", "-", app);
             var target = Path.Combine(appsDir, AppName);
             if (Directory.Exists(target)) Directory.Delete(target, true);
@@ -67,6 +68,43 @@ internal sealed class DropletInstaller(string appsDir, string keyFilePath) : IQu
         finally
         {
             try { if (Directory.Exists(temp)) Directory.Delete(temp, true); } catch (IOException) { }
+        }
+    }
+
+    /// <summary>
+    /// The PhoneBox icon instead of the generic droplet one, so the app in the Dock and in Finder looks like part of PhoneBox. osacompile
+    /// also puts the default icon in an asset catalog and names it in Info.plist; either would win over the file, so both go.
+    /// </summary>
+    private static void WearThePhoneBoxIcon(string app)
+    {
+        var resources = Path.Combine(app, "Contents", "Resources");
+        MakeIcns(Path.Combine(resources, "droplet.icns"));
+        var catalog = Path.Combine(resources, "Assets.car");
+        if (File.Exists(catalog)) File.Delete(catalog);
+        Run("/usr/bin/plutil", "-remove", "CFBundleIconName", Path.Combine(app, "Contents", "Info.plist"));
+    }
+
+    /// <summary>Makes an .icns from the PhoneBox icon that is built into the agent (the same one the notifications carry).</summary>
+    internal static void MakeIcns(string outFile)
+    {
+        using var ico = typeof(DropletInstaller).Assembly.GetManifestResourceStream("phonebox.ico") ?? throw new IOException("no PhoneBox icon");
+        using var bytes = new MemoryStream();
+        ico.CopyTo(bytes);
+        var png = NotifierBundle.LargestPng(bytes.ToArray()) ?? throw new IOException("no PNG in the PhoneBox icon");
+        var work = Path.Combine(Path.GetTempPath(), "pb-icon-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var iconset = Path.Combine(work, "PhoneBox.iconset");
+            Directory.CreateDirectory(iconset);
+            var big = Path.Combine(work, "icon.png");
+            File.WriteAllBytes(big, png);
+            foreach (var (file, pixels) in NotifierBundle.IconsetSizes)
+                Run("/usr/bin/sips", "-z", pixels.ToString(), pixels.ToString(), big, "--out", Path.Combine(iconset, file));
+            Run("/usr/bin/iconutil", "-c", "icns", iconset, "-o", outFile);
+        }
+        finally
+        {
+            try { Directory.Delete(work, true); } catch (IOException) { }
         }
     }
 
