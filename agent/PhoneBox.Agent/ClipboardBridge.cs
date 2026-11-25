@@ -25,7 +25,7 @@ public sealed class ClipboardBridge : IHostedService, IDisposable
     private bool _settling; // a change was seen; it is read on the next pass if the counter has not moved again
     private bool _warnedRefused;
     private long _lastCount;
-    private byte[]? _lastReceived; // hash of the text just written for a phone, until its echo is seen once
+    private (long Count, byte[] Hash)? _lastReceived; // the exact change written for a phone
     private volatile bool _stopped;
 
     internal ClipboardBridge(ITextPasteboard pasteboard, ConfigStore config, BridgeStream stream, ILogger<ClipboardBridge> log)
@@ -45,8 +45,8 @@ public sealed class ClipboardBridge : IHostedService, IDisposable
             // inside the lock, like the poll's look at it: a phone's write that races the switch being turned off either lands
             // before the poll that sees it off (which then clears the kept events) or is refused, never after it
             if (!_config.Get().Bridge.Clipboard) return ClipboardResult.Off;
-            if (!_pasteboard.WriteText(text)) return ClipboardResult.Failed;
-            _lastReceived = Hash(text);
+            if (_pasteboard.WriteText(text) is not { } count) return ClipboardResult.Failed;
+            _lastReceived = (count, Hash(text));
             // inside the lock: two phones writing at once publish in the order their text reached the pasteboard, so a phone that applies
             // events in sequence ends with what the Mac holds
             _stream.Publish("clipboard", text, deviceId);
@@ -90,16 +90,15 @@ public sealed class ClipboardBridge : IHostedService, IDisposable
                 return;
             }
             if (!_settling) return;
-            _settling = false;
-            // Only the first change after our own write can be its echo, whatever that change turns out to be: the guard
-            // never outlives it, so copying the same words again later still goes out.
-            var echo = _lastReceived;
-            _lastReceived = null;
+            // Leave this change pending if the pasteboard fails temporarily. A later poll can retry it.
             var text = _pasteboard.ReadShareableText();
             var refused = _pasteboard.LastReadRefused;
             // a copy during the read (the types and the text are separate calls) makes it a mixture, so nothing is shared from it;
             // the next pass sees the new count and reads that copy once it has settled
             if (_pasteboard.ChangeCount != count) return;
+            _settling = false;
+            var echo = _lastReceived;
+            _lastReceived = null;
             if (text is null)
             {
                 if (refused) WarnRefused("the clipboard holds text but macOS gave PhoneBox none (Privacy & Security, Paste from Other Apps may deny it)");
@@ -107,7 +106,7 @@ public sealed class ClipboardBridge : IHostedService, IDisposable
             }
             _refused = false;
             if (Encoding.UTF8.GetByteCount(text) > MaxBytes) return;
-            if (echo is not null && Hash(text).AsSpan().SequenceEqual(echo)) return;
+            if (echo is { } expected && expected.Count == count && Hash(text).AsSpan().SequenceEqual(expected.Hash)) return;
             _stream.Publish("clipboard", text, null);
         }
     }

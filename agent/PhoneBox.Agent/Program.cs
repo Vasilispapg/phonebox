@@ -258,8 +258,12 @@ app.Map("/api/trackpad", TrackpadHandler.HandleEndpoint);
 
 // ---------------------------------------------------------------- Wi-Fi pairing (local / USB only)
 // The phone calls this through the USB tunnel and stores everything it needs to connect over Wi-Fi.
-app.MapGet("/api/pair", (ConfigStore cfg) =>
+app.MapGet("/api/pair", (HttpRequest req, ConfigStore cfg) =>
 {
+    var connection = req.HttpContext.Connection;
+    if (connection.LocalPort != usb.Port ||
+        !gate.PhoneAllowed(connection.LocalPort, req.IsHttps, req.Method, req.Path, req.Headers.Origin, req.Headers.Authorization))
+        return Results.StatusCode(StatusCodes.Status403Forbidden);
     var lan = cfg.Get().Lan;
     if (!lan.Enabled || lanCert is null) return Results.Json(new { enabled = false, pc = Environment.MachineName });
     return Results.Json(new

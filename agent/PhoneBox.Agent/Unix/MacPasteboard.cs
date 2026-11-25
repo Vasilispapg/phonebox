@@ -153,7 +153,7 @@ internal sealed class MacPasteboard : ITextPasteboard
 
     private const long AlwaysDeny = 3; // NSPasteboardAccessBehaviorAlwaysDeny
 
-    public bool WriteText(string text)
+    public long? WriteText(string text)
     {
         var pool = objc_autoreleasePoolPush();
         try
@@ -161,8 +161,8 @@ internal sealed class MacPasteboard : ITextPasteboard
             // clearContents empties the clipboard before the text is set: if setString:forType: then fails (the caller answers
             // the phone 500), the Mac is left with an empty clipboard rather than what it held before. There is no way around
             // it: every way to put a new item on the pasteboard (clearContents, declareTypes:, prepareForNewContents) first empties it.
-            SendLong(_pasteboard, Sel("clearContents"));
-            return SendBool(_pasteboard, Sel("setString:forType:"), NSString(text), NSString(PlainText));
+            var count = SendLong(_pasteboard, Sel("clearContents"));
+            return SendBool(_pasteboard, Sel("setString:forType:"), NSString(text), NSString(PlainText)) ? count : null;
         }
         finally { objc_autoreleasePoolPop(pool); }
     }

@@ -69,6 +69,15 @@ public sealed class BridgeStream(TimeProvider? time = null)
         }
     }
 
+    internal bool StillQueued(long seq)
+    {
+        lock (_lock)
+        {
+            RemoveExpired();
+            return _events.Any(entry => entry.Event.Seq == seq);
+        }
+    }
+
     internal void PruneExpired()
     {
         lock (_lock) RemoveExpired();

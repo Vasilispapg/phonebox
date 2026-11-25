@@ -26,6 +26,6 @@ internal interface ITextPasteboard
     /// <summary>True when the system is set to deny this program the clipboard (macOS 15.4 and later: Paste from Other Apps).</summary>
     bool AccessDenied { get; }
 
-    /// <summary>Replaces the clipboard with this text. False when the system refused.</summary>
-    bool WriteText(string text);
+    /// <summary>Replaces the clipboard and returns the change count assigned to the write, or null on failure.</summary>
+    long? WriteText(string text);
 }
