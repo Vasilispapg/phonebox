@@ -46,9 +46,10 @@ def main():
         raise SystemExit("ERROR: missing source files: " + ", ".join(missing))
     subprocess.run(["java", "-cp", compiler_cp, "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler", "-no-stdlib", "-no-reflect",
                     "-jvm-target", "17", "-classpath", classpath, "-d", str(output), *map(str, sources)], check=True, timeout=120)
-    result = subprocess.run(["java", "-cp", str(output) + os.pathsep + classpath, "net.oxog.phonebox.deskpanel.BridgeChecksKt"], timeout=120)
-    if result.returncode != 0:
-        raise SystemExit(result.returncode)
+    for main_class in ("net.oxog.phonebox.deskpanel.BridgeChecksKt", "net.oxog.phonebox.deskpanel.NotificationFilterChecksKt"):
+        result = subprocess.run(["java", "-cp", str(output) + os.pathsep + classpath, main_class], timeout=120)
+        if result.returncode != 0:
+            raise SystemExit(result.returncode)
 
 
 if __name__ == "__main__":
