@@ -11,6 +11,7 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Shows the phone's notifications on the Mac. Android keeps a notification listener alive itself, so nothing here needs a
@@ -20,6 +21,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 class PhoneNotificationListener : NotificationListenerService() {
     private val filter by lazy { NotificationFilter({ BridgePrefs.allowedApps(applicationContext) }, packageName, { defaultDialer() }) }
+    private val callGeneration = AtomicInteger()
 
     override fun onListenerConnected() {
         connected = true
@@ -58,12 +60,13 @@ class PhoneNotificationListener : NotificationListenerService() {
     // never below Android 7): without this the screen would say "allowed" after the switch comes back but before a rebind
     override fun onDestroy() {
         connected = false
+        clearCallState()
         super.onDestroy()
     }
 
     override fun onListenerDisconnected() {
         connected = false
-        onCalls { callLifetimes.clear(); contacts.forget() }
+        clearCallState()
         // Android may drop the listener; ask to be bound again while the switch is on
         if (Build.VERSION.SDK_INT >= 24 && BridgePrefs.notificationsEnabled(this))
             requestRebind(ComponentName(this, PhoneNotificationListener::class.java))
@@ -72,6 +75,7 @@ class PhoneNotificationListener : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val app = applicationContext
         val mark = queue.mark()
+        val queuedAt = SystemClock.elapsedRealtime()
         if (!BridgePrefs.notificationsEnabled(app)) return
         val info = describe(sbn) ?: return
         val decision = filter.decide(info)
@@ -90,21 +94,25 @@ class PhoneNotificationListener : NotificationListenerService() {
         // the in-call UI's call stays posted for the whole call: sent once per notification, and again for the next call
         val lifetimeCall = incomingCall && info.callStyle && info.pkg in NotificationFilter.IN_CALL_UIS
         if (lifetimeCall) {
+            val generation = callGeneration.get()
             val person = callPersonName(sbn)
-            val postTime = sbn.postTime
             // off the main thread, where this callback runs: the contacts lookup and the default dialer are calls into other processes.
             // One thread, in order, with the removal and the reconnect: an older update handled after a newer one would rename the call back
             onCalls {
-                if (!BridgePrefs.notificationsEnabled(app)) return@onCalls
+                fun current() = callGeneration.get() == generation &&
+                    queue.isCurrent(mark) && BridgePrefs.notificationsEnabled(app)
+                if (!current()) return@onCalls
                 // the in-call UI first shows only the number: the person's name (from the notification, or the contacts) goes in its place,
                 // and a later update that finally carries the name is sent again for the same call (the Mac replaces the first one)
                 val named = info.copy(title = CallerName.pick(info.title, person) { contacts.get(it) })
+                if (!current()) return@onCalls
+                val shown = gatePackage(defaultDialer(), named.pkg)
                 val callStart = callLifetimes.begin(named.key, System.currentTimeMillis(), named.title)
                     ?: callLifetimes.renamed(named.key, named.title) ?: return@onCalls
                 // the next call from the same person must not look like a repeat to the Mac: its key carries the time this call began.
                 // The in-call UI is not on the list and has no launcher icon (so no name or icon the phone may look up): the default
                 // dialer stands for it, in what the Mac shows and in the check at send time
-                enqueue(app, named, "${named.key}|$callStart", gatePackage(defaultDialer(), named.pkg), "call", postTime)
+                enqueue(app, named, "${named.key}|$callStart", shown, "call", mark, queuedAt, generation)
             }
             return
         }
@@ -112,14 +120,23 @@ class PhoneNotificationListener : NotificationListenerService() {
         if ((incomingCall || decision == Decision.SEND_AS_MISSED_CALL) && !callKeys.firstTime(info.key)) return
         val category = when { decision == Decision.SEND_AS_MISSED_CALL -> "missed_call"; incomingCall -> "call"; else -> "message" }
         // only the in-call UI's calls are shown as another app (above): no lookup of the default dialer for every message
-        enqueue(app, info, info.key, info.pkg, category, sbn.postTime)
+        enqueue(app, info, info.key, info.pkg, category, mark, queuedAt)
     }
 
-    private fun enqueue(app: Context, info: NotificationInfo, sendKey: String, shown: String, category: String, postTime: Long) {
+    private fun enqueue(app: Context, info: NotificationInfo, sendKey: String, shown: String, category: String,
+                        mark: Int, queuedAt: Long, generation: Int? = null) {
         // cut here, as the agent does: a long email in a BigText notification must arrive shortened, not be refused whole
-        val body = BridgeClip.notificationBody(sendKey, label(shown), shown, BridgeClip.cut(info.title, 200), BridgeClip.cut(info.text, 2000), category, postTime)
-        queue.add(NotificationDelivery.Pending(shown, body))
-        requestDrain(app)
+        val body = BridgeClip.notificationBody(sendKey, label(shown), shown, BridgeClip.cut(info.title, 200), BridgeClip.cut(info.text, 2000), category, info.time)
+        val queued = synchronized(queue) {
+            (generation == null || callGeneration.get() == generation) &&
+                queue.addIfCurrent(NotificationDelivery.Pending(shown, body), mark, queuedAt)
+        }
+        if (queued) requestDrain(app)
+    }
+
+    private fun clearCallState() {
+        synchronized(queue) { callGeneration.incrementAndGet() }
+        onCalls { callLifetimes.clear(); contacts.forget() }
     }
 
     private fun onCalls(work: () -> Unit) {

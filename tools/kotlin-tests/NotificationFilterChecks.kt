@@ -181,6 +181,19 @@ private fun queueChecks() {
     r.clear()
     check("a batch taken before a clear is no longer current", !r.isCurrent(mark2))
     check("and cannot be put back", !r.restore(batch2, mark2) && r.isEmpty())
+
+    val beforeLookup = q.mark()
+    q.clear()
+    q.add("new computer")
+    check("a lookup started before a clear cannot admit a call to the new queue",
+        !q.addIfCurrent("old call", beforeLookup) && q.take().single().item == "new computer")
+    val foundAt = now
+    val validLookup = q.mark()
+    now += 119_000
+    check("the current generation accepts a call with its original time",
+        q.addIfCurrent("waiting for a name", validLookup, foundAt))
+    now += 2_000
+    check("a late lookup does not extend the notification lifetime", q.take().isEmpty())
 }
 
 private fun notificationBodyChecks() {

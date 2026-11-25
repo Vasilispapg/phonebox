@@ -40,9 +40,9 @@ class DeliveryQueue<T>(private val max: Int = 20, private val ttlMs: Long = 120_
     }
 
     @Synchronized
-    fun addIfCurrent(item: T, mark: Int): Boolean {
+    fun addIfCurrent(item: T, mark: Int, at: Long = clock()): Boolean {
         if (!isCurrent(mark)) return false
-        add(item)
+        add(item, at)
         return true
     }
 
