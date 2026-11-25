@@ -29,7 +29,7 @@ internal static class BridgeApi
     {
         app.MapPost("/api/bridge/clipboard", (HttpContext ctx, ConfigStore cfg) =>
             PostClipboardAsync(ctx, ctx.RequestServices.GetService<ClipboardBridge>(), cfg, () => Authorized(gate, ctx)));
-        app.MapPost("/api/bridge/notification", (HttpContext ctx) =>
+        app.MapPost("/api/bridge/notification", (HttpContext ctx, ConfigStore _) =>
             PostNotificationAsync(ctx, ctx.RequestServices.GetService<NotificationBridge>(), () => Authorized(gate, ctx)));
         // the Settings page's test button; not on the Wi-Fi allow-list (Lan.cs), so only this computer can ask for it
         app.MapPost("/api/bridge/notification/test", (HttpContext ctx) =>
@@ -90,10 +90,10 @@ internal static class BridgeApi
         };
     }
 
-    /// <summary>Reads at most <paramref name="max"/> bytes of JSON, also for chunked requests that state no length.</summary>
-    private static async Task<(JsonDocument? Doc, string? Error)> ReadJson(HttpRequest req, int max)
+    /// <summary>Reads at most <paramref name="max"/> bytes of JSON, also for chunked requests that state no length, and extracts <typeparamref name="T"/> before clearing the pooled buffer.</summary>
+    private static async Task<(T? Value, string? Error)> ReadJson<T>(HttpRequest req, int max, Func<JsonElement, T?> extract)
     {
-        if (req.ContentLength > max) return (null, RequestTooLarge);
+        if (req.ContentLength > max) return (default, RequestTooLarge);
         // Sized from Content-Length when the phone sends one (Kestrel ends the body there); a chunked request, which has none,
         // gets room for the limit and one byte more, so a body over it is noticed. Pooled, and cleared on return: it held the text.
         var room = (int)(req.ContentLength ?? max) + 1;
@@ -107,56 +107,45 @@ internal static class BridgeApi
                 if (count == 0) break;
                 n += count;
             }
-            if (n > max) return (null, RequestTooLarge);
-            try { return (JsonDocument.Parse(buf.AsMemory(0, n)), null); }
-            catch (JsonException) { return (null, "invalid JSON"); }
+            if (n > max) return (default, RequestTooLarge);
+            try
+            {
+                using var doc = JsonDocument.Parse(buf.AsMemory(0, n));
+                return (extract(doc.RootElement), null);
+            }
+            catch (JsonException) { return (default, "invalid JSON"); }
+            // JSON whose text is not valid Unicode (a lone surrogate escape such as "\ud800", or bytes that are not UTF-8): GetString
+            // throws this for it, and uncaught it would become a 500 instead of a request error
+            catch (InvalidOperationException) { return (default, "invalid text"); }
         }
         finally { ArrayPool<byte>.Shared.Return(buf, clearArray: true); }
     }
 
     /// <summary>Reads <c>{"text": "..."}</c>. A body without a usable text gives (null, null); the caller answers 400.</summary>
-    public static async Task<(string? Text, string? Error)> ReadClipboardBody(HttpRequest req)
-    {
-        var (doc, error) = await ReadJson(req, MaxRequestBytes);
-        if (doc is null) return (null, error);
-        try
-        {
-            using (doc)
-                return doc.RootElement is { ValueKind: JsonValueKind.Object } root
-                       && root.TryGetProperty("text", out var t) && t.ValueKind == JsonValueKind.String
-                    ? (t.GetString(), null)
-                    : (null, null);
-        }
-        // JSON whose text is not valid Unicode (a lone surrogate escape such as "\ud800", or bytes that are not UTF-8): GetString
-        // throws this for it, and uncaught it would become a 500 instead of a request error
-        catch (InvalidOperationException) { return (null, "invalid text"); }
-    }
+    public static Task<(string? Text, string? Error)> ReadClipboardBody(HttpRequest req) =>
+        ReadJson<string>(req, MaxRequestBytes, root =>
+            root is { ValueKind: JsonValueKind.Object }
+            && root.TryGetProperty("text", out var t) && t.ValueKind == JsonValueKind.String
+                ? t.GetString()
+                : null);
 
     /// <summary>
     /// Reads a phone notification: <c>{"key","app","package","title","text","category","time"}</c>. A body that is not one (no
     /// text key, or neither a title nor a text) gives (null, null); the caller answers 400.
     /// </summary>
-    public static async Task<(PhoneNotification? Notification, string? Error)> ReadNotificationBody(HttpRequest req)
-    {
-        var (doc, error) = await ReadJson(req, MaxNotificationBytes);
-        if (doc is null) return (null, error);
-        try
+    public static Task<(PhoneNotification? Notification, string? Error)> ReadNotificationBody(HttpRequest req) =>
+        ReadJson<PhoneNotification>(req, MaxNotificationBytes, root =>
         {
-            using (doc)
-            {
-                if (doc.RootElement is not { ValueKind: JsonValueKind.Object } root) return (null, null);
-                string? Str(string name) => root.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
-                var key = Str("key");
-                var title = Str("title") ?? "";
-                var text = Str("text") ?? "";
-                if (string.IsNullOrEmpty(key) || (title.Length == 0 && text.Length == 0)) return (null, null);
-                var time = root.TryGetProperty("time", out var tv) && tv.ValueKind == JsonValueKind.Number && tv.TryGetInt64(out var t) ? t : 0;
-                var category = Str("category") is { Length: > 0 and <= 32 } c ? c : "message";
-                return (new PhoneNotification(key.Length > 128 ? key[..128] : key, Str("app") ?? "", Str("package") ?? "", title, text, category, time), null);
-            }
-        }
-        catch (InvalidOperationException) { return (null, "invalid text"); } // see ReadClipboardBody
-    }
+            if (root is not { ValueKind: JsonValueKind.Object }) return null;
+            string? Str(string name) => root.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+            var key = Str("key");
+            var title = Str("title") ?? "";
+            var text = Str("text") ?? "";
+            if (string.IsNullOrEmpty(key) || (title.Length == 0 && text.Length == 0)) return null;
+            var time = root.TryGetProperty("time", out var tv) && tv.ValueKind == JsonValueKind.Number && tv.TryGetInt64(out var t) ? t : 0;
+            var category = Str("category") is { Length: > 0 and <= 32 } c ? c : "message";
+            return new PhoneNotification(key.Length > 128 ? key[..128] : key, Str("app") ?? "", Str("package") ?? "", title, text, category, time);
+        });
 
     public static IResult PostNotification(NotificationBridge? bridge, PhoneNotification? notification, string? deviceId)
     {

@@ -381,9 +381,11 @@ public sealed class NotificationBridgeTests : IDisposable
         _clipboard.PollOnce();                                          // clipboard sharing is on: the bridge is watching
         await Send(N("k1", "Messages", "Bank", "Your code is 482913"));
         Assert.Equal("482913", _pb.Text);
-        _clipboard.PollOnce();                                          // sees the change our own write made
+        _clipboard.PollOnce();                                          // sees the change our own write made (settle poll)
+        _clipboard.PollOnce();                                          // reads after settle
         Assert.Equal(0, _stream.Seq);                                   // and does not send the code to any phone
         _pb.Copy("482913");                                             // the owner copying the same digits later is still sent
+        _clipboard.PollOnce();
         _clipboard.PollOnce();
         Assert.Equal(["482913"], _stream.Since(0, null).Select(e => e.Text));
     }
