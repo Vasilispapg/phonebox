@@ -377,9 +377,10 @@ public sealed class NotifierBundleTests
         Assert.Null(NotifierBundle.FindSwiftc(() => null, _ => true));
         Assert.Null(NotifierBundle.FindSwiftc(() => "", _ => true));
         Assert.Null(NotifierBundle.FindSwiftc(() => "/Library/Developer/CommandLineTools", _ => false));
-        Assert.Equal("/Library/Developer/CommandLineTools/usr/bin/swiftc", NotifierBundle.FindSwiftc(() => "/Library/Developer/CommandLineTools", _ => true));
+        Assert.Equal("/Library/Developer/CommandLineTools/usr/bin/swiftc",
+            NotifierBundle.FindSwiftc(() => "/Library/Developer/CommandLineTools", _ => true)?.Replace('\\', '/'));
         Assert.Equal("/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
-            NotifierBundle.FindSwiftc(() => "/Applications/Xcode.app/Contents/Developer", p => p.Contains("XcodeDefault")));
+            NotifierBundle.FindSwiftc(() => "/Applications/Xcode.app/Contents/Developer", p => p.Contains("XcodeDefault"))?.Replace('\\', '/'));
     }
 
     [Fact]
