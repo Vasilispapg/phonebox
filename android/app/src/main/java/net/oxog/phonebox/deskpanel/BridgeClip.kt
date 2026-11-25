@@ -80,10 +80,10 @@ object BridgeClip {
      */
     fun restartOnResume(hasStream: Boolean, state: ClipboardState): Boolean = !hasStream || state == ClipboardState.WAITING
 
-    /** What the agent's answer to a send means. */
     /** A definitive refusal means the first agent did not write the clipboard. */
     fun canFallBackFromUsb(code: Int): Boolean = code == 403 || code == 404 || code == 405 || code == 501
 
+    /** What the agent's answer to a send means. */
     fun resultFor(code: Int): SendResult = when (code) {
         200 -> SendResult.OK
         401 -> SendResult.PAIR_AGAIN
