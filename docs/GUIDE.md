@@ -340,20 +340,30 @@ Share what you copy between the Mac and the phone. It starts with the clipboard.
   connected, the Mac's switch is off, the computer has no bridge, the phone must be paired again (the Mac was paired
   again or got a new key), or Android stopped the service (opening the screen starts it again). Android 13 and later asks to show notifications. On Samsung phones set PhoneBox's battery use to
   **Unrestricted** (Settings › Apps › PhoneBox › Battery), or the system may stop the service.
+- **Notifications on the Mac:** turn on **Settings › Phone bridge › Show phone notifications on this Mac**. Calls (who is
+  calling), messages and the apps you allow on the phone then appear as macOS notifications, with the text of the
+  message. They carry Script Editor's icon, which is how macOS labels a notification from a program that has no app of
+  its own. A banner stays for about five seconds and then waits in **Notification Center** (click the clock). **Send a
+  test notification** shows one right away; save the settings first.
 - **Notifications from the phone:** on the Phone bridge screen turn on **Show notifications on the Mac**, then tap **Allow
   notification access** and switch PhoneBox on in the list (on Android 13 and later the switch is greyed out until you
   open **App info**, tap ⋮ and choose **Allow restricted settings**; the screen says so). **Choose apps** lists your apps
   with a switch each: only the ones you turn on are sent. At first only the phone's own dialer and messaging app are on.
   The Mac's switch (Settings › Phone bridge › Show phone notifications) must be on too; the screen shows whether the
   last notification reached the Mac.
+- **Login codes:** with **Copy one-time codes from messages** on as well, a code in a message ("Your verification code is
+  482913", also in Greek) is put on the Mac's clipboard when the notification arrives, and the notification says "Code
+  copied", so you can paste it into the site at once. It copies only when it finds exactly one code next to a word like
+  code, OTP, PIN or κωδικός; with two numbers, or none, it copies nothing. It knows English and Greek words only, so a
+  code in a message in another language is shown but not copied. It does not send the code on to your phones.
 - **Calls and delivery:** a call is sent once, when it starts ringing, and is not repeated when you answer or hang up; a
-  missed call is sent as "Missed call". If the Mac is asleep or away, notifications are kept for two minutes and sent when it
+  missed call is sent as "Missed call". Calls show who is calling; the voice stays on the phone. Answer there. If the Mac is asleep or away, notifications are kept for two minutes and sent when it
   is back, then dropped (a login code older than that is no use).
 - The text goes only to your own paired phones over the PhoneBox link (USB or paired Wi-Fi / Tailscale), with the
   phone's key. Enable the bridge only on a computer where users and software with access to the local agent API are
-  trusted. The text is kept in memory and never stored
-  or logged. A phone whose connection drops for a moment is sent what it missed when it reconnects (at most the last 20
-  copies, and only those from the last two minutes). See [PRIVACY.md](../PRIVACY.md).
+  trusted. The text is kept in memory and never stored or logged by PhoneBox (macOS itself keeps a notification in
+  Notification Center until you clear it). A phone whose connection drops for a moment is sent what it missed when it
+  reconnects (at most the last 20 copies, and only those from the last two minutes). See [PRIVACY.md](../PRIVACY.md).
 - **macOS asking before an app reads the clipboard:** newer macOS versions can ask whether an app may paste from other
   apps (System Settings › Privacy & Security). If macOS asks about PhoneBox, choose Allow there, or it asks again at each
   copy. If PhoneBox is denied, macOS gives it no text, nothing you copy reaches the phone, and the Phone bridge card says
