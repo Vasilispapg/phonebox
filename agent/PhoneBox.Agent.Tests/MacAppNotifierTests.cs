@@ -121,6 +121,7 @@ public sealed class MacAppNotifierTests : IDisposable
         var source = NotifierBundleSource();
         Assert.Contains("UNUserNotificationCenterDelegate", source);
         Assert.Contains("activateFileViewerSelecting", source); // shows it, never opens or runs it
+        Assert.Contains("NSApplication.shared", source); // macOS hands a click only to a running application (a bare run loop got nothing)
         Assert.DoesNotContain("NSWorkspace.shared.open(", source);
         Assert.DoesNotContain("Process()", source);
     }

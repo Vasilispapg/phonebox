@@ -35,19 +35,30 @@ func finish(_ status: Int32, _ message: String? = nil) -> Never {
 /// A click on a notification that carries a file path shows that file in Finder. Only reveals it: nothing is opened or run.
 final class ClickHandler: NSObject, UNUserNotificationCenterDelegate {
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
-        if let path = response.notification.request.content.userInfo["open"] as? String, !path.isEmpty {
-            NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+        let path = response.notification.request.content.userInfo["open"] as? String
+        DispatchQueue.main.async {
+            if let path = path, !path.isEmpty { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)]) }
+            completionHandler()
+            // give Finder a moment to take the request before this program ends
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { exit(0) }
         }
-        completionHandler()
-        exit(0)
+    }
+
+    // a notification that arrives while this program runs is not shown again here
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([])
     }
 }
 let clickHandler = ClickHandler()
 
-/// Started with no request: macOS did it for a click. The delegate must be set at once for the click to be handed over; a few seconds is plenty.
+/// Started with no request: macOS did it for a click. macOS hands the click to an application that is running as one, with the delegate
+/// set before it finishes starting, so this is a real (faceless) NSApplication, not a bare run loop. A few seconds is plenty.
 func waitForClick() -> Never {
+    let application = NSApplication.shared
+    application.setActivationPolicy(.accessory)
     center.delegate = clickHandler
-    RunLoop.main.run(until: Date(timeIntervalSinceNow: 8))
+    DispatchQueue.main.asyncAfter(deadline: .now() + 10) { exit(0) }
+    application.run()
     exit(0)
 }
 
