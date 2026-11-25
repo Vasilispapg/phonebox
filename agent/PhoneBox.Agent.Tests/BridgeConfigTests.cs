@@ -44,6 +44,36 @@ public sealed class BridgeConfigTests : IDisposable
         Assert.Equal(JsonValueKind.False, doc.RootElement.GetProperty("bridge").GetProperty("clipboard").ValueKind);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void PublicConfigSaysWhetherThisComputerHasTheBridge(bool exists)
+    {
+        // the phone shows its Phone bridge button only where there is a bridge to talk to (macOS), and reads it from here
+        var json = JsonSerializer.Serialize(new AgentConfig().ToPublic(bridgeExists: exists), ConfigStore.WriteOpts);
+        using var doc = JsonDocument.Parse(json);
+        Assert.Equal(exists ? JsonValueKind.True : JsonValueKind.False, doc.RootElement.GetProperty("bridge").GetProperty("supported").ValueKind);
+    }
+
+    [Fact]
+    public void ThePublicConfigDefaultsToWhetherThisSystemHasTheBridge()
+    {
+        using var doc = JsonDocument.Parse(JsonSerializer.Serialize(new AgentConfig().ToPublic(), ConfigStore.WriteOpts));
+        Assert.Equal(OperatingSystem.IsMacOS(), doc.RootElement.GetProperty("bridge").GetProperty("supported").GetBoolean());
+        Assert.Equal(OperatingSystem.IsMacOS(), BridgeConfig.PlatformHasBridge);
+    }
+
+    [Fact]
+    public void ASupportedFlagInTheConfigFileCannotTurnTheBridgeOnWhereThereIsNone()
+    {
+        Directory.CreateDirectory(_root);
+        var path = Path.Combine(_root, "config-supported.json");
+        File.WriteAllText(path, """{"bridge":{"clipboard":true,"supported":true}}""");
+        var json = JsonSerializer.Serialize(new ConfigStore(path).Get().ToPublic(bridgeExists: false), ConfigStore.WriteOpts);
+        using var doc = JsonDocument.Parse(json);
+        Assert.Equal(JsonValueKind.False, doc.RootElement.GetProperty("bridge").GetProperty("supported").ValueKind);
+    }
+
     [Fact]
     public void ANullBridgeSectionBecomesTheDefaultsAndDoesNotBreakTheConfig()
     {
