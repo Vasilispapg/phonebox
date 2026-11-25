@@ -116,6 +116,9 @@ object BridgeClip {
         return Preview(tidy.substring(0, end).trimEnd() + "…", rest.length, rest.lineSequence().count { it.isNotBlank() })
     }
 
+    /** Letters and symbols that draw as empty space but are neither whitespace nor invisible formatting: Hangul fillers, the braille blank. */
+    private val BLANK_LOOKING = intArrayOf(0x115F, 0x1160, 0x3164, 0xFFA0, 0x2800).toSet()
+
     /** One line break for any run of blank lines, one space for any run of spaces, nothing for invisible characters, no edges. */
     private fun tidy(text: String): String {
         val out = StringBuilder(minOf(text.length, 4096))
@@ -127,7 +130,7 @@ object BridgeClip {
             i += Character.charCount(cp)
             when {
                 cp == '\n'.code || cp == '\r'.code || cp == 0x2028 || cp == 0x2029 || cp == 0x85 -> pendingBreak = true
-                Character.isWhitespace(cp) || Character.isSpaceChar(cp) -> pendingSpace = true
+                Character.isWhitespace(cp) || Character.isSpaceChar(cp) || cp in BLANK_LOOKING -> pendingSpace = true
                 Character.getType(cp) == Character.FORMAT.toInt() -> {} // zero-width and direction controls: they draw nothing, or draw the text out of order
                 else -> {
                     if (out.isNotEmpty()) { if (pendingBreak) out.append('\n') else if (pendingSpace) out.append(' ') }

