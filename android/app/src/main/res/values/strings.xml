@@ -33,7 +33,7 @@
     <string name="bridge_send_nothing">Nothing to send: the clipboard is empty or private</string>
     <string name="bridge_send_too_large">Too long to send (the limit is 64 KiB)</string>
     <string name="bridge_notifications_switch">Show notifications on the Mac</string>
-    <string name="bridge_notifications_help">Calls, messages and the apps you choose below appear as notifications on the Mac, with their text (a login code, for example). Only apps you switch on are sent. The Mac\'s own switch (Settings › Phone bridge in PhoneBox on the computer) must be on too.</string>
+    <string name="bridge_notifications_help">Calls, messages and app notifications appear on the Mac with their text. Choose individual apps or turn on All apps. Turn on phone notifications in the Mac’s Phone bridge settings too.</string>
     <string name="bridge_access_missing">Notification access is not allowed yet. PhoneBox needs it to see your notifications.</string>
     <string name="bridge_access_idle">Notification access is allowed, but Android has not started the listener yet. Open this screen again, or check PhoneBox\'s battery setting.</string>
     <string name="bridge_access_granted">Notification access is allowed.</string>

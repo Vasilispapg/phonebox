@@ -35,7 +35,7 @@
     <string name="bridge_pair_again">Mac nie rozpoznaje już tego telefonu: podłącz go raz przez USB lub sparuj ponownie.</string>
     <string name="bridge_send_unknown">Brak odpowiedzi z Maca: tekst mógł dotrzeć. Sprawdź na Macu, zanim wyślesz go ponownie.</string>
     <string name="bridge_notifications_switch">Pokazuj powiadomienia na Macu</string>
-    <string name="bridge_notifications_help">Połączenia, wiadomości i aplikacje wybrane poniżej pojawiają się jako powiadomienia na Macu razem z tekstem (na przykład kodem logowania). Wysyłane są tylko aplikacje, które włączysz. Przełącznik na Macu (Ustawienia › Most telefonu w PhoneBox na komputerze) też musi być włączony.</string>
+    <string name="bridge_notifications_help">Połączenia, wiadomości i powiadomienia aplikacji pojawiają się na Macu wraz z tekstem. Wybierz poszczególne aplikacje lub włącz Wszystkie aplikacje. Włącz też powiadomienia z telefonu w ustawieniach mostu na Macu.</string>
     <string name="bridge_access_missing">Dostęp do powiadomień nie jest jeszcze dozwolony. PhoneBox potrzebuje go, aby widzieć Twoje powiadomienia.</string>
     <string name="bridge_access_granted">Dostęp do powiadomień jest dozwolony.</string>
     <string name="bridge_access_button">Zezwól na dostęp do powiadomień</string>

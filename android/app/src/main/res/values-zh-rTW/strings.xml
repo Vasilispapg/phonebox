@@ -35,7 +35,7 @@
     <string name="bridge_pair_again">Mac 已不再識別這支手機：請用 USB 連接一次，或重新配對。</string>
     <string name="bridge_send_unknown">Mac 沒有回應：文字可能已經送達。再次傳送前，請先在 Mac 上確認。</string>
     <string name="bridge_notifications_switch">在 Mac 上顯示通知</string>
-    <string name="bridge_notifications_help">來電、訊息以及你在下方選擇的 App 會以通知形式顯示在 Mac 上，並附帶文字（例如登入驗證碼）。只有你開啟的 App 才會被傳送。Mac 上的開關（電腦上 PhoneBox 的「設定 › 手機橋接」）也必須開啟。</string>
+    <string name="bridge_notifications_help">來電、訊息和應用程式通知會連同文字一起顯示在 Mac 上。逐一選擇應用程式，或開啟「所有應用程式」。也要在 Mac 的手機橋接設定中開啟手機通知。</string>
     <string name="bridge_access_missing">尚未允許通知存取權。PhoneBox 需要它才能看到你的通知。</string>
     <string name="bridge_access_granted">已允許通知存取權。</string>
     <string name="bridge_access_button">允許通知存取權</string>

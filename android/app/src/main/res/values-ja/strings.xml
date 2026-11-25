@@ -35,7 +35,7 @@
     <string name="bridge_pair_again">Macがこのスマートフォンを認識しなくなりました。一度USBで接続するか、もう一度ペアリングしてください。</string>
     <string name="bridge_send_unknown">Mac から応答がありません。テキストは届いている可能性があります。もう一度送る前に Mac で確認してください。</string>
     <string name="bridge_notifications_switch">Mac に通知を表示</string>
-    <string name="bridge_notifications_help">着信、メッセージ、下で選んだアプリが、テキスト（たとえばログインコード）付きの通知として Mac に表示されます。オンにしたアプリだけが送信されます。Mac 側のスイッチ（コンピューターの PhoneBox の「設定 › スマホブリッジ」）もオンにする必要があります。</string>
+    <string name="bridge_notifications_help">通話、メッセージ、アプリの通知が本文とともにMacに表示されます。アプリを個別に選ぶか、「すべてのアプリ」をオンにしてください。Macの電話ブリッジ設定でも電話の通知をオンにしてください。</string>
     <string name="bridge_access_missing">通知へのアクセスがまだ許可されていません。PhoneBox が通知を見るために必要です。</string>
     <string name="bridge_access_granted">通知へのアクセスは許可されています。</string>
     <string name="bridge_access_button">通知へのアクセスを許可</string>

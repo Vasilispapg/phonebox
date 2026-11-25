@@ -364,8 +364,9 @@ Share what you copy between the Mac and the phone. It starts with the clipboard.
   missed call is sent as "Missed call". Calls show who is calling; the voice stays on the phone. Answer there. If the Mac is asleep or away, notifications are kept for two minutes and sent when it
   is back, then dropped (a login code older than that is no use). On a Samsung phone a ringing call is posted by the in-call
   app rather than the dialer, so it is sent whenever the default dialer is on your app list (other apps' calls, such as
-  WhatsApp, follow your list like any notification); an outgoing call looks the same there and is sent too. When Android
-  shows only the number, it asks once for **Contacts**: allowed, the caller's name is shown on the Mac instead of the
+  WhatsApp, follow your list like any notification); an outgoing call looks the same there and is sent too. Opening the
+  Phone bridge screen while notifications are enabled can prompt once for **Contacts**. If Android shows only the
+  number and you allow access, the caller's name is shown on the Mac instead of the
   number (one lookup of that number, nothing is read in bulk or kept), and a name that arrives a moment later replaces
   the first notification.
 - The text goes only to your own paired phones over the PhoneBox link (USB or paired Wi-Fi / Tailscale), with the

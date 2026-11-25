@@ -18,7 +18,7 @@ class DeliveryQueue<T>(private val max: Int = 20, private val ttlMs: Long = 120_
     /** [at] is when the item first happened: a retry puts it back with its original time so it still expires on schedule. */
     @Synchronized
     fun add(item: T, at: Long = clock()) {
-        items.addLast(Entry(at, item))
+        items.add(items.indexOfLast { it.at <= at } + 1, Entry(at, item))
         while (items.size > max) items.removeFirst()
     }
 
@@ -70,14 +70,15 @@ class DeliveryQueue<T>(private val max: Int = 20, private val ttlMs: Long = 120_
     fun isCurrent(mark: Int): Boolean = clears == mark
 
     /**
-     * Puts unsent entries back in front of what was added while they were out (they are older), then drops the oldest
-     * beyond [max], as [add] does. Nothing goes back if the queue was cleared since [mark]; returns whether they went back.
+     * Puts unsent entries back in timestamp order and drops the oldest beyond [max].
+     * Nothing goes back if the queue was cleared since [mark]; returns whether they went back.
      */
     @Synchronized
     fun restore(entries: List<Entry<T>>, mark: Int): Boolean {
         if (clears != mark) return false
-        for (e in entries.asReversed()) items.addFirst(e)
-        while (items.size > max) items.removeFirst()
+        val pending = (entries + items).sortedBy { it.at }.takeLast(max)
+        items.clear()
+        items.addAll(pending)
         return true
     }
 }

@@ -35,7 +35,7 @@
     <string name="bridge_pair_again">Il Mac non riconosce più questo telefono: collegalo una volta via USB o associalo di nuovo.</string>
     <string name="bridge_send_unknown">Nessuna risposta dal Mac: il testo potrebbe essere arrivato. Controlla sul Mac prima di inviarlo di nuovo.</string>
     <string name="bridge_notifications_switch">Mostra le notifiche sul Mac</string>
-    <string name="bridge_notifications_help">Chiamate, messaggi e le app che scegli qui sotto compaiono come notifiche sul Mac, con il loro testo (un codice di accesso, per esempio). Vengono inviate solo le app che attivi. Anche l\'interruttore del Mac (Impostazioni › Ponte telefono in PhoneBox sul computer) deve essere attivo.</string>
+    <string name="bridge_notifications_help">Chiamate, messaggi e notifiche delle app appaiono sul Mac con il loro testo. Scegli singole app o attiva Tutte le app. Attiva anche le notifiche del telefono nelle impostazioni del collegamento sul Mac.</string>
     <string name="bridge_access_missing">L\'accesso alle notifiche non è ancora consentito. PhoneBox ne ha bisogno per vedere le tue notifiche.</string>
     <string name="bridge_access_granted">L\'accesso alle notifiche è consentito.</string>
     <string name="bridge_access_button">Consenti l\'accesso alle notifiche</string>
