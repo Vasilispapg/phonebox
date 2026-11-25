@@ -126,6 +126,13 @@ internal sealed class MacPasteboard : ITextPasteboard
     }
 
     /// <summary>Whether the current item carries a withheld marker, and whether it offers plain text at all (types only, no data).</summary>
+    public bool CanShare(long changeCount)
+    {
+        var pool = objc_autoreleasePoolPush();
+        try { return !Marks().Withheld && SendLong(_pasteboard, Sel("changeCount")) == changeCount; }
+        finally { objc_autoreleasePoolPop(pool); }
+    }
+
     private (bool Withheld, bool HasText) Marks()
     {
         var types = Send(_pasteboard, Sel("types"));

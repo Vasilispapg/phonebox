@@ -91,4 +91,12 @@
             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     </ItemGroup>
   </Target>
+
+  <Target Name="ClassifyMacPasteboardForBundle" BeforeTargets="_ComputeFilesToBundle"
+          Condition="'$(PublishSingleFile)' == 'true' and $([MSBuild]::IsOSPlatform('OSX'))">
+    <ItemGroup>
+      <ResolvedFileToPublish Update="@(ResolvedFileToPublish->WithMetadataValue('RelativePath', 'libPhoneBoxPasteboard.dylib'))"
+                             AssetType="native" />
+    </ItemGroup>
+  </Target>
 </Project>

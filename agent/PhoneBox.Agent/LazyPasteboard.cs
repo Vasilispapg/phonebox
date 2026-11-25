@@ -30,6 +30,7 @@ internal sealed class LazyPasteboard(Func<ITextPasteboard> create, ILogger<LazyP
 
     public long ChangeCount => Inner()?.ChangeCount ?? 0;
     public string? ReadShareableText() => Inner()?.ReadShareableText();
+    public bool CanShare(long changeCount) => Inner()?.CanShare(changeCount) ?? false;
     public bool LastReadRefused => Inner()?.LastReadRefused ?? false;
     public bool AccessDenied => Inner()?.AccessDenied ?? false;
     public long? WriteText(string text) => Inner()?.WriteText(text);
