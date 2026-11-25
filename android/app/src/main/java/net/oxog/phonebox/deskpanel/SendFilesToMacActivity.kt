@@ -1,13 +1,29 @@
 package net.oxog.phonebox.deskpanel
 
 import android.app.Activity
-import android.app.AlertDialog
+import android.app.Dialog
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.content.res.Configuration
+import android.graphics.Bitmap
+import android.graphics.Color
+import android.graphics.Outline
+import android.graphics.Typeface
+import android.graphics.drawable.ColorDrawable
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.OpenableColumns
+import android.text.TextUtils
+import android.util.Size
+import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup
+import android.view.ViewOutlineProvider
+import android.view.Window
+import android.widget.Button
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.TextView
 import android.widget.Toast
 
 /**
@@ -17,7 +33,11 @@ import android.widget.Toast
  * behind one). The upload itself runs in [FileUploadService], which outlives this window.
  */
 class SendFilesToMacActivity : Activity() {
-    private var dialog: AlertDialog? = null
+    private var dialog: Dialog? = null
+    @Volatile private var gone = false
+
+    /** What one line of the confirmation shows. [thumb] is null for a file the system cannot draw (the line shows its extension instead). */
+    private class Row(val name: String, val size: Long?, val thumb: Bitmap?)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -40,29 +60,90 @@ class SendFilesToMacActivity : Activity() {
             finish()
             return
         }
-        val names = ArrayList<String>()
-        val sizes = ArrayList<Long?>()
-        for (uri in uris) {
-            val (name, size) = describe(uri)
-            names += name
-            sizes += size
+        // names, sizes and pictures come from other apps' providers, which can be slow: never on the main thread
+        Thread {
+            val rows = uris.take(SHOWN).map { describe(it) }
+            runOnUiThread { if (!gone && !isFinishing) show(uris, rows) }
+        }.start()
+    }
+
+    private fun show(uris: List<Uri>, rows: List<Row>) {
+        val theme = BridgeTheme(this)
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(theme.dp(20), theme.dp(20), theme.dp(20), theme.dp(12))
+            background = theme.roundRect(theme.card, 24, theme.cardStroke)
+            // a tap that reaches a button through another app's window drawn on top does not count (tapjacking)
+            filterTouchesWhenObscured = true
         }
-        val shown = FileTransferRules.confirmLines(names, sizes, 5)
-        val message = (shown.lines + if (shown.more > 0) listOf(getString(R.string.files_more, shown.more)) else emptyList()).joinToString("\n")
-        val night = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
-        val theme = if (night) android.R.style.Theme_Material_Dialog_Alert else android.R.style.Theme_Material_Light_Dialog_Alert
-        dialog = AlertDialog.Builder(this, theme)
-            .setTitle(getString(R.string.files_confirm_title))
-            .setMessage(message)
-            .setPositiveButton(getString(R.string.bridge_send_to_mac)) { _, _ -> FileUploadService.start(this, uris); finish() }
-            .setNegativeButton(getString(R.string.pair_negative), null)
-            .setOnDismissListener { finish() } // Cancel, Back or a tap outside: nothing is sent
-            .show()
-            .apply {
-                listOf(AlertDialog.BUTTON_POSITIVE, AlertDialog.BUTTON_NEGATIVE).forEach { getButton(it)?.isAllCaps = false }
-                // a tap that reaches the button through another app's window drawn on top does not count (tapjacking)
-                window?.decorView?.filterTouchesWhenObscured = true
+        fun text(value: String, sp: Float, color: Int, bold: Boolean = false) = TextView(this).apply {
+            this.text = value; textSize = sp; setTextColor(color)
+            if (bold) typeface = Typeface.DEFAULT_BOLD
+        }
+        card.addView(text(getString(R.string.files_confirm_title), 21f, theme.text, bold = true))
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        for (row in rows) list.addView(fileRow(theme, row), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = theme.dp(12) })
+        card.addView(list)
+        val more = uris.size - rows.size
+        if (more > 0) card.addView(text(getString(R.string.files_more, more), 14f, theme.muted), LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = theme.dp(10) })
+
+        val send = Button(this).apply {
+            text = getString(R.string.bridge_send_to_mac); isAllCaps = false; textSize = 16f; typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE); minimumHeight = theme.dp(52); stateListAnimator = null
+            background = theme.pressable(theme.roundRect(theme.accent, 16))
+            setOnClickListener { FileUploadService.start(this@SendFilesToMacActivity, uris); finish() }
+        }
+        val cancel = Button(this).apply {
+            text = getString(R.string.pair_negative); isAllCaps = false; textSize = 15f
+            setTextColor(theme.accentText); minimumHeight = theme.dp(44); stateListAnimator = null
+            background = theme.pressable(theme.roundRect(Color.TRANSPARENT, 14))
+            setOnClickListener { finish() }
+        }
+        card.addView(send, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = theme.dp(18) })
+        card.addView(cancel, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = theme.dp(4) })
+
+        dialog = Dialog(this).apply {
+            requestWindowFeature(Window.FEATURE_NO_TITLE)
+            setContentView(card)
+            window?.apply {
+                setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+                setLayout((resources.displayMetrics.widthPixels * 0.92f).toInt(), ViewGroup.LayoutParams.WRAP_CONTENT)
+                setGravity(Gravity.CENTER)
+                decorView.filterTouchesWhenObscured = true
             }
+            setOnDismissListener { finish() } // Back or a tap outside: nothing is sent
+            show()
+        }
+    }
+
+    private fun fileRow(theme: BridgeTheme, row: Row): View {
+        val box = theme.dp(52)
+        val picture: View = if (row.thumb != null) ImageView(this).apply {
+            setImageBitmap(row.thumb); scaleType = ImageView.ScaleType.CENTER_CROP
+            outlineProvider = object : ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: Outline) { outline.setRoundRect(0, 0, view.width, view.height, theme.dp(12).toFloat()) }
+            }
+            clipToOutline = true
+        } else TextView(this).apply {
+            text = FileTransferRules.extensionLabel(row.name); gravity = Gravity.CENTER; textSize = 12f
+            typeface = Typeface.DEFAULT_BOLD; setTextColor(theme.accentText)
+            background = theme.roundRect(if (theme.dark) 0xFF26324A.toInt() else 0xFFE4ECFD.toInt(), 12)
+        }
+        val names = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(TextView(this@SendFilesToMacActivity).apply {
+                text = row.name; textSize = 15f; typeface = Typeface.DEFAULT_BOLD; setTextColor(theme.text)
+                maxLines = 1; ellipsize = TextUtils.TruncateAt.MIDDLE
+            })
+            if (row.size != null) addView(TextView(this@SendFilesToMacActivity).apply {
+                text = FileTransferRules.formatSize(row.size); textSize = 13f; setTextColor(theme.muted)
+            })
+        }
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            addView(picture, LinearLayout.LayoutParams(box, box))
+            addView(names, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = theme.dp(12) })
+        }
     }
 
     /** The shared content URIs, in order, without this app's own providers. An extra this app cannot read counts as nothing. */
@@ -84,8 +165,8 @@ class SendFilesToMacActivity : Activity() {
         providers.flatMap { (it.authority ?: "").split(';') }.filter { it.isNotEmpty() }.toSet()
     } catch (_: Exception) { setOf("$packageName.usb", "$packageName.clip") }
 
-    /** The display name and size a provider reports; a provider that cannot say gives the last part of the URI and no size. */
-    private fun describe(uri: Uri): Pair<String, Long?> {
+    /** The name, size and (from Android 10, for pictures and videos) a small picture a provider gives; a provider that cannot say gives the last part of the URI. */
+    private fun describe(uri: Uri): Row {
         var name: String? = null
         var size: Long? = null
         try {
@@ -96,10 +177,16 @@ class SendFilesToMacActivity : Activity() {
                 }
             }
         } catch (_: Exception) {}
-        return FileTransferRules.displayName(name ?: uri.lastPathSegment) to size
+        val type = try { contentResolver.getType(uri) } catch (_: Exception) { null }
+        var thumb: Bitmap? = null
+        if (Build.VERSION.SDK_INT >= 29 && type != null && (type.startsWith("image/") || type.startsWith("video/"))) {
+            try { thumb = contentResolver.loadThumbnail(uri, Size(160, 160), null) } catch (_: Exception) {}
+        }
+        return Row(FileTransferRules.displayName(name ?: uri.lastPathSegment), size, thumb)
     }
 
     override fun onDestroy() {
+        gone = true
         dialog?.setOnDismissListener(null)
         dialog?.dismiss()
         dialog = null
@@ -109,5 +196,7 @@ class SendFilesToMacActivity : Activity() {
     private companion object {
         /** Enough for any photo burst; a longer list would be a hostile intent. */
         const val MAX_FILES = 50
+        /** Lines the confirmation draws; the rest is counted ("+3 more"). */
+        const val SHOWN = 5
     }
 }

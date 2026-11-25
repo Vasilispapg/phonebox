@@ -94,6 +94,65 @@ public sealed class MacAppNotifierTests : IDisposable
     }
 
     [Fact]
+    public async Task ANotificationThatShouldOpenAFileCarriesItsPathAsDataOnTheInput()
+    {
+        var n = Notifier();
+        await n.PrepareAsync(CancellationToken.None);
+        Assert.True(await n.PostAsync("PhoneBox", "From your phone", "Received a.jpg", null, null, "/Users/me/Downloads/PhoneBox/a \"b\".jpg", CancellationToken.None));
+        var request = _calls.Last(c => c.Stdin is not null);
+        Assert.Empty(request.Args); // the path is never an argument either
+        using var doc = JsonDocument.Parse(request.Stdin!);
+        Assert.Equal("/Users/me/Downloads/PhoneBox/a \"b\".jpg", doc.RootElement.GetProperty("open").GetString());
+    }
+
+    [Fact]
+    public async Task AnOrdinaryNotificationHasNoOpenKey()
+    {
+        var n = Notifier();
+        await n.PrepareAsync(CancellationToken.None);
+        await n.PostAsync("t", "s", "b", null, null, CancellationToken.None);
+        using var doc = JsonDocument.Parse(_calls.Last(c => c.Stdin is not null).Stdin!);
+        Assert.False(doc.RootElement.TryGetProperty("open", out _));
+    }
+
+    [Fact]
+    public void TheNotifierProgramReactsToAClickByShowingTheFileInFinder()
+    {
+        var source = NotifierBundleSource();
+        Assert.Contains("UNUserNotificationCenterDelegate", source);
+        Assert.Contains("activateFileViewerSelecting", source); // shows it, never opens or runs it
+        Assert.DoesNotContain("NSWorkspace.shared.open(", source);
+        Assert.DoesNotContain("Process()", source);
+    }
+
+    private static string NotifierBundleSource()
+    {
+        using var swift = typeof(NotifierBundle).Assembly.GetManifestResourceStream("notifier.swift")!;
+        using var reader = new StreamReader(swift);
+        return reader.ReadToEnd();
+    }
+
+    [Fact]
+    public async Task TheFallbackNotifierPassesThePathToTheNotifierThatCanShowItAndDropsItForTheOther()
+    {
+        var calls = new List<string>();
+        var fallback = new FallbackNotifier(new RevealStub("primary", false, calls), new RevealStub("fallback", true, calls));
+        Assert.True(await fallback.PostAsync("t", "s", "b", null, null, "/x/y.jpg", CancellationToken.None));
+        Assert.Equal(["primary:/x/y.jpg", "fallback:"], calls);
+    }
+
+    private sealed class RevealStub(string name, bool result, List<string> calls) : IMacNotifier, IRevealingNotifier
+    {
+        public Task<bool> PostAsync(string title, string subtitle, string body, byte[]? iconPng, string? replaceId, CancellationToken ct) =>
+            PostAsync(title, subtitle, body, iconPng, replaceId, null, ct);
+        public Task<bool> PostAsync(string title, string subtitle, string body, byte[]? iconPng, string? replaceId, string? revealPath, CancellationToken ct)
+        {
+            calls.Add(name + ":" + (name == "fallback" ? "" : revealPath));
+            return Task.FromResult(result);
+        }
+    }
+
+    [Fact]
     public async Task WithoutASwiftCompilerItIsUnavailableAndNothingIsBuilt()
     {
         _swiftc = null;

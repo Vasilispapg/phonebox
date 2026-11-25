@@ -125,7 +125,14 @@ internal static class BridgeApi
         if (notifier is not null)
         {
             // never awaited: osascript can take seconds, and the phone's answer must not wait for it
-            try { _ = notifier.PostAsync("PhoneBox", "From your phone", $"Received {result.Name}", null, null, CancellationToken.None); }
+            // a click on it shows the file in Finder (a notifier that cannot do that just shows the notice)
+            try
+            {
+                var where = Path.Combine(receiver.Folder, result.Name!);
+                _ = notifier is IRevealingNotifier revealing
+                    ? revealing.PostAsync("PhoneBox", "From your phone", $"Received {result.Name}", null, null, where, CancellationToken.None)
+                    : notifier.PostAsync("PhoneBox", "From your phone", $"Received {result.Name}", null, null, CancellationToken.None);
+            }
             catch (Exception) { /* a notification that cannot be shown is not a failed transfer */ }
         }
         return Results.Ok(new { ok = true, name = result.Name, size = result.Bytes });

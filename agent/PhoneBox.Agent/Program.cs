@@ -98,9 +98,15 @@ if (OperatingSystem.IsMacOS())
     builder.Services.AddSingleton(_ => new Outbox(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library", "Caches", "PhoneBox", "outbox"), TimeProvider.System));
     builder.Services.AddSingleton(_ => new LocalTransferKey(Path.Combine(configDir, "transfer.json"), Port));
     // the Finder Quick Action "Send to phone", written while sending files is on
-    builder.Services.AddSingleton<IQuickActionInstaller>(sp => new QuickActionInstaller(
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library", "Services"),
-        sp.GetRequiredService<LocalTransferKey>().Path, QuickActionInstaller.RefreshServices));
+    // (and the droplet app "Send to phone" in ~/Applications, the second way to send from the Mac)
+    builder.Services.AddSingleton<IQuickActionInstaller>(sp =>
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var key = sp.GetRequiredService<LocalTransferKey>().Path;
+        return new CombinedQuickAction(
+            new QuickActionInstaller(Path.Combine(home, "Library", "Services"), key, QuickActionInstaller.RefreshServices),
+            new DropletInstaller(Path.Combine(home, "Applications"), key));
+    });
     // the key file, the Finder Quick Action and the outbox follow the switch (started here: the outbox is emptied at every start)
     builder.Services.AddHostedService(sp => new TransferSwitchWatcher(sp.GetRequiredService<ConfigStore>(), sp.GetRequiredService<Outbox>(),
         sp.GetRequiredService<LocalTransferKey>(), sp.GetService<IQuickActionInstaller>() ?? NoQuickAction.Instance, TimeSpan.FromSeconds(5),

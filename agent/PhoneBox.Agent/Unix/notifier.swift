@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import UserNotifications
 
@@ -7,8 +8,10 @@ import UserNotifications
 //                                  must be started through LaunchServices, `open -W -n -a PhoneBox.app --args ...`, or macOS shows
 //                                  no question and refuses; the exit code then goes to FILE, because `open` does not pass it on)
 //   PhoneBoxNotifier --status      says whether it is allowed, never asking
-//   PhoneBoxNotifier               reads one JSON request on stdin {"title","subtitle","body","image"(base64 PNG, optional),"id"(optional)}
-//                                  and shows it, never asking
+//   PhoneBoxNotifier               reads one JSON request on stdin {"title","subtitle","body","image"(base64 PNG, optional),"id"(optional),
+//                                  "open"(a file path, optional)} and shows it, never asking
+//   PhoneBoxNotifier               with nothing on stdin it was started by macOS because the person clicked a notification: if that
+//                                  notification carries a path ("open") the file is shown in Finder (selected, never opened or run)
 // Exit codes: 0 done (allowed / shown), 2 bad request, 3 not allowed, 4 macOS refused the notification,
 //             5 no answer yet (the permission question is still open, or macOS did not reply in time).
 // Exists so a phone's notification carries the PhoneBox icon and the phone app's own icon as its picture; the agent falls back
@@ -29,12 +32,32 @@ func finish(_ status: Int32, _ message: String? = nil) -> Never {
     exit(status)
 }
 
+/// A click on a notification that carries a file path shows that file in Finder. Only reveals it: nothing is opened or run.
+final class ClickHandler: NSObject, UNUserNotificationCenterDelegate {
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
+        if let path = response.notification.request.content.userInfo["open"] as? String, !path.isEmpty {
+            NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+        }
+        completionHandler()
+        exit(0)
+    }
+}
+let clickHandler = ClickHandler()
+
+/// Started with no request: macOS did it for a click. The delegate must be set at once for the click to be handed over; a few seconds is plenty.
+func waitForClick() -> Never {
+    center.delegate = clickHandler
+    RunLoop.main.run(until: Date(timeIntervalSinceNow: 8))
+    exit(0)
+}
+
 let arguments = CommandLine.arguments
 let authorizeMode = arguments.contains("--authorize")
 let statusMode = arguments.contains("--status")
 var request: [String: Any] = [:]
 if !authorizeMode && !statusMode {
     let input = FileHandle.standardInput.readDataToEndOfFile()
+    if input.isEmpty { waitForClick() }
     guard let parsed = try? JSONSerialization.jsonObject(with: input) as? [String: Any] else { finish(2, "not a request") }
     request = parsed
 }
@@ -44,6 +67,7 @@ func show() {
     content.title = request["title"] as? String ?? ""
     content.subtitle = request["subtitle"] as? String ?? ""
     content.body = request["body"] as? String ?? ""
+    if let path = request["open"] as? String, !path.isEmpty { content.userInfo = ["open": path] }
     if let encoded = request["image"] as? String, let png = Data(base64Encoded: encoded) {
         // the system moves the attachment file away, so every notification gets a file of its own
         let file = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".png")

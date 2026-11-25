@@ -224,7 +224,18 @@ private fun preflightChecks() {
     check("the check asks for the same path as the upload", BridgeClient(link).uploadFile("b c", 7L, { "x".byteInputStream() }, {}, { false }) == SendResult.OK && link.uploads.last().first == "/api/bridge/files/in?name=b%20c&size=7")
 }
 
+private fun labelChecks() {
+    check("a PDF is labelled PDF", FileTransferRules.extensionLabel("report.pdf") == "PDF")
+    check("the last extension is the label", FileTransferRules.extensionLabel("a.tar.gz") == "GZ")
+    check("no extension is FILE", FileTransferRules.extensionLabel("notes") == "FILE")
+    check("a dot file is FILE", FileTransferRules.extensionLabel(".hidden") == "FILE")
+    check("a very long extension is FILE", FileTransferRules.extensionLabel("a.verylongextension") == "FILE")
+    check("a trailing dot is FILE", FileTransferRules.extensionLabel("a.") == "FILE")
+    check("the label is upper case whatever the name's case", FileTransferRules.extensionLabel("IMG.jpeg") == "JPEG")
+}
+
 fun main() {
+    labelChecks()
     queueChecks()
     uniqueNameChecks()
     preflightChecks()

@@ -15,6 +15,24 @@ internal sealed class NoQuickAction : IQuickActionInstaller
     public void Remove() { }
 }
 
+/// <summary>The ways to send from the Mac (the Finder Quick Action and the droplet app) are put in place and taken away together; one that fails does not keep the other from being tried.</summary>
+internal sealed class CombinedQuickAction(params IQuickActionInstaller[] parts) : IQuickActionInstaller
+{
+    public void Install() => Each(p => p.Install());
+    public void Remove() => Each(p => p.Remove());
+
+    private void Each(Action<IQuickActionInstaller> step)
+    {
+        Exception? first = null;
+        foreach (var part in parts)
+        {
+            try { step(part); }
+            catch (Exception e) { first ??= e; }
+        }
+        if (first is not null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
+    }
+}
+
 /// <summary>
 /// Keeps everything that exists only for "Send files to the phone" in step with its switch: while on, the local key file and the
 /// Quick Action are in place and old files in the outbox are swept; while off, the key, the Quick Action and the outbox are gone

@@ -23,8 +23,15 @@ public sealed class BridgeApiTests : IDisposable
     private readonly NotificationBridge _notifications;
     private int _stamp;
 
-    private sealed class RecordingNotifier(List<(string, string, string)> shown) : IMacNotifier
+    private sealed class RecordingNotifier(List<(string, string, string)> shown) : IMacNotifier, IRevealingNotifier
     {
+        public readonly List<string?> Revealed = [];
+        public Task<bool> PostAsync(string title, string subtitle, string body, byte[]? iconPng, string? replaceId, string? revealPath, CancellationToken ct)
+        {
+            Revealed.Add(revealPath);
+            return PostAsync(title, subtitle, body, iconPng, replaceId, ct);
+        }
+
         public Task<bool> PostAsync(string title, string subtitle, string body, byte[]? iconPng, string? replaceId, CancellationToken ct)
         {
             shown.Add((title, subtitle, body));
@@ -660,8 +667,11 @@ public sealed class BridgeApiTests : IDisposable
     {
         SetFiles(true);
         var ctx = FileRequest("?name=hello.txt&size=5", new MemoryStream("hello"u8.ToArray()));
-        var result = await BridgeApi.PutFileAsync(ctx, NewReceiver(), new RecordingNotifier(_shown), _store, () => true);
+        var notifier = new RecordingNotifier(_shown);
+        var result = await BridgeApi.PutFileAsync(ctx, NewReceiver(), notifier, _store, () => true);
         Assert.Equal(200, Status(result));
+        // a click on the notice shows the file in Finder: the path is where the file really is
+        Assert.Equal(Path.Combine(_root, "received", "hello.txt"), Assert.Single(notifier.Revealed));
         Assert.Contains("\"name\":\"hello.txt\"", Json(result));
         Assert.Equal("hello", File.ReadAllText(Path.Combine(_root, "received", "hello.txt")));
         var shown = Assert.Single(_shown);

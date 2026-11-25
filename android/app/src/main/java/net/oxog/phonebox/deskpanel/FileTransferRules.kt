@@ -158,6 +158,14 @@ object FileTransferRules {
         return ConfirmLines(shown, maxOf(0, names.size - maxLines))
     }
 
+    /** What to write on the square of a file that has no picture: its extension in capitals ("PDF"), or "FILE" when it has none or a long one. */
+    fun extensionLabel(name: String): String {
+        val dot = name.lastIndexOf('.')
+        if (dot <= 0 || dot == name.length - 1) return "FILE"
+        val extension = name.substring(dot + 1)
+        return if (extension.length in 1..4) extension.uppercase(java.util.Locale.ROOT) else "FILE"
+    }
+
     /** Decimal units with one decimal ("1.2 MB"); units are not translated. */
     fun formatSize(bytes: Long): String {
         if (bytes < 1000) return "$bytes B"
