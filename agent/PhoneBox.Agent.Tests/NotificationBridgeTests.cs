@@ -19,9 +19,9 @@ public sealed class NotificationBridgeTests : IDisposable
         public bool Ok = true;
         public Task<bool> PostAsync(string title, string subtitle, string body, byte[]? iconPng, string? replaceId, CancellationToken ct)
         {
-            Posts.Add((title, subtitle, body));
             Icons.Add(iconPng);
             Ids.Add(replaceId);
+            Posts.Add((title, subtitle, body)); // last: tests wait on Posts.Count and then read Icons/Ids
             return Task.FromResult(Ok);
         }
     }

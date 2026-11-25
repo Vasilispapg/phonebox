@@ -20,6 +20,7 @@ internal sealed class MacAppNotifier : IMacNotifier, IWarmable, IDisposable
     private static readonly TimeSpan AuthorizeTimeout = TimeSpan.FromSeconds(180); // the person has to answer macOS's question
     private const long RecheckEveryMs = 10 * 60_000;     // a permission question left open is asked again this often
     private const long RecheckDeniedEveryMs = 60_000;     // a refusal is looked at (never asked) this often, so allowing it in System Settings works within a minute
+    private const int MaxConsecutiveFailures = 3;         // after three failed/timed-out posts in a row, stop stalling every notification and let osascript handle them
 
     private readonly string _dir;
     private readonly Run _run;
@@ -29,6 +30,7 @@ internal sealed class MacAppNotifier : IMacNotifier, IWarmable, IDisposable
     private readonly ILogger _log;
     private readonly CancellationTokenSource _stop = new();
     private int _started;
+    private int _failures;
     private long _deniedAt;
     private volatile NotifierState _state = NotifierState.NotStarted;
 
@@ -79,12 +81,19 @@ internal sealed class MacAppNotifier : IMacNotifier, IWarmable, IDisposable
         try
         {
             var (exit, _) = await _run(ExecutablePath, [], NotifierBundle.RequestJson(title, subtitle, body, iconPng, replaceId), PostTimeout, ct);
-            if (exit == 3) { _deniedAt = _clock(); SetState(NotifierState.NotAllowed); }
-            else if (exit == 5) { _deniedAt = _clock(); SetState(NotifierState.Undecided, "macOS has not been told yet whether PhoneBox may show notifications"); }
-            return exit == 0;
+            if (exit == 0) { _failures = 0; return true; }
+            if (exit == 3) { _failures = 0; _deniedAt = _clock(); SetState(NotifierState.NotAllowed); return false; }
+            if (exit == 5) { _failures = 0; _deniedAt = _clock(); SetState(NotifierState.Undecided, "macOS has not been told yet whether PhoneBox may show notifications"); return false; }
+            if (++_failures >= MaxConsecutiveFailures) SetState(NotifierState.Unavailable, "the PhoneBox notifier stopped answering; falling back to osascript");
+            return false;
         }
         catch (OperationCanceledException) { throw; }
-        catch (Exception ex) { _log.LogWarning("the PhoneBox notifier did not run: {Error}", ex.GetType().Name); return false; }
+        catch (Exception ex)
+        {
+            _log.LogWarning("the PhoneBox notifier did not run: {Error}", ex.GetType().Name);
+            if (++_failures >= MaxConsecutiveFailures) SetState(NotifierState.Unavailable, "the PhoneBox notifier failed repeatedly; falling back to osascript");
+            return false;
+        }
     }
 
     /// <summary>One of the program's modes ("--authorize" may show macOS's question, "--status" never does); its exit code, or -1 when it did not answer.</summary>
