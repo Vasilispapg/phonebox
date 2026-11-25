@@ -18,6 +18,7 @@ public sealed class AgentConfig
     public DisplayConfig Display { get; set; } = new();
     public LanConfig Lan { get; set; } = new();
     public UpdateConfig Updates { get; set; } = new();
+    public TerminalConfig Terminal { get; set; } = new();
     public ClaudeConfig Claude { get; set; } = new();
     /// <summary>Cursor agent-transcript sessions on the AI sessions widget (off by default).</summary>
     public CursorConfig Cursor { get; set; } = new();
@@ -294,6 +295,17 @@ public sealed class LanConfig
     public string? Token { get; set; }
     /// <summary>Separate key for the webhook API from other machines (push/notify/goto/refresh only). May appear in URLs.</summary>
     public string? WebhookToken { get; set; }
+}
+
+/// <summary>Terminal widget: a shell on this computer, reachable from the phone only while this master switch is on.</summary>
+public sealed class TerminalConfig
+{
+    public bool Enabled { get; set; } = false;
+    /// <summary>Minutes without overlay activity before a shell is closed. 0 means 30 seconds after the overlay stops.</summary>
+    public int IdleMinutes { get; set; } = 10;
+
+    /// <summary>A method, not a property, so the clamped copy is never written to config.json.</summary>
+    public int EffectiveIdleMinutes() => Math.Clamp(IdleMinutes, 0, 120);
 }
 
 public sealed class UpdateConfig
@@ -749,6 +761,7 @@ public sealed partial class ConfigStore(string path)
     /// <summary>Fills in defaults: builds pages from templates, migrates old pages, generates unique ids.</summary>
     private static AgentConfig Normalize(AgentConfig c, IReadOnlySet<string>? staleIds = null)
     {
+        c.Terminal ??= new();
         c.Weather ??= new();
         c.Weather.Unit = WeatherUnitJsonConverter.Normalize(c.Weather.Unit);
         c.Weather.Model = WeatherModelJsonConverter.Normalize(c.Weather.Model);

@@ -374,6 +374,30 @@ public class ConfigTests
         Assert.Equal(1440, c.Rules[0].Value);
         Assert.Equal("info", c.Rules[0].Level);
     }
+
+    [Fact]
+    public void SavingAConfigNeverWritesADerivedEffectiveIdleMinutes()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"phonebox-terminal-{Guid.NewGuid():N}.json");
+        try
+        {
+            File.WriteAllText(path, "{}");
+            var store = new ConfigStore(path);
+            Assert.Null(store.Save("""{"terminal":{"enabled":true,"idleMinutes":500}}"""));
+            var written = File.ReadAllText(path);
+            Assert.DoesNotContain("effectiveIdleMinutes", written, StringComparison.OrdinalIgnoreCase);
+            using var doc = JsonDocument.Parse(written);
+            var section = doc.RootElement.GetProperty("terminal");
+            Assert.True(section.GetProperty("enabled").GetBoolean());
+            Assert.Equal(500, section.GetProperty("idleMinutes").GetInt32()); // stored as typed, clamped only when read
+            Assert.Equal(120, store.Get().Terminal.EffectiveIdleMinutes());
+        }
+        finally
+        {
+            File.Delete(path);
+            File.Delete(path + ".bak");
+        }
+    }
 }
 
 public class LanTests
