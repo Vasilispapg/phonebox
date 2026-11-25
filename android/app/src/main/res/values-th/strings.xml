@@ -44,6 +44,8 @@
     <string name="files_received">รับจาก Mac แล้ว: %1$s</string>
     <string name="files_received_many">ไฟล์ที่รับจาก Mac: %1$d</string>
     <string name="files_receive_failed">รับไฟล์จาก Mac ไม่ได้</string>
+    <string name="files_notifications_blocked">Android บล็อกการแจ้งเตือนของ PhoneBox คุณจึงจะไม่เห็นเมื่อไฟล์มาถึงหรือถูกส่ง</string>
+    <string name="files_notifications_allow">อนุญาตการแจ้งเตือน</string>
     <string name="bridge_state_unsupported">คอมพิวเตอร์เครื่องนี้แชร์คลิปบอร์ดไม่ได้: สะพานเชื่อมโทรศัพท์ต้องใช้เอเจนต์ PhoneBox บน Mac</string>
     <string name="bridge_state_stopped">ถูก Android หยุดไว้ เปิดหน้าจอนี้อีกครั้ง หรือรีสตาร์ต PhoneBox เพื่อเชื่อมต่อใหม่</string>
     <string name="bridge_confirm_title">ส่งข้อความนี้ไปยังคลิปบอร์ดของ Mac ไหม</string>

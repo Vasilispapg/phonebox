@@ -44,6 +44,8 @@
     <string name="files_received">已從 Mac 收到：%1$s</string>
     <string name="files_received_many">已從 Mac 收到的檔案數：%1$d</string>
     <string name="files_receive_failed">無法接收來自 Mac 的檔案</string>
+    <string name="files_notifications_blocked">Android 封鎖了 PhoneBox 的通知，因此你看不到檔案何時抵達或傳出。</string>
+    <string name="files_notifications_allow">允許通知</string>
     <string name="bridge_state_unsupported">此電腦無法共享剪貼簿：手機橋接需要在 Mac 上執行 PhoneBox 代理程式</string>
     <string name="bridge_state_stopped">已被 Android 停止。請再次開啟此畫面，或重新啟動 PhoneBox 以重新連線</string>
     <string name="bridge_confirm_title">要將這段文字傳送到 Mac 的剪貼簿嗎？</string>

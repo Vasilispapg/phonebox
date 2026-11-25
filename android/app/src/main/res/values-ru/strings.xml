@@ -44,6 +44,8 @@
     <string name="files_received">Получено с Mac: %1$s</string>
     <string name="files_received_many">Файлов получено с Mac: %1$d</string>
     <string name="files_receive_failed">Не удалось получить файл с Mac</string>
+    <string name="files_notifications_blocked">Android блокирует уведомления PhoneBox, поэтому вы не увидите, когда файл придёт или будет отправлен.</string>
+    <string name="files_notifications_allow">Разрешить уведомления</string>
     <string name="bridge_state_unsupported">Этот компьютер не может делиться буфером обмена: для моста с телефоном нужен агент PhoneBox на Mac</string>
     <string name="bridge_state_stopped">Остановлено Android. Откройте этот экран снова или перезапустите PhoneBox, чтобы подключиться</string>
     <string name="bridge_confirm_title">Отправить этот текст в буфер обмена Mac?</string>

@@ -44,6 +44,8 @@
     <string name="files_received">Diterima dari Mac: %1$s</string>
     <string name="files_received_many">File diterima dari Mac: %1$d</string>
     <string name="files_receive_failed">Tidak dapat menerima file dari Mac</string>
+    <string name="files_notifications_blocked">Android memblokir notifikasi PhoneBox, jadi Anda tidak akan melihat saat file tiba atau terkirim.</string>
+    <string name="files_notifications_allow">Izinkan notifikasi</string>
     <string name="bridge_state_unsupported">Komputer ini tidak dapat membagikan papan klip: jembatan ponsel memerlukan agen PhoneBox di Mac</string>
     <string name="bridge_state_stopped">Dihentikan oleh Android. Buka layar ini lagi, atau mulai ulang PhoneBox, untuk terhubung kembali</string>
     <string name="bridge_confirm_title">Kirim teks ini ke papan klip Mac?</string>

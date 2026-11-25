@@ -46,6 +46,8 @@
     <string name="files_received">Λήφθηκε από το Mac: %1$s</string>
     <string name="files_received_many">Αρχεία που λήφθηκαν από το Mac: %1$d</string>
     <string name="files_receive_failed">Δεν ήταν δυνατή η λήψη αρχείου από το Mac</string>
+    <string name="files_notifications_blocked">Το Android μπλοκάρει τις ειδοποιήσεις του PhoneBox, οπότε δεν θα βλέπεις πότε φτάνει ή στέλνεται ένα αρχείο.</string>
+    <string name="files_notifications_allow">Να επιτρέπονται οι ειδοποιήσεις</string>
     <string name="bridge_state_unsupported">Αυτός ο υπολογιστής δεν μπορεί να μοιραστεί το πρόχειρο: η γέφυρα τηλεφώνου χρειάζεται τον πράκτορα PhoneBox σε Mac</string>
     <string name="bridge_state_stopped">Σταμάτησε από το Android. Άνοιξε ξανά αυτή την οθόνη ή επανεκκίνησε το PhoneBox για να συνδεθείς</string>
     <string name="bridge_confirm_title">Αποστολή αυτού του κειμένου στο πρόχειρο του Mac;</string>

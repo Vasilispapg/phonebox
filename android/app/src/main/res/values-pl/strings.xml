@@ -44,6 +44,8 @@
     <string name="files_received">Odebrano z Maca: %1$s</string>
     <string name="files_received_many">Pliki odebrane z Maca: %1$d</string>
     <string name="files_receive_failed">Nie udało się odebrać pliku z Maca</string>
+    <string name="files_notifications_blocked">Android blokuje powiadomienia z PhoneBox, więc nie zobaczysz, kiedy plik dotrze lub zostanie wysłany.</string>
+    <string name="files_notifications_allow">Zezwól na powiadomienia</string>
     <string name="bridge_state_unsupported">Ten komputer nie może udostępniać schowka: most telefonu wymaga agenta PhoneBox na Macu</string>
     <string name="bridge_state_stopped">Zatrzymane przez Androida. Otwórz ten ekran ponownie lub uruchom PhoneBox od nowa, aby się połączyć</string>
     <string name="bridge_confirm_title">Wysłać ten tekst do schowka Maca?</string>

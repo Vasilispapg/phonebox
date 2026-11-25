@@ -44,6 +44,8 @@
     <string name="files_received">Vom Mac empfangen: %1$s</string>
     <string name="files_received_many">Vom Mac empfangene Dateien: %1$d</string>
     <string name="files_receive_failed">Eine Datei vom Mac konnte nicht empfangen werden</string>
+    <string name="files_notifications_blocked">Android blockiert Benachrichtigungen von PhoneBox, daher siehst du nicht, wann eine Datei ankommt oder gesendet wird.</string>
+    <string name="files_notifications_allow">Benachrichtigungen erlauben</string>
     <string name="bridge_state_unsupported">Dieser Computer kann die Zwischenablage nicht teilen: Die Telefonbrücke braucht den PhoneBox-Agenten auf einem Mac</string>
     <string name="bridge_state_stopped">Von Android beendet. Öffne diesen Bildschirm erneut oder starte PhoneBox neu, um die Verbindung wiederherzustellen</string>
     <string name="bridge_confirm_title">Diesen Text in die Zwischenablage des Mac senden?</string>

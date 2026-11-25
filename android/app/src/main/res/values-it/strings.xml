@@ -44,6 +44,8 @@
     <string name="files_received">Ricevuto dal Mac: %1$s</string>
     <string name="files_received_many">File ricevuti dal Mac: %1$d</string>
     <string name="files_receive_failed">Impossibile ricevere un file dal Mac</string>
+    <string name="files_notifications_blocked">Android blocca le notifiche di PhoneBox, quindi non vedrai quando un file arriva o viene inviato.</string>
+    <string name="files_notifications_allow">Consenti le notifiche</string>
     <string name="bridge_state_unsupported">Questo computer non può condividere gli appunti: il ponte telefono richiede l\'agente PhoneBox su un Mac</string>
     <string name="bridge_state_stopped">Arrestato da Android. Riapri questa schermata, o riavvia PhoneBox, per riconnetterti</string>
     <string name="bridge_confirm_title">Inviare questo testo negli appunti del Mac?</string>

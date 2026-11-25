@@ -44,6 +44,8 @@
     <string name="files_received">تم الاستلام من Mac: %1$s</string>
     <string name="files_received_many">الملفات المستلمة من Mac: %1$d</string>
     <string name="files_receive_failed">تعذّر استلام ملف من Mac</string>
+    <string name="files_notifications_blocked">يحظر Android إشعارات PhoneBox، لذلك لن ترى متى يصل ملف أو يُرسل.</string>
+    <string name="files_notifications_allow">السماح بالإشعارات</string>
     <string name="bridge_state_unsupported">لا يستطيع هذا الكمبيوتر مشاركة الحافظة: يحتاج جسر الهاتف إلى وكيل PhoneBox على جهاز Mac</string>
     <string name="bridge_state_stopped">أوقفه Android. افتح هذه الشاشة مرة أخرى، أو أعد تشغيل PhoneBox، لإعادة الاتصال</string>
     <string name="bridge_confirm_title">إرسال هذا النص إلى حافظة Mac؟</string>

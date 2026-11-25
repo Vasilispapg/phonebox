@@ -46,6 +46,8 @@
     <string name="files_received">Đã nhận từ Mac: %1$s</string>
     <string name="files_received_many">Số tệp đã nhận từ Mac: %1$d</string>
     <string name="files_receive_failed">Không nhận được tệp từ Mac</string>
+    <string name="files_notifications_blocked">Android đang chặn thông báo của PhoneBox nên bạn sẽ không thấy khi tệp đến hoặc được gửi.</string>
+    <string name="files_notifications_allow">Cho phép thông báo</string>
     <string name="bridge_state_unsupported">Máy tính này không thể chia sẻ bộ nhớ tạm: cầu nối điện thoại cần tác nhân PhoneBox trên máy Mac</string>
     <string name="bridge_state_stopped">Android đã dừng. Hãy mở lại màn hình này, hoặc khởi động lại PhoneBox, để kết nối lại</string>
     <string name="bridge_confirm_title">Gửi văn bản này tới bộ nhớ tạm của Mac?</string>

@@ -44,6 +44,8 @@
     <string name="files_received">Přijato z Macu: %1$s</string>
     <string name="files_received_many">Soubory přijaté z Macu: %1$d</string>
     <string name="files_receive_failed">Soubor z Macu se nepodařilo přijmout</string>
+    <string name="files_notifications_blocked">Android blokuje oznámení z PhoneBoxu, takže neuvidíte, kdy soubor dorazí nebo se odešle.</string>
+    <string name="files_notifications_allow">Povolit oznámení</string>
     <string name="bridge_state_unsupported">Tento počítač nemůže sdílet schránku: most k telefonu potřebuje agenta PhoneBox na Macu</string>
     <string name="bridge_state_stopped">Zastaveno systémem Android. Otevřete tuto obrazovku znovu nebo restartujte PhoneBox a připojte se</string>
     <string name="bridge_confirm_title">Poslat tento text do schránky Macu?</string>

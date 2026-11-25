@@ -21,6 +21,9 @@ import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
 
+/** The request code of the "Allow notifications" button on the Phone bridge screen. */
+private const val REQUEST_NOTIFY = 3
+
 /**
  * The phone's "Phone bridge" screen: the clipboard switch, a short how-to, and an honest status line (whether the
  * service is connected, or the computer's switch is off), so a feature that is switched on never looks like it works
@@ -46,8 +49,41 @@ class BridgeActivity : Activity() {
     private val bad get() = theme.bad
     private val grey get() = theme.grey
 
+    /** Shown while a files switch is on but Android does not let PhoneBox show notifications (Android 13 and later asks once, and may never ask again). */
+    private lateinit var notifyWarning: TextView
+    private lateinit var notifyButton: Button
+
+    private fun notificationsBlockedForFiles(): Boolean =
+        Build.VERSION.SDK_INT >= 33 && (BridgePrefs.filesFromPhoneEnabled(this) || BridgePrefs.filesToPhoneEnabled(this)) &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+
+    /** Asks Android for the permission; when Android will not ask (it was refused before), takes the person to the app's notification settings instead. */
+    private fun allowNotifications() {
+        if (Build.VERSION.SDK_INT >= 33) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQUEST_NOTIFY)
+        else openNotificationSettings()
+    }
+
+    private fun openNotificationSettings() {
+        try {
+            startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
+        } catch (_: RuntimeException) {
+            startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)))
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        // Android gave no question (it was refused before, for good): the only way left is its settings page
+        if (requestCode == REQUEST_NOTIFY && Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED &&
+            !shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)) openNotificationSettings()
+    }
+
     private val refresh = object : Runnable {
         override fun run() {
+            val blocked = notificationsBlockedForFiles()
+            notifyWarning.visibility = if (blocked) View.VISIBLE else View.GONE
+            notifyButton.visibility = if (blocked) View.VISIBLE else View.GONE
             val clip = statusState()
             status.text = clip.first
             paint(statusDot, clip.second)
@@ -167,6 +203,8 @@ class BridgeActivity : Activity() {
             label(getString(R.string.bridge_clipboard_help), 13f, mutedColor),
         ), 16)
 
+        notifyWarning = label(getString(R.string.files_notifications_blocked), 13f, wait)
+        notifyButton = primaryButton(getString(R.string.files_notifications_allow)) { allowNotifications() }
         // ---- files to the Mac (Share › Send file to Mac)
         add(card(
             switchRow(getString(R.string.bridge_files_from_phone_switch), BridgePrefs.filesFromPhoneEnabled(this)) { on ->
@@ -181,6 +219,8 @@ class BridgeActivity : Activity() {
                     requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
                 ClipboardService.sync(this) // the connection to the Mac follows this switch too
             },
+            notifyWarning,
+            notifyButton,
         ), 12)
 
         // ---- notifications on the Mac

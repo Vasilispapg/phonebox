@@ -48,6 +48,8 @@
     <string name="files_received">Received from the Mac: %1$s</string>
     <string name="files_received_many">Files received from the Mac: %1$d</string>
     <string name="files_receive_failed">Could not receive a file from the Mac</string>
+    <string name="files_notifications_blocked">Android blocks notifications from PhoneBox, so you will not see when a file arrives or is sent.</string>
+    <string name="files_notifications_allow">Allow notifications</string>
     <string name="bridge_notifications_switch">Show notifications on the Mac</string>
     <string name="bridge_notifications_help">Calls, messages and the apps you choose below appear as notifications on the Mac, with their text (a login code, for example). Only apps you switch on are sent. The Mac\'s own switch (Settings › Phone bridge in PhoneBox on the computer) must be on too.</string>
     <string name="bridge_access_missing">Notification access is not allowed yet. PhoneBox needs it to see your notifications.</string>
