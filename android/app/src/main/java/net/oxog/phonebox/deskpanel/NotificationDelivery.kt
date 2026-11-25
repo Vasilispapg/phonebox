@@ -33,7 +33,10 @@ class NotificationDelivery(
             // switch drops what waited, so the rest of this batch is void; what was posted since stays for the next pass
             if (!queue.isCurrent(mark)) return false
             if (!queue.isFresh(entry) || !appAllowed(entry.item.pkg)) { i++; continue }
-            when (send(entry.item.body)) {
+            val result = send(entry.item.body)
+            // if the switch went off or another computer was chosen while the request was out, this answer belongs to the old one
+            if (!queue.isCurrent(mark)) return false
+            when (result) {
                 SendResult.OK -> { markMacOn(); onOutcome(NotificationOutcome.OK); i++ }
                 SendResult.OFF -> { markMacOff(); onOutcome(NotificationOutcome.MAC_OFF); queue.clear(); return false }
                 SendResult.TOO_LARGE -> i++ // the agent will never take it; dropped

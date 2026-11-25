@@ -5,7 +5,7 @@ class BridgeClient(private val link: AgentLink) {
     /** Sends one notification (the JSON from [BridgeClip.notificationBody]). Never throws: a failure is [SendResult.UNREACHABLE]. */
     fun sendNotification(body: String): SendResult = try {
         val reply = link.request("POST", "/api/bridge/notification", body.toByteArray(Charsets.UTF_8), "application/json")
-        reply.body.close()
+        try { reply.body.close() } catch (_: Exception) {} // a failed close is not a failed send: the agent already answered
         BridgeClip.resultFor(reply.code)
     } catch (_: Exception) {
         SendResult.UNREACHABLE

@@ -6,6 +6,7 @@ import android.content.Context
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import java.util.concurrent.Executors
@@ -84,7 +85,7 @@ class PhoneNotificationListener : NotificationListenerService() {
 
         private val worker = Executors.newSingleThreadExecutor()
         private val callKeys = CallKeys()
-        private val queue = DeliveryQueue<NotificationDelivery.Pending>(clock = System::currentTimeMillis)
+        private val queue = DeliveryQueue<NotificationDelivery.Pending>(clock = SystemClock::elapsedRealtime)
         private val draining = AtomicBoolean(false)
         private val retryPending = AtomicBoolean(false)
         @Volatile private var cache: BridgeConfigCache? = null
