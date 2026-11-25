@@ -104,7 +104,7 @@ class PhoneNotificationListener : NotificationListenerService() {
                 // the next call from the same person must not look like a repeat to the Mac: its key carries the time this call began.
                 // The in-call UI is not on the list and has no launcher icon (so no name or icon the phone may look up): the default
                 // dialer stands for it, in what the Mac shows and in the check at send time
-                enqueue(app, named, "${named.key}|$callStart", gatePackage(defaultDialer(), named.pkg), "call", postTime)
+                enqueue(app, named, "${named.key}|$callStart", gatePackage(defaultDialer(), named.pkg), "call", postTime, mark)
             }
             return
         }
@@ -112,14 +112,13 @@ class PhoneNotificationListener : NotificationListenerService() {
         if ((incomingCall || decision == Decision.SEND_AS_MISSED_CALL) && !callKeys.firstTime(info.key)) return
         val category = when { decision == Decision.SEND_AS_MISSED_CALL -> "missed_call"; incomingCall -> "call"; else -> "message" }
         // only the in-call UI's calls are shown as another app (above): no lookup of the default dialer for every message
-        enqueue(app, info, info.key, info.pkg, category, sbn.postTime)
+        enqueue(app, info, info.key, info.pkg, category, sbn.postTime, mark)
     }
 
-    private fun enqueue(app: Context, info: NotificationInfo, sendKey: String, shown: String, category: String, postTime: Long) {
+    private fun enqueue(app: Context, info: NotificationInfo, sendKey: String, shown: String, category: String, postTime: Long, mark: Long) {
         // cut here, as the agent does: a long email in a BigText notification must arrive shortened, not be refused whole
         val body = BridgeClip.notificationBody(sendKey, label(shown), shown, BridgeClip.cut(info.title, 200), BridgeClip.cut(info.text, 2000), category, postTime)
-        queue.add(NotificationDelivery.Pending(shown, body))
-        requestDrain(app)
+        if (queue.addIfCurrent(NotificationDelivery.Pending(shown, body), mark)) requestDrain(app)
     }
 
     private fun onCalls(work: () -> Unit) {
