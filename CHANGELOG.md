@@ -17,6 +17,13 @@
   the chosen server's voice channels as big keys, the chat and the screen share. A server switcher keeps the servers
   you used lately, and outside a voice channel **Back to** returns to the last one (#516,
   [DarkusK](https://github.com/DarkusK)).
+- **Terminal** (Computer): a real login shell on the Mac in a full-screen terminal on the phone, with a key row and
+  Paste. A remote shell as your user, so it is off by default and needs two switches: Settings › General › Terminal and the
+  widget's own **Allow a shell on the computer** option. Turning either off, removing the widget, disabling its page or
+  saving a **New key** ends the shells. The agent does not log or store typed text or output (they stay in memory);
+  your shell may keep its own history. macOS only: not available on Linux or Windows yet. On the phone it needs Android
+  System WebView 94 or newer, and the terminal moves up above the on-screen keyboard on Android 11 and newer. See
+  Security & privacy in the guide.
 - Control Deck: **Mics off, camera off**, next to Emergency mute. One tap mutes every microphone the computer can control, leaves the speakers
   as they are and stops the OBS virtual camera. Like Emergency mute, it drops a held push-to-talk key and keeps
   retrying a microphone that refuses. The phone says what happened to each, and **Camera not turned off** when OBS is

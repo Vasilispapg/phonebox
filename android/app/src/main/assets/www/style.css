@@ -1751,6 +1751,41 @@ body.waking::after { opacity: 0; pointer-events: auto; transition: opacity .2s e
 .ac-knob::after { content: ""; position: absolute; top: 8%; left: 50%; width: 4px; height: 22%; margin-left: -2px; border-radius: 2px; background: var(--accent, #60a5fa); }
 .ac-note { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 12px; }
 .ac-note[hidden] { display: none; }
+/* terminal: the card (status, the last lines seen, Open) and the full-screen overlay with xterm.js and a key row.
+   Nothing here animates: a static dot, no blinking cursor. */
+.w.tm { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+.tm-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.tm-title { flex: 1; min-width: 0; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tm-status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.tm-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
+.w.tm[data-state="live"] .tm-dot { background: var(--ok); }
+.w.tm[data-state="ready"] .tm-dot { background: var(--accent, #2dd4bf); }
+.w.tm[data-state="ended"] .tm-dot, .w.tm[data-state="offline"] .tm-dot { background: var(--net); }
+.tm-status .ico { width: 13px; height: 13px; }
+.tm-lines { flex: 1; min-height: 0; margin: 0; overflow: hidden; font: 12px/1.35 ui-monospace, Menlo, "Roboto Mono", monospace; color: var(--text); opacity: .8; white-space: pre; display: flex; flex-direction: column; justify-content: flex-end; }
+.tm-foot { display: flex; align-items: flex-end; gap: 10px; min-width: 0; }
+.tm-hint { flex: 1; min-width: 0; font-size: 12px; color: var(--muted); white-space: pre-line; }
+.tm-open { flex: none; border: 1px solid var(--line); border-radius: 12px; background: rgba(255, 255, 255, .08); color: var(--text); font: inherit; font-size: 15px; padding: 8px 18px; }
+.tm-open:active, .tm-keys button:active, .tm-bar button:active { background: rgba(255, 255, 255, .18); }
+.tm [hidden], .tm-ov [hidden] { display: none !important; }
+.tm-ov { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 19; display: flex; flex-direction: column; background: var(--bg); overscroll-behavior: contain; padding: 0 var(--pad-r) 0 var(--pad-l); }
+.tm-bar { display: flex; align-items: center; gap: 8px; padding: 6px 0; min-width: 0; }
+.tm-ov-title { flex: 1; min-width: 0; font-size: 14px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tm-net { font-size: 12px; color: var(--net); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.tm-bar button, .tm-keys button { flex: none; border: 1px solid var(--line); border-radius: 10px; background: rgba(255, 255, 255, .07); color: var(--text); font: inherit; font-size: 14px; padding: 6px 14px; min-height: 36px; }
+.tm-screen { flex: 1; min-height: 0; overflow: hidden; }
+.tm-screen .xterm { height: 100%; }
+.tm-keys { display: flex; gap: 6px; padding: 6px 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; flex: none; }
+.tm-keys::-webkit-scrollbar { display: none; }
+.tm-keys button { min-width: 44px; padding: 6px 10px; font-family: ui-monospace, Menlo, "Roboto Mono", monospace; }
+.tm-keys .tm-ctrl.on { background: var(--accent, #2dd4bf); color: #000; border-color: transparent; }
+/* a short window (the keyboard is up): one thin bar, one row of keys, every other pixel for the terminal */
+.tm-ov.tm-compact .tm-bar { padding: 2px 0; }
+/* End session stays: a shell stuck behind the keyboard must still be endable from here */
+.tm-ov.tm-compact .tm-ov-title { display: none; }
+.tm-ov.tm-compact .tm-net { flex: 1; }
+.tm-ov.tm-compact .tm-bar button, .tm-ov.tm-compact .tm-keys button { min-height: 30px; padding-top: 3px; padding-bottom: 3px; font-size: 13px; }
+.tm-ov.tm-compact .tm-keys { padding: 3px 0; }
 /* dictation: a big microphone button, what was heard, and a status line */
 .w.dc { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 10px; }
 .dc-mic { width: 84px; height: 84px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .1); background: rgba(255, 255, 255, .07); color: var(--text); display: flex; align-items: center; justify-content: center; flex: none; }

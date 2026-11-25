@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.ActivityManager
 import android.app.AlertDialog
+import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -113,6 +114,7 @@ class MainActivity : Activity(), SensorEventListener {
         }
         web.setBackgroundColor(0xFF000000.toInt())
         setContentView(web)
+        keepAboveKeyboard()
 
         with(web.settings) {
             javaScriptEnabled = true
@@ -143,7 +145,14 @@ class MainActivity : Activity(), SensorEventListener {
 
             // Old WebView without document-start scripts: hand the bridge key to the main frame only (evaluateJavascript
             // never runs in iframes), and only when it shows the panel. Bridge calls before it arrives get nothing.
-            override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) = giveKey(view, url)
+            override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+                // a page that loads (a reload, the agent's settings change) has no Terminal overlay open
+                if (keyboardResize) {
+                    keyboardResize = false
+                    setBottomMargin(view, 0)
+                }
+                giveKey(view, url)
+            }
             override fun onPageFinished(view: WebView, url: String?) = giveKey(view, url)
         }
         if (documentStartKey)
@@ -221,9 +230,44 @@ class MainActivity : Activity(), SensorEventListener {
         val status = if (r.code in 100..599 && r.code !in 300..399) r.code else 502
         return WebResourceResponse(mime, charset, status, if (status < 400) "OK" else "Error", NO_STORE, r.body)
     }
+    @Volatile private var windowFocused = false
+
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
+        windowFocused = hasFocus
         if (hasFocus) hideSystemUi()
+    }
+
+    /**
+     * While the Terminal overlay is open (Bridge.setKeyboardResize), the page shrinks above the on-screen keyboard. The
+     * panel is edge-to-edge (hideSystemUi), where Android 11+ no longer shrinks the window for the keyboard, so the page
+     * is given a bottom margin as tall as the keyboard instead and window.innerHeight follows. Only then: every other
+     * text field (a note, the all-apps search, an approval) keeps the page as it always was, since a shrinking page can
+     * flip the layout between portrait and landscape and rebuild it under the field being typed in. Android 10 and older
+     * get no resize (the keyboard height cannot be told from the navigation bar there); a hardware keyboard needs none.
+     * Only touched on the main thread.
+     */
+    private var keyboardResize = false
+
+    private fun keepAboveKeyboard() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        // A listener replaces the view's own onApplyWindowInsets, and the WebView takes the display-cutout safe area
+        // (env(safe-area-inset-*), the panel's --pad-l/--pad-r) from it, so the insets are always passed on to it first.
+        // It does not use the keyboard inset, so the page is resized once, by the margin.
+        web.setOnApplyWindowInsetsListener { view, insets ->
+            val forwarded = view.onApplyWindowInsets(insets)
+            val keyboard = if (keyboardResize && insets.isVisible(WindowInsets.Type.ime())) insets.getInsets(WindowInsets.Type.ime()).bottom else 0
+            setBottomMargin(view, keyboard)
+            forwarded
+        }
+    }
+
+    /** Nothing changes (no layout is requested) while the margin already has that height. */
+    private fun setBottomMargin(view: View, height: Int) {
+        val params = view.layoutParams as? ViewGroup.MarginLayoutParams ?: return
+        if (params.bottomMargin == height) return
+        params.bottomMargin = height
+        view.layoutParams = params
     }
 
     @Suppress("DEPRECATION")
@@ -519,6 +563,21 @@ class MainActivity : Activity(), SensorEventListener {
         @JavascriptInterface
         fun transport(key: String): String = if (ok(key)) link.route.name.lowercase() else ""
 
+        /**
+         * The Terminal overlay is open (true) or closed (false): only meanwhile does the page shrink above the on-screen
+         * keyboard (keepAboveKeyboard). Turning it off puts the page back to full height at once.
+         */
+        @JavascriptInterface
+        fun setKeyboardResize(key: String, on: Boolean) {
+            if (!ok(key)) return
+            runOnUiThread {
+                if (keyboardResize == on || !hasWeb) return@runOnUiThread
+                keyboardResize = on
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return@runOnUiThread
+                if (on) web.requestApplyInsets() else setBottomMargin(web, 0)
+            }
+        }
+
         /** Whether the volume keys flip pages (true) or change the phone's volume (false). */
         @JavascriptInterface
         fun setVolumeKeys(key: String, enabled: Boolean) { if (ok(key)) volumeKeysFlipPages = enabled }
@@ -621,6 +680,32 @@ class MainActivity : Activity(), SensorEventListener {
 
         @JavascriptInterface
         fun cancelListening(key: String, id: Int) { if (ok(key) && id > 0) dictation.cancel(id) }
+
+        /**
+         * Terminal widget, Paste button: the clipboard's plain text, at most 64 KB. Empty when the clipboard is empty or holds
+         * something else, and while the panel is not the app in front (Android 10+ refuses background reads anyway). Read when
+         * asked, never kept, never logged.
+         */
+        @JavascriptInterface
+        fun readClipboardText(key: String): String {
+            if (!ok(key) || !resumed || !windowFocused) return ""
+            return try {
+                val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                val clip = clipboard.primaryClip
+                // any text type (rich text from a browser lists only text/html but carries its plain text); .text is null for
+                // a URI or an intent, which are never resolved
+                if (clip == null || clip.itemCount == 0 || !clip.description.hasMimeType("text/*")) ""
+                else clip.getItemAt(0).text?.let { clipped(it) } ?: ""
+            } catch (_: Exception) { "" }
+        }
+
+        private fun clipped(text: CharSequence): String {
+            val limit = 64 * 1024 // UTF-16 chars, not bytes
+            if (text.length <= limit) return text.toString()
+            // do not cut a surrogate pair in half
+            val end = if (Character.isHighSurrogate(text[limit - 1])) limit - 1 else limit
+            return text.subSequence(0, end).toString()
+        }
     }
 
     companion object {

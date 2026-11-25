@@ -14,6 +14,7 @@ import './widgets/web.js';
 import './widgets/photos.js';
 import './widgets/controls.js';
 import './widgets/console.js';
+import './widgets/terminal.js';
 import './widgets/dictate.js';
 import './widgets/camera.js';
 import './widgets/spectrum.js';
@@ -63,11 +64,14 @@ export const $ = (id) => document.getElementById(id);
 // The native bridge (window.Android) is in every frame, sandboxed widgets included, so each call carries a key that only
 // the panel's own frames receive (MainActivity.bridgeKey). This wrapper adds it.
 const BRIDGE = ['battery', 'buzz', 'haptic', 'is24Hour', 'pcs', 'selectPc', 'forgetPc', 'setBrightness', 'setHomeScreen', 'setOrientation',
-  'setPinned', 'setVolumeKeys', 'setLanguage', 'transport', 'sensors', 'version', 'canListen', 'listen', 'stopListening', 'cancelListening', 'trackpad', 'canWake', 'wakePc'];
+  'setPinned', 'setVolumeKeys', 'setLanguage', 'transport', 'sensors', 'version', 'canListen', 'listen', 'stopListening', 'cancelListening', 'trackpad', 'canWake', 'wakePc', 'readClipboardText', 'setKeyboardResize'];
 export const bridge = typeof Android === 'undefined' ? null : Object.fromEntries(BRIDGE.filter((m) => typeof Android[m] === 'function')
   .map((m) => [m, (...args) => Android[m](window.__phoneboxKey || '', ...args)]));
 // Live preview inside the agent's layout editor: the layout comes from the editor (unsaved), not from the agent.
 export const PREVIEW = new URLSearchParams(location.search).has('preview') && window.parent !== window;
+// The Terminal widget's full-screen overlay is open (widgets/terminal.js): keys belong to the shell, and the panel holds
+// back page changes, the idle return, dimming and layout rebuilds until it closes (the widget rebuilds then).
+export const terminalOpen = () => document.body.classList.contains('term-open');
 
 /** Used until the agent has sent its settings once (first start without a connection). */
 export const FALLBACK_PAGES = [{
@@ -104,6 +108,16 @@ let writeBarrier = 0; // config reads numbered below this started before the pan
 export let online = null;
 export let lastTouch = Date.now();
 export let lastUserTouch = 0;     // last real touch or key (rules wait a while after it)
+/**
+ * Counts as a touch (typing in the Terminal overlay, the overlay closing): the idle return, dimming and rules start their
+ * wait again, and, as after a tap, the night screen lifts and stays away for 30 s (also when it is only held back by the
+ * overlay, so closing the overlay at night shows the panel for a moment before the night screen returns).
+ */
+export function noteTouch() {
+  lastTouch = lastUserTouch = Date.now();
+  wakeUntil = Math.max(wakeUntil, Date.now() + 30_000);
+  if (nightOn) setNight(false);
+}
 export let wakeUntil = 0;
 export let rulesPaused = null;    // unix ms until which the agent's rules are paused
 export let nightOn = null;
@@ -1467,7 +1481,7 @@ export function handleEvent(e) {
 }
 
 export const WIDGET_ICONS = { camera: '📹', dictate: '🎙️', spectrum: '📶', 'app-console': '🎛️', discord: '💬', 'discord-bar': '🔊', steam: '👥', 'steam-activity': '🔔', rules: '⚡', chargecare: '🔋', nextup: '⏭️', moon: '🌙', wordclock: '🔤', clock: '🕒', weather: '⛅', forecast: '🌦️', media: '🎵', lyrics: '🎤', stat: '📈', gauge: '⏲️', chart: '📊', meters: '💾', gpu: '🎮', quotas: '✳️', sessions: '🤖',
-  github: '🐙', processes: '⚙️', shortcuts: '🎛️', button: '🔘', worldclock: '🌍', calendar: '📅', pomodoro: '🍅', countdown: '⏳', note: '📝', command: '💻',
+  github: '🐙', processes: '⚙️', shortcuts: '🎛️', button: '🔘', worldclock: '🌍', calendar: '📅', pomodoro: '🍅', countdown: '⏳', note: '📝', command: '💻', terminal: '⌨️',
   push: '📡', inbox: '📬', label: '🔤', analog: '🕰️', progress: '📆', stopwatch: '⏱️', timer: '⏲️', counter: '🔢', breathe: '🫁', quote: '💬',
   checklist: '✅', battery: '🔋', topprocs: '🔥', quotaring: '🎯', volume: '🔊', sun: '🌅', air: '🍃', hackernews: '📰', feeds: '🗞️', photos: '🖼️', exchange: '💱', crypto: '🪙', image: '🖼️', pcswitch: '🖥️', pagebuttons: '🧭', 'plex-queue': '🎛️', 'plex-playlists': '🎶' };
 
@@ -1499,6 +1513,7 @@ export function portraitLayout(widgets, cols = 6) {
 const gridOptions = () => ({ tabletRows: cfg.display?.tabletRows === true });
 
 export function buildLayout() {
+  if (terminalOpen()) return;
   const enabled = (cfg.pages || []).filter((p) => p.enabled !== false && Array.isArray(p.widgets));
   const next = enabled.length ? enabled : FALLBACK_PAGES;
   const viewport = gridForViewport(window.innerWidth, window.innerHeight, gridOptions());
@@ -1841,7 +1856,7 @@ export function requestBack(rule) {
 /** Seconds of no touch after which this page goes home (0 = stay). */
 const idleLimit = () => pages[curPage]?.idleSec ?? dsp().idleReturnSec ?? 90;
 function idleDue() {
-  if (pagePaused) return false;
+  if (pagePaused || terminalOpen()) return false;
   const idle = idleLimit();
   if (!(idle > 0)) return false;
   const maxHold = (dsp().holdMaxMin ?? 30) * 60_000;
@@ -1921,7 +1936,7 @@ function waitReason(req) {
   if (pagePaused) return t('panel.pagePausedWait');
   const grace = (dsp().touchGraceSec ?? 20) * 1000;
   if (Date.now() - lastUserTouch < grace) return 'waits until you are done';
-  if (sheet || !$('overview').hidden) return 'waits until you are done';
+  if (sheet || !$('overview').hidden || terminalOpen()) return 'waits until you are done';
   const dwell = (dsp().minDwellSec ?? 15) * 1000 - (Date.now() - lastAutoSwitch);
   if (dwell > 0) return `in ${Math.ceil(dwell / 1000)} s`;
   return '';
@@ -2303,11 +2318,13 @@ pager.addEventListener('touchcancel', () => { swipeTracking = false; }, { passiv
 window.onAndroidKey = (k) => {
   lastTouch = lastUserTouch = Date.now();
   if (nightOn) { wakeUntil = Date.now() + 30_000; setNight(false); return; }
+  if (terminalOpen()) return;
   if (!$('overview').hidden) closeOverview();
   if (k === 'next') goPage(curPage + 1 >= pages.length ? 0 : curPage + 1, true);
   else if (k === 'prev') goPage(curPage - 1 < 0 ? pages.length - 1 : curPage - 1, true);
 };
 document.addEventListener('keydown', (e) => {
+  if (terminalOpen()) return; // Esc and the arrows are the shell's
   if (e.key === 'Escape') {
     const noteEdit = document.querySelector('.note-edit');
     if (noteEdit) { e.preventDefault(); noteEdit.remove(); return; }
@@ -2324,6 +2341,7 @@ document.addEventListener('keydown', (e) => {
 });
 window.onAndroidBack = () => {
   if (!$('approval').hidden) return; // answer it (or let it time out); Back must not dismiss a permission prompt
+  if (terminalOpen()) { window.dispatchEvent(new Event('phonebox-terminal-close')); return; }
   const noteEdit = document.querySelector('.note-edit');
   if (noteEdit) { noteEdit.remove(); return; }
   if (closeSessionDetails()) return;
@@ -2368,14 +2386,15 @@ function reconcileUnreachableNight(now = new Date()) {
   const unreachable = enabled && unreachableSince > 0
     && Date.now() - unreachableSince >= delayMin * 60_000;
   const dark = darkRoom && cfg.display?.nightWhenDark === true;
-  setNight((isNight(now) || dark || unreachable) && Date.now() > wakeUntil);
+  // never over an open Terminal overlay: keys typed there would reach the shell unseen, and its output would stop
+  setNight((isNight(now) || dark || unreachable) && Date.now() > wakeUntil && !terminalOpen());
 }
 /**
  * Before widgets are built: a timer that ran out while the panel was closed rings during the build, so the night
  * screen must already be on if the schedule says so (nightOn is null at start, and new settings may move the night).
  * Only ever turns night on; tick() keeps the state up to date as before, so the day is unchanged.
  */
-function nightBeforeBuild() { if (isNight(new Date()) && Date.now() > wakeUntil) setNight(true); }
+function nightBeforeBuild() { if (isNight(new Date()) && Date.now() > wakeUntil && !terminalOpen()) setNight(true); }
 
 // ---------------------------------------------------------------- phone sensors
 // Room light (lux) and proximity come from the Android shell. Brightness can follow the room, the night screen can
@@ -2463,7 +2482,7 @@ export function applyBurnIn() {
     root.setProperty('--night-y', `${ny}vmin`);
   }
   const after = Math.max(0, Math.floor(+d.idleDimMin || 0)) * 60_000;
-  const dim = after > 0 && !PREVIEW && !nightOn && $('approval').hidden
+  const dim = after > 0 && !PREVIEW && !nightOn && $('approval').hidden && !terminalOpen()
     && Date.now() - Math.max(lastTouch, lastNav, lastWake) > after;
   if (dim !== dimmed) {
     dimmed = dim;

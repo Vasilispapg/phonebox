@@ -520,7 +520,138 @@
     return { ok: true };
   }
 
-  async function handle(method, path, q, body, headers) {
+  // Terminal (TerminalService): an echo "shell" per widget key behind the agent's routes and status codes. `out` answers
+  // the agent's binary frame [flags:1][cursor:8, big-endian][data…] (bit 0 = the shell ended, bit 1 = the cursor was
+  // reset) and holds at most `wait` ms in short steps. The shell prints "demo$ ", echoes what is typed, answers
+  // "echo X" with X and ends on "exit". Tests reach it through window.__terminalDemo:
+  //   sessions: Map widget key → { inputs (the applied batches' text, in order), sizes ([cols, rows] per open/size), exited, total }
+  //   requests: [{ route, seq, since, at }], one per /api/terminal call;  opens: shells started
+  //   loseNext / lose504: the next n `in` batches are applied but their answer is lost (a dropped connection, or 504
+  //     "result unknown"), so the phone must resend the same number
+  //   dupNext: the next n batches arrive twice (a transport retry): applied once, and the phone sees {applied:false}
+  //   noExpected: the next n `in` requests answer 409 without an expected number
+  //   inFault: 'drop' (every `in` fails before reaching the shell) or 'lose' (applied, answer lost), until cleared
+  //   loseOpen / failOpen: the next n `open` answers are lost after the open happened, or are 500 "could not start"
+  //   holdIn: the next `in` waits (still in transit) until release() is called; it then meets whatever shell is there
+  //   busyIn: the next n `in` batches answer 503 "busy" untyped (an earlier write is still stuck in the pty)
+  //   stuckIn: the next batch gets stuck in the pty (the program in front is not reading): it is in flight, so open still
+  //     says nextSeq is its number and every `in` answers 503 "busy" until unstick(key) lets the write finish
+  //   write(key, bytes): raw output (a string, or an array of byte values);  exit(key): the shell ends
+  //   replace(key, text): another shell takes the widget's place (a new identity), its first output `text`
+  //   missing: answer 404 everywhere, as an agent older than the widget
+  const TERM_CAP = 262144, TERM_MAX_IN = 4096, utf8 = new TextEncoder();
+  const termDemo = window.__terminalDemo = { sessions: new Map(), requests: [], opens: 0, loseNext: 0, lose504: 0, dupNext: 0, noExpected: 0, inFault: null, loseOpen: 0, failOpen: 0, holdIn: false, busyIn: 0, stuckIn: false, release() {},
+    write(key, bytes) { const s = this.sessions.get(key); if (s) termOut(s, bytes); },
+    exit(key) { const s = this.sessions.get(key); if (s) { termOut(s, 'logout\r\n'); s.exited = true; } },
+    replace(key, text) { const s = termShell(); this.sessions.set(key, s); this.opens++; termOut(s, text); },
+    unstick(key) { const s = this.sessions.get(key); if (s?.stuck) { const d = s.stuck; s.stuck = null; s.next++; s.inputs.push(d); termType(s, d); } } };
+  function termShell() {
+    // every shell has an identity of its own (TerminalSession.Id)
+    const id = [...crypto.getRandomValues(new Uint8Array(8))].map((b) => b.toString(16).padStart(2, '0')).join('');
+    return { id, buf: new Uint8Array(0), total: 0, next: 1, line: '', esc: 0, exited: false, inputs: [], sizes: [] };
+  }
+  function termOut(s, data) {
+    const bytes = typeof data === 'string' ? utf8.encode(data) : Uint8Array.from(data);
+    const all = new Uint8Array(s.buf.length + bytes.length);
+    all.set(s.buf); all.set(bytes, s.buf.length);
+    s.total += bytes.length;
+    s.buf = all.length > TERM_CAP ? all.slice(all.length - TERM_CAP) : all;
+  }
+  function termType(s, text) {
+    for (const ch of text) {
+      if (s.exited) return;
+      // escape sequences (arrows, bracketed paste markers) are taken, not echoed
+      if (s.esc === 1) { s.esc = ch === '[' || ch === 'O' ? 2 : 0; continue; }
+      if (s.esc === 2) { if (ch >= '@' && ch <= '~') s.esc = 0; continue; }
+      if (ch === '\x1b') s.esc = 1;
+      else if (ch === '\r' || ch === '\n') {
+        const line = s.line.trim();
+        s.line = '';
+        termOut(s, '\r\n');
+        if (line === 'exit') { termOut(s, 'logout\r\n'); s.exited = true; return; }
+        if (line.startsWith('echo ')) termOut(s, line.slice(5) + '\r\n');
+        else if (line) termOut(s, `demo: ${line.split(' ')[0]}: not found\r\n`);
+        termOut(s, 'demo$ ');
+      } else if (ch === '\x7f') { if (s.line) { s.line = [...s.line].slice(0, -1).join(''); termOut(s, '\b \b'); } }
+      else if (ch === '\x03') { s.line = ''; termOut(s, '^C\r\ndemo$ '); }
+      else if (ch >= ' ') { s.line += ch; termOut(s, ch); }
+    }
+  }
+  async function terminal(method, route, q, signal) {
+    const key = q.get('widget') || '';
+    termDemo.requests.push({ route, seq: q.get('seq'), since: q.get('since'), at: Date.now() });
+    if (termDemo.missing) return json({ error: 'not in the demo' }, 404);
+    const c = await config(), w = panelWidget(c, key, 'terminal');
+    if (!w) return json({ error: "this terminal widget isn't on an enabled page of this phone" }, 404);
+    let s = termDemo.sessions.get(key);
+    if (route === 'state') return json({ supported: true, enabled: c.terminal?.enabled === true, control: w.options?.control === true, open: !!s && !s.exited });
+    if (route === 'close') { termDemo.sessions.delete(key); return json({ ok: true }); }
+    if (c.terminal?.enabled !== true) return json({ error: 'the terminal is off: turn it on in Settings › General › Terminal' }, 403);
+    if (w.options?.control !== true) return json({ error: 'this widget may not open a shell: turn on its control option' }, 403);
+    const closed = () => json({ error: 'closed' }, 410);
+    if (route === 'open') {
+      if (termDemo.failOpen > 0) { termDemo.failOpen--; return json({ error: 'The shell could not be started.' }, 500); }
+      const attached = !!s && !s.exited;
+      if (!attached) {
+        if ([...termDemo.sessions].filter(([k, x]) => k !== key && !x.exited).length >= 2)
+          return json({ error: 'Two terminals are already open on this computer. Close one of them first.' }, 429);
+        termDemo.sessions.set(key, s = termShell());
+        termDemo.opens++;
+        termOut(s, 'demo$ ');
+      }
+      s.sizes.push([+q.get('cols') || 80, +q.get('rows') || 24]);
+      if (termDemo.loseOpen > 0) { termDemo.loseOpen--; throw new TypeError('Failed to fetch'); }
+      return json({ ok: true, attached, nextSeq: s.next, shell: s.id });
+    }
+    if (route === 'out') {
+      if (!s) return closed();
+      const since = Number(q.get('since') || 0), until = Date.now() + Math.min(Math.max(+q.get('wait') || 0, 0), 2500);
+      const aborted = () => { if (signal?.aborted) throw new DOMException('The operation was aborted.', 'AbortError'); };
+      while (s.total === since && !s.exited && Date.now() < until && termDemo.sessions.get(key) === s) { aborted(); await new Promise((r) => setTimeout(r, 20)); }
+      aborted();
+      const oldest = s.total - s.buf.length, reset = since < oldest || since > s.total;
+      const data = s.buf.subarray(reset ? 0 : since - oldest), frame = new Uint8Array(9 + data.length);
+      frame[0] = (s.exited ? 1 : 0) | (reset ? 2 : 0);
+      new DataView(frame.buffer).setBigUint64(1, BigInt(s.total));
+      frame.set(data, 9);
+      return new Response(frame.buffer, { status: 200, headers: { 'Content-Type': 'application/octet-stream' } });
+    }
+    if (route === 'in') {
+      const seq = /^\d+$/.test(q.get('seq') || '') ? Number(q.get('seq')) : 0, d = q.get('d');
+      if (!seq) return json({ error: 'seq must be a number from 1' }, 400);
+      if (d == null) return json({ error: 'nothing to type' }, 400);
+      if (utf8.encode(d).length > TERM_MAX_IN) return json({ error: `more than ${TERM_MAX_IN} bytes at once` }, 413);
+      if (termDemo.holdIn) { termDemo.holdIn = false; await new Promise((r) => { termDemo.release = r; }); s = termDemo.sessions.get(key); }
+      if (!s || s.exited) return closed();
+      // numbered for another shell (one that ended or was replaced): refused, nothing typed
+      if (q.has('s') && q.get('s') !== s.id) return json({ error: 'other-session' }, 409);
+      if (termDemo.inFault === 'drop') throw new TypeError('Failed to fetch');
+      if (termDemo.busyIn > 0) { termDemo.busyIn--; return json({ error: 'busy' }, 503); }
+      if (s.stuck != null) return json({ error: 'busy' }, 503);
+      if (termDemo.stuckIn && seq === s.next) { termDemo.stuckIn = false; s.stuck = d; return json({ error: 'busy' }, 503); }
+      if (termDemo.noExpected > 0 && seq >= s.next) { termDemo.noExpected--; return json({ error: 'out-of-order' }, 409); }
+      if (seq < s.next) { if (termDemo.inFault === 'lose') throw new TypeError('Failed to fetch'); return json({ applied: false }); }
+      if (seq > s.next) return json({ error: 'out-of-order', expected: s.next }, 409);
+      s.next++;
+      s.inputs.push(d);
+      termType(s, d);
+      if (termDemo.lose504 > 0) { termDemo.lose504--; return json({ error: 'result unknown' }, 504); }
+      if (termDemo.loseNext > 0 || termDemo.inFault === 'lose') { termDemo.loseNext = Math.max(0, termDemo.loseNext - 1); throw new TypeError('Failed to fetch'); }
+      if (termDemo.dupNext > 0) { termDemo.dupNext--; return json({ applied: false }); }
+      return json({ applied: true });
+    }
+    if (route === 'size') {
+      const cols = Number(q.get('cols')), rows = Number(q.get('rows'));
+      if (!Number.isInteger(cols) || !Number.isInteger(rows) || !q.get('cols') || !q.get('rows')) return json({ error: 'cols and rows must be numbers' }, 400);
+      if (!s || s.exited) return closed();
+      s.sizes.push([cols, rows]);
+      return json({ ok: true });
+    }
+    return json({ error: 'not in the demo' }, 404);
+  }
+
+  async function handle(method, path, q, body, headers, signal) {
+    if (path.startsWith('/api/terminal/')) return terminal(method, path.slice(14), q, signal);
     if (path === '/api/controls/obs') return json(deckObsState());
     if (path.startsWith('/api/controls/obs/') && method === 'POST') {
       // ObsMonitor.DeckAct: only when a widget allows control, and only for inputs, sources and scenes OBS really has
@@ -955,7 +1086,7 @@
     const url = new URL(typeof input === 'string' ? input : input.url, location.href);
     const i = url.pathname.indexOf('/api/');
     if (url.origin !== location.origin || i < 0) return realFetch(input, init);
-    return handle((init.method || 'GET').toUpperCase(), url.pathname.slice(i), url.searchParams, init.body, new Headers(init.headers || {}));
+    return handle((init.method || 'GET').toUpperCase(), url.pathname.slice(i), url.searchParams, init.body, new Headers(init.headers || {}), init.signal);
   };
 
   // Album art and radio logos are <img>, which fetch() does not see: swap their address for the demo cover.

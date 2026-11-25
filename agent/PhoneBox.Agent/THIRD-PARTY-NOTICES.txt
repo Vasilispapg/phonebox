@@ -2,6 +2,7 @@ PhoneBox agent: third-party software
 
 The release agent is self-contained: it includes the .NET runtime and ASP.NET Core, QRCoder, and on Windows also
 Windows Forms, the C#/WinRT projection (WinRT.Runtime, Microsoft.Windows.SDK.NET) and NAudio.
+The Android app (not the agent) bundles the xterm.js terminal emulator, listed at the end.
 
 .NET runtime, ASP.NET Core, Windows Forms, C#/WinRT
 https://github.com/dotnet/runtime  https://github.com/dotnet/aspnetcore  https://github.com/dotnet/winforms
@@ -41,3 +42,16 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
+
+--------------------------------------------------------------------------------
+
+xterm.js 6.0.0 (@xterm/xterm) and its fit addon 0.11.0 (@xterm/addon-fit)
+https://github.com/xtermjs/xterm.js  https://xtermjs.org/
+MIT License
+Copyright (c) 2017-2019, The xterm.js authors (https://github.com/xtermjs/xterm.js)
+Copyright (c) 2014-2016, SourceLair Private Company (https://www.sourcelair.com)
+Copyright (c) 2012-2013, Christopher Jeffrey (https://github.com/chjj/)
+(the fit addon: Copyright (c) 2019, The xterm.js authors)
+Used as the terminal emulator of the Terminal widget; shipped as local files inside the Android app
+(android/app/src/main/assets/www/vendor/xterm/), not in the agent.
+(the same MIT terms as above; the full license texts are kept next to the files as LICENSE-xterm and LICENSE-addon-fit)

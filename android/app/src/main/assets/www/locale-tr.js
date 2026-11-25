@@ -909,6 +909,8 @@ window.PhoneBoxLocaleData = Object.assign(window.PhoneBoxLocaleData || {}, {
       "Send configured MIDI messages to a MIDI output.": "MIDI çıkışına yapışmış MIDI mesajlarını gönder.",
       "Send configured OSC messages.": "Yapıştırılmış OSC mesajlarını gönder.",
       "Send keys to the computer": "Anahtarlar bilgisayara gönder",
+      "A shell on the computer in a full-screen terminal: type with the phone's keyboard, with Esc, Tab, Ctrl, arrows and Paste on a key row (macOS). Off until you allow it here and turn on terminals in the computer's settings.": "Bilgisayarda tam ekran bir terminalde kabuk: telefonun klavyesiyle yazın; Esc, Tab, Ctrl, oklar ve Yapıştır bir tuş satırında (macOS). Burada izin verip bilgisayarın ayarlarında terminalleri açana kadar kapalıdır.",
+      "Allow a shell on the computer (anyone with this phone can run commands as you)": "Bilgisayarda kabuğa izin ver (bu telefona sahip herkes sizin adınıza komut çalıştırabilir)",
       "Separate left and right channel controls.": "Sol ve sağ kanal kontrollerini ayır.",
       "Series": "Seri",
       "Serif": "Serif",

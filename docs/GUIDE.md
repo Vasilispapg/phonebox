@@ -80,7 +80,7 @@ screen on.
 |---|---|
 | **Time** | Clock (with status line and weather) · Analog clock (any time zone) · **Word clock** · World clocks · Calendar · **Next up** · Time progress (day / week / month / year) · Countdown · Pomodoro · Quick timer · Stopwatch |
 | **Weather & sky** | Weather · Forecast (hourly / 7 days) · Sun & moon (daylight left, UV, moon phase) · **Moon** · Air quality (European AQI, PM2.5, PM10, O₃, NO₂) |
-| **Computer** | **Rules** (which hold, pause) · **Battery care** · On air (microphone / camera / OBS) · OBS Studio (live, recording, scenes) · **Dictation** (speak on the phone, typed on the PC; the app asks for the microphone on first use) · **App console** (Windows: keys and a dial for the app in front, set per app in Settings › General; use the focused app's process name from Task Manager's Details tab; packaged Store apps can all show up as `ApplicationFrameHost` and terminal tabs as `WindowsTerminal`, so a profile for those names covers all of them) · **Steam library** (installed games with covers, most recently played first; starting a game only when the widget allows it) · Device batteries (headphones, mice, keyboards) · Docker / Podman (containers, start / stop) · Metric tile · Gauge · Chart · GPU details · Memory & disks · Top processes · Processes · Now playing · Radio · Volume · **Spectrum bars** (Windows: a live spectrum of what the PC is playing, like the classic LED bar visualizers) · Shortcut grid · Big button (optionally filled with the shortcut's uploaded picture) · **Command** (PowerShell / bash / zsh output, refreshed every N seconds) · **Trackpad** (control PC cursor, tap to click, hold to drag, scroll) |
+| **Computer** | **Rules** (which hold, pause) · **Battery care** · On air (microphone / camera / OBS) · OBS Studio (live, recording, scenes) · **Dictation** (speak on the phone, typed on the PC; the app asks for the microphone on first use) · **App console** (Windows: keys and a dial for the app in front, set per app in Settings › General; use the focused app's process name from Task Manager's Details tab; packaged Store apps can all show up as `ApplicationFrameHost` and terminal tabs as `WindowsTerminal`, so a profile for those names covers all of them) · **Steam library** (installed games with covers, most recently played first; starting a game only when the widget allows it) · Device batteries (headphones, mice, keyboards) · Docker / Podman (containers, start / stop) · Metric tile · Gauge · Chart · GPU details · Memory & disks · Top processes · Processes · Now playing · Radio · Volume · **Spectrum bars** (Windows: a live spectrum of what the PC is playing, like the classic LED bar visualizers) · Shortcut grid · Big button (optionally filled with the shortcut's uploaded picture) · **Command** (PowerShell / bash / zsh output, refreshed every N seconds) · **Trackpad** (control PC cursor, tap to click, hold to drag, scroll) · **Terminal** (macOS only, off by default: a real shell on the computer in a full-screen terminal on the phone, with a key row for Esc, Tab, Ctrl and the arrows; needs two switches) |
 | **AI & code** | AI quotas · Quota ring · AI sessions (Claude Code, Codex, Cursor, OpenCode, Antigravity) · GitHub |
 | **Personal** | **Agenda** (Google / Outlook / iCloud calendars) · Note (edit it from the phone) · Checklist (resets daily) · Counter · Breathe · Quote · Title · Phone battery · **Computers** (switch between paired computers) · **Photo frame** (a slideshow from a photo folder on the PC or an Immich album) |
 | **Web & data** | **Custom HTML** (your own widget, sandboxed) · **Home Assistant** (entities with their own name and icon, tap to switch) · **Pushed value** · **Notifications** (both fed by [webhooks](#webhooks)) · **News feeds** (RSS and Atom feeds with categories, OPML/bulk import, and category filtering; with its "Open articles on the PC" option, a tap opens the article on the PC) · Hacker News · Exchange rates (ECB) · Crypto prices · Image / webcam · **Camera** (a live picture from an IP camera over RTSP, pulled by ffmpeg on the PC) |
@@ -122,6 +122,40 @@ starts and a longer one when a gesture fires (only for a Mac: another computer i
 vibrate for them). **Tick while scrolling**, off by default, adds a light tick for each notch of a scroll. In the widget's
 settings, **Haptic feedback** sets how strong they are (no vibration, light, normal or strong). The vibrations follow the
 display's vibration switch and night mode like the panel's other ones.
+
+**Terminal** opens a real shell on the computer in a full-screen terminal on the phone (xterm.js), for a quick check,
+a restart or a look at a log. It is a **remote shell that runs as you**, so it is **off by default** and
+needs **two switches**: **Settings › General › Terminal › Allow terminals on this computer** (changeable only from the
+settings page on the computer, never from the phone) and the widget's own option **Allow a shell on the computer
+(anyone with this phone can run commands as you)** on an enabled page. Turning either off, removing the widget,
+disabling its page or saving a new Wi-Fi key (**New key** on the Wi-Fi card, then save; it unpairs all phones) cuts
+the shell off within about a second (stopping its programs can take a few seconds more). A new key ends every running
+shell, a phone on USB included, because the agent cannot tell which way a shell came in. It works on macOS only: it is
+not available on Linux or Windows yet, where the widget says *Terminals need a Mac for now*. On the phone the terminal
+needs Android System WebView 94 or newer: with an older one the card still works and **Open** says the terminal
+couldn't load (the rest of the panel still runs on WebView 83). The terminal moves up above the on-screen keyboard on
+Android 11 and newer; a hardware keyboard works on any version.
+
+Tap **Open** to open the terminal. The shell is your login shell (`$SHELL`, `/bin/zsh` when that is not set) started
+in your home folder, with the agent's environment variables plus `TERM=xterm-256color`, `COLORTERM=truecolor` and
+`PHONEBOX_TERMINAL=1`. You type with the phone's keyboard, and a **key row** above it adds what a phone keyboard
+lacks: **Esc**, **Tab**, a sticky **Ctrl** (tap it, then a letter), the four arrows, ``| ~ / - _ ` `` and **Paste**,
+which reads the phone's clipboard only when you tap it. **Close** leaves the screen and leaves the shell running;
+**End session** closes the shell and anything running in it. The shell runs under PhoneBox's macOS privacy
+permissions: the first time it reaches into Documents, Desktop, Downloads and the like, macOS asks on the Mac (for
+PhoneBox), and the phone cannot answer that prompt.
+
+Limits: at most **2 shells** at once on the computer, 256 KB of output kept per shell (a phone that falls further
+behind than that skips ahead) and 4 KB of typed text per request. When the phone leaves the terminal screen, the shell
+keeps running (a build, an `ssh` session) and the phone reattaches to it when you come back, until it has been idle
+for **Close an idle terminal after (minutes)**: 10 by default, 0 to 120, where 0 closes it 30 seconds after you leave,
+or until another terminal needs its place (with two open, a third takes one whose screen has been left for a minute).
+The agent does not log or store what you type or what the shell prints: it stays in memory, and the phone keeps no
+copy on disk either. Your own shell may keep its own history, for example `~/.zsh_history`. The widget's card on the
+panel page shows the last three lines of the screen while the shell is there, kept in the panel page's memory only.
+The phone's connection carries typed text in the request address, so the agent keeps `/api/terminal` addresses out of
+its logs. The paths are `GET /api/terminal/state` and `/api/terminal/out` and `POST /api/terminal/open`, `/in`, `/size`
+and `/close`; they are on the Wi-Fi allow-list for the phone key and are not available to the webhook key.
 
 **Steam library** shows the Steam games installed on this computer: the favorites you tick in the widget's options
 first, in the order you ticked them, then the most recently played, with their covers, the game being played and update progress.
