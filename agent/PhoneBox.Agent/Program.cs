@@ -262,7 +262,7 @@ app.MapGet("/api/pair", (HttpRequest req, ConfigStore cfg) =>
 {
     var connection = req.HttpContext.Connection;
     if (connection.LocalPort != usb.Port ||
-        !gate.PhoneAllowed(connection.LocalPort, req.IsHttps, req.Method, req.Path, req.Headers.Origin, req.Headers.Authorization))
+        !gate.PhoneAllowed(connection.LocalPort, req.IsHttps, req.Method, req.Path, req.Headers.Origin.ToString(), req.Headers.Authorization))
         return Results.StatusCode(StatusCodes.Status403Forbidden);
     var lan = cfg.Get().Lan;
     if (!lan.Enabled || lanCert is null) return Results.Json(new { enabled = false, pc = Environment.MachineName });
