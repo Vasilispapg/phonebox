@@ -96,6 +96,8 @@ public static partial class Lan
         || path == "/api/lyrics" || path == "/api/wallpaper"
         || path.StartsWithSegments("/api/work") || path.StartsWithSegments("/api/procs") || path.StartsWithSegments("/api/run")
         || path.StartsWithSegments("/api/apps") || path.StartsWithSegments("/api/shortcuts/icon") || path.StartsWithSegments("/api/console") || path == "/api/dictate"
+        // the Terminal widget (a phone-key path, never a webhook one): off unless the master switch and the widget's own control are on
+        || path.StartsWithSegments("/api/terminal")
         // the Steam library widget: the list of installed games, an installed game's cover (the tiles' <img>), and starting a
         // game (off unless the asking widget, on an enabled page, allows it). /api/steam/games, the settings page's picker, stays local.
         || path == "/api/steam/library" || path == "/api/steam/cover" || path == "/api/steam/launch"

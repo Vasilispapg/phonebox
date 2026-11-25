@@ -56,6 +56,8 @@ builder.WebHost.ConfigureKestrel(k =>
 });
 builder.Logging.ClearProviders();
 builder.Logging.AddFilter("Microsoft", LogLevel.Warning);
+// typed terminal text (and other secrets) can be in a query string: ASP.NET Core's URL-printing categories stay silent
+RequestLog.KeepQueriesOut(builder.Logging);
 builder.Logging.AddProvider(new FileLoggerProvider());
 builder.Logging.AddSimpleConsole(o => { o.SingleLine = true; o.TimestampFormat = "HH:mm:ss "; });
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase);
@@ -117,6 +119,11 @@ builder.Services.AddSingleton<CommandRunner>();
 builder.Services.AddSingleton<ApprovalStore>();
 builder.Services.AddSingleton<HomeAssistant>();
 builder.Services.AddSingleton<AppConsole>();
+// Terminal widget: at most two shells, closed when idle or when a switch goes off (swept every second, all closed on stop)
+builder.Services.AddSingleton(sp => new TerminalSessions(sp.GetRequiredService<ConfigStore>(), Pty.Start, () => Environment.TickCount64,
+    sp.GetRequiredService<ILogger<TerminalSessions>>()));
+builder.Services.AddSingleton<TerminalService>();
+builder.Services.AddHostedService<TerminalSweeper>();
 builder.Services.AddSingleton<Dictation>();
 builder.Services.AddSingleton<SpectrumAnalyzer>();
 AddMonitor<SystemMonitor>(builder.Services);
@@ -538,7 +545,7 @@ app.MapPost("/api/phone-mic/setup", async (ConfigStore cfg, CancellationToken ct
 app.MapPost("/api/phone/open", async (AdbReverse adb) => { await adb.OpenPanelAsync(); return Results.Ok(); });
 
 // Widget types and page templates for the settings page's layout editor.
-app.MapGet("/api/catalog", () => Results.Text($"{{\"cols\":{Catalog.Cols},\"rows\":{Catalog.Rows},\"widgets\":{Catalog.WidgetsJson},\"templates\":{Catalog.TemplatesJson}}}",
+app.MapGet("/api/catalog", () => Results.Text($"{{\"cols\":{Catalog.Cols},\"rows\":{Catalog.Rows},\"maxRows\":{Catalog.MaxRows},\"widgets\":{Catalog.WidgetsJson},\"templates\":{Catalog.TemplatesJson}}}",
     "application/json; charset=utf-8"));
 
 // ---------------------------------------------------------------- webhook API: push data and events into the panel
@@ -694,6 +701,9 @@ app.MapPost("/api/console/{profile}/{slot}", async (string profile, string slot,
     return error is null ? Results.Ok(new { ok = true }) : Results.Json(new { error }, statusCode: status);
 });
 
+// Terminal (widget): a shell on this computer, only with the master switch and the widget's control on (see TerminalService).
+TerminalRoutes.Map(app);
+
 // OBS Studio (widget): state, scenes and the widget's buttons (only if a widget allows control).
 app.MapGet("/api/obs", (ObsMonitor obs, ConfigStore cfg) => Results.Json(new
 {
@@ -713,6 +723,10 @@ app.MapGet("/api/discord", (DiscordMonitor dc, ConfigStore cfg) => Results.Json(
     snapshot = dc.Snapshot(),
     control = DiscordMonitor.ControlAllowed(cfg.Get()),
     share = DiscordMonitor.ShareWanted(cfg.Get()),
+    // the current-channel bar: whether you share (its Live badge and Stop), and whether join and the input mode are
+    // allowed beyond its own Control option (mute, deafen and leave only)
+    shareState = DiscordMonitor.ShareStateWanted(cfg.Get()),
+    joinControl = DiscordMonitor.ControlAllowed(cfg.Get(), "join"),
     widgetControl = DiscordMonitor.WidgetControl(cfg.Get()),
     chat = DiscordMonitor.ChatWanted(cfg.Get()),
     chatUnread = dc.ChatUnread(),

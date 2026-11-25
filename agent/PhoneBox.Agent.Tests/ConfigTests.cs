@@ -295,9 +295,40 @@ public class ConfigTests
         var ws = c.Pages.Single().Widgets!;
         Assert.Equal(3, ws.Count);                                      // the unknown widget is dropped
         var clock = ws[0];
-        Assert.True(clock.X + clock.W <= 12 && clock.Y + clock.H <= 6);
+        Assert.True(clock.X + clock.W <= Catalog.Cols && clock.Y + clock.H <= Catalog.MaxRows);
+        Assert.Equal(9, clock.H); // taller than a phone page, still inside the tablet maximum
         Assert.Equal(0, ws[1].X);
         Assert.Equal(["clock", "n", "n-2"], ws.Select(w => w.Id));
+    }
+
+    [Fact]
+    public void WidgetsOnLaterRowsStayThereUntilTheMaximum()
+    {
+        var c = Load("""
+        { "pages": [ { "id": "p", "title": "P", "widgets": [
+            { "type": "clock", "x": 0, "y": 6, "w": 6, "h": 2 },
+            { "type": "note", "x": 0, "y": 40, "w": 2, "h": 30 } ] } ] }
+        """);
+        var ws = c.Pages.Single().Widgets!;
+        Assert.Equal(6, ws[0].Y); // below a phone's 6 rows: kept for a tablet
+        Assert.Equal(2, ws[0].H);
+        Assert.Equal(Catalog.MaxRows, ws[1].H);
+        Assert.True(ws[1].Y + ws[1].H <= Catalog.MaxRows);
+    }
+
+    [Fact]
+    public void MoreRowsOnATabletIsOffByDefaultAndKeptWhenOn()
+    {
+        Assert.False(Load("{}").Display.TabletRows);
+        Assert.True(Load("""{ "display": { "tabletRows": true } }""").Display.TabletRows);
+        // the default files are embedded in the agent, not copied next to the tests
+        foreach (var name in new[] { "config.default.json", "config.default.linux.json", "config.default.macos.json" })
+        {
+            using var stream = typeof(AgentConfig).Assembly.GetManifestResourceStream(name);
+            Assert.NotNull(stream);
+            using var doc = System.Text.Json.JsonDocument.Parse(stream, new() { CommentHandling = System.Text.Json.JsonCommentHandling.Skip, AllowTrailingCommas = true });
+            Assert.Equal(System.Text.Json.JsonValueKind.False, doc.RootElement.GetProperty("display").GetProperty("tabletRows").ValueKind);
+        }
     }
 
     [Fact]
@@ -343,6 +374,49 @@ public class ConfigTests
         Assert.Equal(1440, c.Rules[0].Value);
         Assert.Equal("info", c.Rules[0].Level);
     }
+
+    [Theory]
+    [InlineData("config.default.json")]
+    [InlineData("config.default.linux.json")]
+    [InlineData("config.default.macos.json")]
+    public void EveryDefaultFileCarriesTheTerminalSectionOffWithTenIdleMinutes(string resource)
+    {
+        using var stream = typeof(ConfigStore).Assembly.GetManifestResourceStream(resource)!;
+        using var reader = new StreamReader(stream);
+        var text = reader.ReadToEnd();
+        // The section is written in the file, not left to the class default.
+        using var doc = JsonDocument.Parse(text, new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
+        Assert.True(doc.RootElement.TryGetProperty("terminal", out var section), resource + " has no terminal section");
+        Assert.False(section.GetProperty("enabled").GetBoolean());
+        Assert.Equal(10, section.GetProperty("idleMinutes").GetInt32());
+        var cfg = JsonSerializer.Deserialize<AgentConfig>(text, ConfigStore.ReadOpts)!;
+        Assert.False(cfg.Terminal.Enabled);
+        Assert.Equal(10, cfg.Terminal.IdleMinutes);
+    }
+
+    [Fact]
+    public void SavingAConfigNeverWritesADerivedEffectiveIdleMinutes()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"phonebox-terminal-{Guid.NewGuid():N}.json");
+        try
+        {
+            File.WriteAllText(path, "{}");
+            var store = new ConfigStore(path);
+            Assert.Null(store.Save("""{"terminal":{"enabled":true,"idleMinutes":500}}"""));
+            var written = File.ReadAllText(path);
+            Assert.DoesNotContain("effectiveIdleMinutes", written, StringComparison.OrdinalIgnoreCase);
+            using var doc = JsonDocument.Parse(written);
+            var section = doc.RootElement.GetProperty("terminal");
+            Assert.True(section.GetProperty("enabled").GetBoolean());
+            Assert.Equal(500, section.GetProperty("idleMinutes").GetInt32()); // stored as typed, clamped only when read
+            Assert.Equal(120, store.Get().Terminal.EffectiveIdleMinutes());
+        }
+        finally
+        {
+            File.Delete(path);
+            File.Delete(path + ".bak");
+        }
+    }
 }
 
 public class LanTests
@@ -377,6 +451,9 @@ public class LanTests
     [InlineData("/api/pair/claim/x", false)]
     [InlineData("/api/shortcuts/test", false)]
     [InlineData("/api/shortcuts/icon", true)]
+    [InlineData("/api/terminal/out", true)]
+    [InlineData("/api/terminal/in", true)]
+    [InlineData("/api/terminalx", false)]
     [InlineData("/api/settings/shortcut-icon", false)]
     [InlineData("/api/claude/hook", false)]
     [InlineData("/api/codex/hook", false)]
@@ -395,6 +472,8 @@ public class LanTests
     [InlineData("/api/refresh", true)]
     [InlineData("/api/state", false)]
     [InlineData("/api/run/x", false)]
+    [InlineData("/api/terminal/in", false)]
+    [InlineData("/api/terminal/out", false)]
     public void TheWebhookKeyOpensOnlyWebhooks(string path, bool webhook) => Assert.Equal(webhook, Lan.IsWebhook(new PathString(path)));
 
     [Fact]

@@ -31,7 +31,7 @@
   async function loadCatalog() {
     if (catalog) return catalog;
     const [widgets, templates] = await Promise.all([realFetch(ROOT + 'widgets.json').then((r) => r.json()), realFetch(ROOT + 'templates.json').then((r) => r.json())]);
-    return (catalog = { cols: 12, rows: 6, widgets, templates });
+    return (catalog = { cols: 12, rows: 6, maxRows: 18, widgets, templates });
   }
 
   const store = {
@@ -52,7 +52,7 @@
     const action = (id, label, kind, target, value = 0) => ({ id, label, kind, target, argument: null, value, device: null });
     // every section the agent serves, with its defaults (Config.cs), so the settings page shows what a real one does
     c = {
-      codexBar: { providers: ['claude', 'codex', 'antigravity'], rotate: true, pageSize: 2, rotateInterval: 8 },
+      codexBar: { providers: ['claude', 'codex', 'antigravity', 'grok'], rotate: true, pageSize: 2, rotateInterval: 8 },
       controls: { allowListening: false, allowPower: false, actions: [
         action('build', 'Build', 'task', 'npm run build'), action('tests', 'Run tests', 'task', 'npm test'),
         action('web', 'Web dev server', 'server', 'npm run dev'), action('api', 'API dev server', 'server', 'dotnet watch'),
@@ -113,9 +113,15 @@
   const isObs = (type) => type === 'obs' || type.startsWith('obs-');
   // like AgentConfig.Widgets(enabledPagesOnly: true): what may control the computer comes from enabled pages only
   const shownWidgets = (c) => widgets({ ...c, pages: (c.pages || []).filter((p) => p.enabled !== false) });
+  // a saved config without a Discord section keeps the simulated connection; an explicit enabled: false turns it off
+  const dcOn = (c) => c.discord?.enabled !== false;
   const dcControl = (c) => shownWidgets(c).some((w) => w.type === 'discord' && w.options?.control === true); // DiscordMonitor.WidgetControl
-  const dcShare = (c) => c.discord?.screenShare === true && dcControl(c); // DiscordMonitor.ShareWanted
-  const dcChat = (c) => c.discord?.chat === true && shownWidgets(c).some((w) => w.type === 'discord'); // DiscordMonitor.ChatWanted
+  const dcBar = (c) => shownWidgets(c).some((w) => w.type === 'discord-bar' && w.options?.control === true); // DiscordMonitor.BarControl
+  // DiscordMonitor.ControlAllowed: the bar's own option allows only the actions it shows
+  const dcVoice = (c, a) => c.discord?.allowControl === true || dcControl(c) || ((a == null || ['mute', 'deafen', 'leave'].includes(a)) && dcBar(c));
+  const dcShare = (c) => dcOn(c) && c.discord?.screenShare === true && dcControl(c); // DiscordMonitor.ShareWanted
+  const dcShareState = (c) => dcOn(c) && c.discord?.screenShare === true && (dcControl(c) || dcBar(c)); // DiscordMonitor.ShareStateWanted
+  const dcChat = (c) => dcOn(c) && c.discord?.chat === true && shownWidgets(c).some((w) => w.type === 'discord'); // DiscordMonitor.ChatWanted
   const feedsCanOpen = (c) => shownWidgets(c).some((w) => w.type === 'feeds' && w.options?.open === true);
 
   // What the agent sends to a phone (AgentConfig.ToPublic): no commands, keys, tokens or what a rule matches on.
@@ -134,7 +140,7 @@
       // iconRev / iconUpload: the agent sets them when a shortcut has a picture (and when the user uploaded it). The demo
       // has no uploads and serves no /agent/api/shortcuts/icon, so a config that sets them also needs that image mocked
       // (see button-cover.spec.js); without one the key keeps its emoji.
-      shortcuts: (c.shortcuts || []).map(({ id, label, icon, color, toggle, cmd, longPress, cycle, iconRev, iconUpload }) => ({ id, label, icon, color, toggle: !!toggle || cmd === 'builtin:mute', cycle: cmd === 'builtin:cycle' && (cycle || []).length > 0, hold: !!longPress && longPress !== id && (c.shortcuts || []).some((x) => x.id === longPress), iconRev: iconRev ?? null, iconUpload: iconUpload === true })),
+      shortcuts: (c.shortcuts || []).map(({ id, label, icon, color, toggle, cmd, longPress, cycle, iconRev, iconUpload, iconSize }) => ({ id, label, icon, color, iconSize: typeof iconSize === 'string' && ['m', 'l', 'max'].includes(iconSize.trim().toLowerCase()) ? iconSize.trim().toLowerCase() : undefined, toggle: !!toggle || cmd === 'builtin:mute', cycle: cmd === 'builtin:cycle' && (cycle || []).length > 0, hold: !!longPress && longPress !== id && (c.shortcuts || []).some((x) => x.id === longPress), iconRev: iconRev ?? null, iconUpload: iconUpload === true })),
       rules: (c.rules || []).map(({ id, name, enabled, when }) => ({ id, name, enabled: enabled !== false, when })),
       charge: { enabled: !!c.charge?.enabled, min: c.charge?.min ?? 50, max: c.charge?.max ?? 80 },
     };
@@ -307,6 +313,8 @@
         codex: { model: 'Demo coding model', effort: 'high', totalTokens: 187000, totalInput: 150000, totalOutput: 37000, totalCached: 90000, totalReasoning: 12000, lastInput: 42000, contextWindow: 256000 }, limits: [
         { label: '5-hour session', percent: 12, resetsAt: n + 4.1 * 3600e3, windowSec: 18000 },
         { label: 'Weekly', percent: 27, resetsAt: n + 5.5 * 86400e3, windowSec: 604800 }] },
+      { id: 'grok', name: 'Grok', plan: 'SuperGrok', updatedAt: n - 90e3, extra: 'Grok Build 28% · Grok Chat 13%', error: null, codex: null, source: 'local', limits: [
+        { label: 'Weekly', percent: 41, resetsAt: n + 4.2 * 86400e3, windowSec: 604800 }] },
     ] };
   }
 
@@ -315,12 +323,12 @@
     const s = (i, tool, name, status, mins, waitingFor = null) => ({ id: `${tool}:${i}`, tool, name, project: name, status, waitingFor, since: n - mins * 60e3, startedAt: n - 3 * 3600e3,
       pid: 4000 + i * 211, outcome: null, model: null, effort: null, totalTokens: null, inputTokens: null, outputTokens: null, cachedInputTokens: null, reasoningTokens: null,
       lastInputTokens: null, contextWindow: null, lastTool: null, turnStartedAt: null,
-      ...(tool === 'codex' ? { model: 'Demo coding model', effort: 'high', totalTokens: 187000, inputTokens: 150000, outputTokens: 37000, cachedInputTokens: 90000, reasoningTokens: 12000, lastInputTokens: 42000, contextWindow: 256000, lastTool: 'read', turnStartedAt: n - 45000 } : {}) });
+      ...(tool === 'codex' || tool === 'grok' ? { model: tool === 'grok' ? 'grok-demo' : 'Demo coding model', effort: 'high', totalTokens: 187000, inputTokens: 150000, outputTokens: 37000, cachedInputTokens: 90000, reasoningTokens: 12000, lastInputTokens: 42000, contextWindow: 256000, lastTool: 'read', turnStartedAt: n - 45000 } : {}) });
     const pr = (repo, number, title, ci = null, review = null, draft = false, author = null) => ({ repo, number, title, ci, review, draft, author, updated: n - (number % 9 + 1) * 3600e3 });
     return {
       sessions: [s(1, 'claude', 'api-gateway', 'busy', 4), s(2, 'claude', 'docs-site', 'waiting', 2, 'approve a file edit'), s(3, 'codex', 'mobile-app', 'busy', 11),
         s(4, 'claude', 'infra', 'shell', 1), s(5, 'claude', 'blog-engine', 'idle', 38), s(6, 'codex', 'data-pipeline', 'idle', 74), s(7, 'claude', 'design-system', 'idle', 125),
-        s(8, 'cursor', 'phonebox', 'busy', 3), s(9, 'cursor', 'fueltrack', 'idle', 1), s(10, 'antigravity', 'phonebox', 'busy', 2)],
+        s(8, 'cursor', 'phonebox', 'busy', 3), s(9, 'cursor', 'fueltrack', 'idle', 1), s(10, 'antigravity', 'phonebox', 'busy', 2), s(11, 'grok', 'desk-widget', 'busy', 6)],
       github: { user: 'octocat', notifications: 7, error: null, updatedAt: n - 90e3,
         reviewRequests: [pr('acme/api', 412, 'Rate limiter for public endpoints', null, null, false, 'hubot'), pr('acme/web', 1288, 'Dark mode for the dashboard', null, null, false, 'monalisa'),
           pr('acme/infra', 77, 'Move staging to a new region', null, null, false, 'hubot')],
@@ -512,7 +520,138 @@
     return { ok: true };
   }
 
-  async function handle(method, path, q, body, headers) {
+  // Terminal (TerminalService): an echo "shell" per widget key behind the agent's routes and status codes. `out` answers
+  // the agent's binary frame [flags:1][cursor:8, big-endian][data…] (bit 0 = the shell ended, bit 1 = the cursor was
+  // reset) and holds at most `wait` ms in short steps. The shell prints "demo$ ", echoes what is typed, answers
+  // "echo X" with X and ends on "exit". Tests reach it through window.__terminalDemo:
+  //   sessions: Map widget key → { inputs (the applied batches' text, in order), sizes ([cols, rows] per open/size), exited, total }
+  //   requests: [{ route, seq, since, at }], one per /api/terminal call;  opens: shells started
+  //   loseNext / lose504: the next n `in` batches are applied but their answer is lost (a dropped connection, or 504
+  //     "result unknown"), so the phone must resend the same number
+  //   dupNext: the next n batches arrive twice (a transport retry): applied once, and the phone sees {applied:false}
+  //   noExpected: the next n `in` requests answer 409 without an expected number
+  //   inFault: 'drop' (every `in` fails before reaching the shell) or 'lose' (applied, answer lost), until cleared
+  //   loseOpen / failOpen: the next n `open` answers are lost after the open happened, or are 500 "could not start"
+  //   holdIn: the next `in` waits (still in transit) until release() is called; it then meets whatever shell is there
+  //   busyIn: the next n `in` batches answer 503 "busy" untyped (an earlier write is still stuck in the pty)
+  //   stuckIn: the next batch gets stuck in the pty (the program in front is not reading): it is in flight, so open still
+  //     says nextSeq is its number and every `in` answers 503 "busy" until unstick(key) lets the write finish
+  //   write(key, bytes): raw output (a string, or an array of byte values);  exit(key): the shell ends
+  //   replace(key, text): another shell takes the widget's place (a new identity), its first output `text`
+  //   missing: answer 404 everywhere, as an agent older than the widget
+  const TERM_CAP = 262144, TERM_MAX_IN = 4096, utf8 = new TextEncoder();
+  const termDemo = window.__terminalDemo = { sessions: new Map(), requests: [], opens: 0, loseNext: 0, lose504: 0, dupNext: 0, noExpected: 0, inFault: null, loseOpen: 0, failOpen: 0, holdIn: false, busyIn: 0, stuckIn: false, release() {},
+    write(key, bytes) { const s = this.sessions.get(key); if (s) termOut(s, bytes); },
+    exit(key) { const s = this.sessions.get(key); if (s) { termOut(s, 'logout\r\n'); s.exited = true; } },
+    replace(key, text) { const s = termShell(); this.sessions.set(key, s); this.opens++; termOut(s, text); },
+    unstick(key) { const s = this.sessions.get(key); if (s?.stuck) { const d = s.stuck; s.stuck = null; s.next++; s.inputs.push(d); termType(s, d); } } };
+  function termShell() {
+    // every shell has an identity of its own (TerminalSession.Id)
+    const id = [...crypto.getRandomValues(new Uint8Array(8))].map((b) => b.toString(16).padStart(2, '0')).join('');
+    return { id, buf: new Uint8Array(0), total: 0, next: 1, line: '', esc: 0, exited: false, inputs: [], sizes: [] };
+  }
+  function termOut(s, data) {
+    const bytes = typeof data === 'string' ? utf8.encode(data) : Uint8Array.from(data);
+    const all = new Uint8Array(s.buf.length + bytes.length);
+    all.set(s.buf); all.set(bytes, s.buf.length);
+    s.total += bytes.length;
+    s.buf = all.length > TERM_CAP ? all.slice(all.length - TERM_CAP) : all;
+  }
+  function termType(s, text) {
+    for (const ch of text) {
+      if (s.exited) return;
+      // escape sequences (arrows, bracketed paste markers) are taken, not echoed
+      if (s.esc === 1) { s.esc = ch === '[' || ch === 'O' ? 2 : 0; continue; }
+      if (s.esc === 2) { if (ch >= '@' && ch <= '~') s.esc = 0; continue; }
+      if (ch === '\x1b') s.esc = 1;
+      else if (ch === '\r' || ch === '\n') {
+        const line = s.line.trim();
+        s.line = '';
+        termOut(s, '\r\n');
+        if (line === 'exit') { termOut(s, 'logout\r\n'); s.exited = true; return; }
+        if (line.startsWith('echo ')) termOut(s, line.slice(5) + '\r\n');
+        else if (line) termOut(s, `demo: ${line.split(' ')[0]}: not found\r\n`);
+        termOut(s, 'demo$ ');
+      } else if (ch === '\x7f') { if (s.line) { s.line = [...s.line].slice(0, -1).join(''); termOut(s, '\b \b'); } }
+      else if (ch === '\x03') { s.line = ''; termOut(s, '^C\r\ndemo$ '); }
+      else if (ch >= ' ') { s.line += ch; termOut(s, ch); }
+    }
+  }
+  async function terminal(method, route, q, signal) {
+    const key = q.get('widget') || '';
+    termDemo.requests.push({ route, seq: q.get('seq'), since: q.get('since'), at: Date.now() });
+    if (termDemo.missing) return json({ error: 'not in the demo' }, 404);
+    const c = await config(), w = panelWidget(c, key, 'terminal');
+    if (!w) return json({ error: "this terminal widget isn't on an enabled page of this phone" }, 404);
+    let s = termDemo.sessions.get(key);
+    if (route === 'state') return json({ supported: true, enabled: c.terminal?.enabled === true, control: w.options?.control === true, open: !!s && !s.exited });
+    if (route === 'close') { termDemo.sessions.delete(key); return json({ ok: true }); }
+    if (c.terminal?.enabled !== true) return json({ error: 'the terminal is off: turn it on in Settings › General › Terminal' }, 403);
+    if (w.options?.control !== true) return json({ error: 'this widget may not open a shell: turn on its control option' }, 403);
+    const closed = () => json({ error: 'closed' }, 410);
+    if (route === 'open') {
+      if (termDemo.failOpen > 0) { termDemo.failOpen--; return json({ error: 'The shell could not be started.' }, 500); }
+      const attached = !!s && !s.exited;
+      if (!attached) {
+        if ([...termDemo.sessions].filter(([k, x]) => k !== key && !x.exited).length >= 2)
+          return json({ error: 'Two terminals are already open on this computer. Close one of them first.' }, 429);
+        termDemo.sessions.set(key, s = termShell());
+        termDemo.opens++;
+        termOut(s, 'demo$ ');
+      }
+      s.sizes.push([+q.get('cols') || 80, +q.get('rows') || 24]);
+      if (termDemo.loseOpen > 0) { termDemo.loseOpen--; throw new TypeError('Failed to fetch'); }
+      return json({ ok: true, attached, nextSeq: s.next, shell: s.id });
+    }
+    if (route === 'out') {
+      if (!s) return closed();
+      const since = Number(q.get('since') || 0), until = Date.now() + Math.min(Math.max(+q.get('wait') || 0, 0), 2500);
+      const aborted = () => { if (signal?.aborted) throw new DOMException('The operation was aborted.', 'AbortError'); };
+      while (s.total === since && !s.exited && Date.now() < until && termDemo.sessions.get(key) === s) { aborted(); await new Promise((r) => setTimeout(r, 20)); }
+      aborted();
+      const oldest = s.total - s.buf.length, reset = since < oldest || since > s.total;
+      const data = s.buf.subarray(reset ? 0 : since - oldest), frame = new Uint8Array(9 + data.length);
+      frame[0] = (s.exited ? 1 : 0) | (reset ? 2 : 0);
+      new DataView(frame.buffer).setBigUint64(1, BigInt(s.total));
+      frame.set(data, 9);
+      return new Response(frame.buffer, { status: 200, headers: { 'Content-Type': 'application/octet-stream' } });
+    }
+    if (route === 'in') {
+      const seq = /^\d+$/.test(q.get('seq') || '') ? Number(q.get('seq')) : 0, d = q.get('d');
+      if (!seq) return json({ error: 'seq must be a number from 1' }, 400);
+      if (d == null) return json({ error: 'nothing to type' }, 400);
+      if (utf8.encode(d).length > TERM_MAX_IN) return json({ error: `more than ${TERM_MAX_IN} bytes at once` }, 413);
+      if (termDemo.holdIn) { termDemo.holdIn = false; await new Promise((r) => { termDemo.release = r; }); s = termDemo.sessions.get(key); }
+      if (!s || s.exited) return closed();
+      // numbered for another shell (one that ended or was replaced): refused, nothing typed
+      if (q.has('s') && q.get('s') !== s.id) return json({ error: 'other-session' }, 409);
+      if (termDemo.inFault === 'drop') throw new TypeError('Failed to fetch');
+      if (termDemo.busyIn > 0) { termDemo.busyIn--; return json({ error: 'busy' }, 503); }
+      if (s.stuck != null) return json({ error: 'busy' }, 503);
+      if (termDemo.stuckIn && seq === s.next) { termDemo.stuckIn = false; s.stuck = d; return json({ error: 'busy' }, 503); }
+      if (termDemo.noExpected > 0 && seq >= s.next) { termDemo.noExpected--; return json({ error: 'out-of-order' }, 409); }
+      if (seq < s.next) { if (termDemo.inFault === 'lose') throw new TypeError('Failed to fetch'); return json({ applied: false }); }
+      if (seq > s.next) return json({ error: 'out-of-order', expected: s.next }, 409);
+      s.next++;
+      s.inputs.push(d);
+      termType(s, d);
+      if (termDemo.lose504 > 0) { termDemo.lose504--; return json({ error: 'result unknown' }, 504); }
+      if (termDemo.loseNext > 0 || termDemo.inFault === 'lose') { termDemo.loseNext = Math.max(0, termDemo.loseNext - 1); throw new TypeError('Failed to fetch'); }
+      if (termDemo.dupNext > 0) { termDemo.dupNext--; return json({ applied: false }); }
+      return json({ applied: true });
+    }
+    if (route === 'size') {
+      const cols = Number(q.get('cols')), rows = Number(q.get('rows'));
+      if (!Number.isInteger(cols) || !Number.isInteger(rows) || !q.get('cols') || !q.get('rows')) return json({ error: 'cols and rows must be numbers' }, 400);
+      if (!s || s.exited) return closed();
+      s.sizes.push([cols, rows]);
+      return json({ ok: true });
+    }
+    return json({ error: 'not in the demo' }, 404);
+  }
+
+  async function handle(method, path, q, body, headers, signal) {
+    if (path.startsWith('/api/terminal/')) return terminal(method, path.slice(14), q, signal);
     if (path === '/api/controls/obs') return json(deckObsState());
     if (path.startsWith('/api/controls/obs/') && method === 'POST') {
       // ObsMonitor.DeckAct: only when a widget allows control, and only for inputs, sources and scenes OBS really has
@@ -657,7 +796,8 @@
       // who is in Lounge: only when a widget that shows channels wants it, as the agent does (DiscordFavorites.WantedRooms)
       const lounge = shownWidgets(c).some((w) => w.type === 'discord' && w.options?.channels !== false
         && ((w.options?.favChannels || []).includes('c3') || ((w.options?.favGuilds || []).includes('g1') && !(w.options?.favChannels || []).includes('c1'))));
-      return json({ enabled: true, share: dcShare(c), chat: dcChat(c), chatUnread: dcChat(c) && !dc.chatSeen, control: c.discord?.allowControl === true || dcControl(c), widgetControl: dcControl(c), snapshot: {
+      if (!dcOn(c)) return json({ enabled: false, share: false, shareState: false, chat: false, chatUnread: false, control: false, joinControl: false, widgetControl: false, snapshot: null });
+      return json({ enabled: true, share: dcShare(c), shareState: dcShareState(c), chat: dcChat(c), chatUnread: dcChat(c) && !dc.chatSeen, control: dcVoice(c), joinControl: dcVoice(c, 'join'), widgetControl: dcControl(c), snapshot: {
         connected: true, error: null, user: 'demo', muted: dc.muted, deafened: dc.deaf, channelId: dc.in, channelName: dc.in ? 'Game night' : null, channelKind: dc.in ? 'voice' : null,
         inputMode: dc.ptt ? 'PUSH_TO_TALK' : 'VOICE_ACTIVITY', pttKey: true,
         members: dc.in ? [{ id: '1', name: 'demo', muted: dc.muted, deafened: dc.deaf }, { id: '2', name: 'Ada', muted: false, deafened: false, speaking: Math.floor(now() / 1500) % 2 === 0 }, { id: '3', name: 'Linus', muted: true, deafened: false }] : [],
@@ -708,18 +848,22 @@
     }
     if (path === '/api/discord/share') {
       // screen share (off unless discord.screenShare is on): a few running apps; only the game shares directly
-      if (!dcShare(await config())) return json({ enabled: false });
+      const sc = await config();
+      if (!dcShareState(sc)) return json({ enabled: false });
       // the agent reads it as a bool: anything but true or false is refused, as ASP.NET does
       if (q.has('apps') && !/^(true|false)$/i.test(q.get('apps'))) return json({}, 400);
-      return json({ enabled: true, ready: true, inCall: !!dc.in, active: !!dc.sharing, name: dc.sharing,
-        apps: /^true$/i.test(q.get('apps') || '') ? [{ pid: 4242, name: 'Space Racers' }, { pid: 77, name: 'Firefox' }, { pid: 91, name: 'Visual Studio Code' }] : null });
+      // the app list and the name of what is shared only for the Discord widget's share view, as the agent does
+      const withApps = /^true$/i.test(q.get('apps') || '') && dcShare(sc);
+      return json({ enabled: true, ready: true, inCall: !!dc.in, active: !!dc.sharing, name: withApps ? dc.sharing : null,
+        apps: withApps ? [{ pid: 4242, name: 'Space Racers' }, { pid: 77, name: 'Firefox' }, { pid: 91, name: 'Visual Studio Code' }] : null });
     }
     if (path.startsWith('/api/discord/share/') && method === 'POST') {
       const c = await config();
       const no = (code, error) => json({ error, code }, 400); // DiscordShareError
-      if (!dcControl(c)) return no('control', "controlling Discord is turned off in the widget's settings");
-      if (c.discord?.screenShare !== true) return no('off', 'screen share is turned off');
       const a = path.slice(19);
+      // the current-channel bar may only stop a share
+      if (!dcControl(c) && !(a === 'stop' && dcBar(c))) return no('control', "controlling Discord is turned off in the widget's settings");
+      if (c.discord?.screenShare !== true) return no('off', 'screen share is turned off');
       if (a === 'stop') dc.sharing = null;
       else if (!dc.in) return no('noCall', 'join a voice channel first');
       else if (dc.sharing) return no('sharing', 'you are already sharing');
@@ -752,8 +896,8 @@
     }
     if (path.startsWith('/api/discord/') && method === 'POST') {
       const dcCfg = await config();
-      if (dcCfg.discord?.allowControl !== true && !dcControl(dcCfg)) return json({ error: "controlling Discord is turned off in the widget's settings and in Settings › General › Discord" }, 400);
       const a = path.slice(13);
+      if (!dcVoice(dcCfg, a)) return json({ error: "controlling Discord is turned off in the widget's settings and in Settings › General › Discord" }, 400);
       if (a === 'mute') dc.muted = !dc.muted; else if (a === 'deafen') dc.deaf = !dc.deaf; else if (a === 'inputmode') dc.ptt = !dc.ptt; else if (a === 'leave') dc.in = null; else if (a === 'join') dc.in = q.get('channel'); else return json({ error: 'unknown action' }, 400);
       return json({ ok: true });
     }
@@ -942,7 +1086,7 @@
     const url = new URL(typeof input === 'string' ? input : input.url, location.href);
     const i = url.pathname.indexOf('/api/');
     if (url.origin !== location.origin || i < 0) return realFetch(input, init);
-    return handle((init.method || 'GET').toUpperCase(), url.pathname.slice(i), url.searchParams, init.body, new Headers(init.headers || {}));
+    return handle((init.method || 'GET').toUpperCase(), url.pathname.slice(i), url.searchParams, init.body, new Headers(init.headers || {}), init.signal);
   };
 
   // Album art and radio logos are <img>, which fetch() does not see: swap their address for the demo cover.

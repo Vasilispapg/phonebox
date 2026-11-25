@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 
 namespace PhoneBox.Agent;
 
@@ -14,9 +15,15 @@ public static class PhoneRegistry
     private static readonly ConcurrentDictionary<string, string?> Warned = new();
     private static readonly Lock WarningGate = new();
 
+    /// <summary>A phone id as the app makes it: 1 to 32 ASCII letters and digits. Anything else could carry any text.</summary>
+    public static bool IsValidId([NotNullWhen(true)] string? id) => !string.IsNullOrEmpty(id) && id.Length <= 32 && id.All(char.IsAsciiLetterOrDigit);
+
+    /// <summary>The phone id to key state by and to write to the log: the id itself when it is valid, else "" (no id).</summary>
+    public static string CleanId(string? id) => IsValidId(id) ? id! : "";
+
     public static string? Touch(string? id, string? model, string via, string? webView = null)
     {
-        if (string.IsNullOrWhiteSpace(id) || id.Length > 32 || !id.All(char.IsAsciiLetterOrDigit)) return null;
+        if (!IsValidId(id)) return null;
         model = string.IsNullOrWhiteSpace(model) ? "Android phone" : new string(model.Where(c => c >= ' ' && c <= '~').Take(40).ToArray());
         var normalized = WebViewDoctor.Normalize(webView);
         Seen[id] = new PhoneSeen(id, model, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), via, normalized);

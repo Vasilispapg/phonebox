@@ -18,6 +18,7 @@ public sealed class AgentConfig
     public DisplayConfig Display { get; set; } = new();
     public LanConfig Lan { get; set; } = new();
     public UpdateConfig Updates { get; set; } = new();
+    public TerminalConfig Terminal { get; set; } = new();
     public ClaudeConfig Claude { get; set; } = new();
     /// <summary>Cursor agent-transcript sessions on the AI sessions widget (off by default).</summary>
     public CursorConfig Cursor { get; set; } = new();
@@ -103,7 +104,7 @@ public sealed class AgentConfig
         shortcuts = Shortcuts.Select(s =>
         {
             var pic = shortcutIcon?.Invoke(s);
-            return new { s.Id, s.Label, s.Icon, s.Color, toggle = s.Toggle || s.Cmd is "builtin:mute" or PhoneDevices.MicCmd, hold = s.LongPress is not null, cycle = s.Cmd == "builtin:cycle" && s.Cycle is { Count: > 0 }, iconRev = pic?.Rev, iconUpload = pic?.Upload == true };
+            return new { s.Id, s.Label, s.Icon, s.Color, iconSize = s.IconSize, toggle = s.Toggle || s.Cmd is "builtin:mute" or PhoneDevices.MicCmd, hold = s.LongPress is not null, cycle = s.Cmd == "builtin:cycle" && s.Cycle is { Count: > 0 }, iconRev = pic?.Rev, iconUpload = pic?.Upload == true };
         }),
         // names only (for the Rules widget); what a rule matches on stays here
         rules = Rules.Select(r => new { r.Id, r.Name, r.Enabled, r.When }),
@@ -129,6 +130,19 @@ public sealed class AgentConfig
     /// <summary>True when an enabled page (including enabled Smart Stack children) shows a quota or CodexBar widget that includes Codex.</summary>
     public bool ShowCodexQuota() => Widgets(enabledPagesOnly: true)
         .Any(w => w.Type is "codexbar" or "quotas" && WidgetIncludesProvider(w, "codex"));
+
+    /// <summary>
+    /// True when an enabled page (including enabled Smart Stack children) shows Grok quotas: a Quotas or CodexBar
+    /// widget, or a Clock with its status line, whose providers include Grok, or a Quota ring set to Grok.
+    /// </summary>
+    public bool ShowGrokQuota() => Widgets(enabledPagesOnly: true)
+        .Any(w => w.Type switch
+        {
+            "codexbar" or "quotas" => WidgetIncludesProvider(w, "grok"),
+            "clock" => w.Bool("status") != false && WidgetIncludesProvider(w, "grok"),
+            "quotaring" => w.Str("provider") == "grok",
+            _ => false,
+        });
 
     private bool WidgetIncludesProvider(WidgetConfig w, string id)
     {
@@ -215,6 +229,11 @@ public sealed class DisplayConfig
     public bool VolumeKeys { get; set; } = true;
     /// <summary>landscape, portrait or auto (follow the phone). In portrait the widgets are arranged automatically.</summary>
     public string Orientation { get; set; } = "landscape";
+    /// <summary>
+    /// A landscape tablet gets more rows (12 × 8 to 12 × 10, from its shape) and an upright one packs 12 columns, so a
+    /// page holds more widgets. Off by default: turning it on changes how an arranged tablet looks.
+    /// </summary>
+    public bool TabletRows { get; set; }
     /// <summary>default, amoled, midnight, warm or graphite.</summary>
     public string Theme { get; set; } = "default";
     /// <summary>Accent colour (background glow, page dots), e.g. "#2dd4bf".</summary>
@@ -280,6 +299,17 @@ public sealed class LanConfig
     public string? Token { get; set; }
     /// <summary>Separate key for the webhook API from other machines (push/notify/goto/refresh only). May appear in URLs.</summary>
     public string? WebhookToken { get; set; }
+}
+
+/// <summary>Terminal widget: a shell on this computer, reachable from the phone only while this master switch is on.</summary>
+public sealed class TerminalConfig
+{
+    public bool Enabled { get; set; } = false;
+    /// <summary>Minutes without overlay activity before a shell is closed. 0 means 30 seconds after the overlay stops.</summary>
+    public int IdleMinutes { get; set; } = 10;
+
+    /// <summary>A method, not a property, so the clamped copy is never written to config.json.</summary>
+    public int EffectiveIdleMinutes() => Math.Clamp(IdleMinutes, 0, 120);
 }
 
 public sealed class UpdateConfig
@@ -386,7 +416,7 @@ public sealed class PageConfig
     public bool Enabled { get; set; } = true;
     /// <summary>Return home after this many idle seconds on this page; null = the display setting, 0 = stay.</summary>
     public int? IdleSec { get; set; }
-    /// <summary>Widgets on a 12 x 6 grid.</summary>
+    /// <summary>Widgets on a 12-column grid: 6 rows on a phone, more on a tablet (up to <see cref="Catalog.MaxRows"/>).</summary>
     public List<WidgetConfig>? Widgets { get; set; }
 
     /// <summary>Create the page from this template (templates.json) when it has no widgets yet.</summary>
@@ -577,6 +607,10 @@ public sealed class Shortcut
     [JsonConverter(typeof(IconJsonConverter))]
     public string Icon { get; set; } = "";
     public string Color { get; set; } = "#6b7280";
+    /// <summary>How big the icon (emoji or picture) is on the phone's key: empty = default, "m", "l" or "max" (fills the key).</summary>
+    [JsonConverter(typeof(IconSizeJsonConverter))]
+    public string? IconSize { get; set; }
+    public static readonly string[] IconSizes = ["m", "l", "max"];
     /// <summary>A program, address or file; or builtin:lock / monitor-off / mute / keys / text / macro, or the phone
     /// mic command (builtin:phone-mic, see PhoneDevices).</summary>
     public string Cmd { get; set; } = "";
@@ -758,11 +792,13 @@ public sealed partial class ConfigStore(string path)
     /// <summary>Fills in defaults: builds pages from templates, migrates old pages, generates unique ids.</summary>
     private static AgentConfig Normalize(AgentConfig c, IReadOnlySet<string>? staleIds = null)
     {
+        c.Terminal ??= new();
         c.Weather ??= new();
         c.Weather.Unit = WeatherUnitJsonConverter.Normalize(c.Weather.Unit);
         c.Weather.Model = WeatherModelJsonConverter.Normalize(c.Weather.Model);
         c.CodexBar ??= new();
-        c.CodexBar.Providers = (c.CodexBar.Providers ?? []).Where(p => p is "claude" or "codex" or "antigravity").Distinct().ToArray();
+        // The same ids as the checkboxes in settings.html (cb_claude, cb_codex, cb_antigravity, cb_grok).
+        c.CodexBar.Providers = (c.CodexBar.Providers ?? []).Where(p => p is "claude" or "codex" or "antigravity" or "grok").Distinct().ToArray();
         c.CodexBar.PageSize = Math.Clamp(c.CodexBar.PageSize, 0, 6);
         c.CodexBar.RotateInterval = Math.Clamp(c.CodexBar.RotateInterval, 2, 300);
         c.Night ??= new();
@@ -861,6 +897,12 @@ public sealed partial class ConfigStore(string path)
             if (string.IsNullOrWhiteSpace(s.StateKey)) s.StateKey = null;
             if (string.IsNullOrWhiteSpace(s.OffCmd)) s.OffCmd = null;
             if (string.IsNullOrWhiteSpace(s.OffArgs)) s.OffArgs = null;
+        }
+        // icon size: only the known presets; anything else falls back to the default
+        foreach (var s in c.Shortcuts)
+        {
+            var sz = s.IconSize?.Trim().ToLowerInvariant();
+            s.IconSize = sz is not null && Shortcut.IconSizes.Contains(sz) ? sz : null;
         }
         // a long press runs another key: drop a blank, self-referencing or dangling target, so the phone never offers a hold that does nothing
         foreach (var s in c.Shortcuts)
@@ -1037,9 +1079,9 @@ public sealed partial class ConfigStore(string path)
                 w.Appearance?.Normalize(widget: true);
                 var (minW, minH) = Catalog.MinSize(w.Type);
                 w.W = Math.Clamp(w.W, Math.Min(minW, Catalog.Cols), Catalog.Cols);
-                w.H = Math.Clamp(w.H, Math.Min(minH, Catalog.Rows), Catalog.Rows);
+                w.H = Math.Clamp(w.H, Math.Min(minH, Catalog.MaxRows), Catalog.MaxRows);
                 w.X = Math.Clamp(w.X, 0, Catalog.Cols - w.W);
-                w.Y = Math.Clamp(w.Y, 0, Catalog.Rows - w.H);
+                w.Y = Math.Clamp(w.Y, 0, Catalog.MaxRows - w.H);
                 w.Id = reservedWidgets.TryGetValue(w, out var reservedWidget)
                     ? reservedWidget : UniqueLayoutId(LayoutId(w.Type, w.Type), widgetIds);
                 widgets.Add(w);
@@ -1164,7 +1206,7 @@ public sealed partial class ConfigStore(string path)
 
 public sealed class CodexBarConfig
 {
-    public string[] Providers { get; set; } = ["claude", "codex", "antigravity"];
+    public string[] Providers { get; set; } = ["claude", "codex", "antigravity", "grok"];
     public bool Rotate { get; set; } = true;
     public int PageSize { get; set; } = 2;
     public int RotateInterval { get; set; } = 8;
