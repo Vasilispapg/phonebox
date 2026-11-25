@@ -284,13 +284,14 @@ Share what you copy between the Mac and the phone. It starts with the clipboard.
   Turn off sharing before copying sensitive text.
   On Android 9 and older, every app on the phone can read the clipboard at any time. From Android 10, the foreground
   app and the default keyboard can read it.
-- **Phone to Mac:** Android does not let an app read the clipboard in the background, so sending from the phone is one
-  tap, in any of four places: **Send to Mac** in the text-selection menu (select text, it sits next to Copy, and the
-  text is sent without copying first), **Share › Send to Mac**, a **Send to Mac** tile (add it under Quick Settings
-  › Edit), or the **Send to Mac** button on the app's "sharing the clipboard" notification. The selection menu and
-  Share show the start of the text first and send it when you tap **Send to Mac**, because any app can hand text to
-  them; the tile and the notification button send what is on the clipboard straight away. A short message says
-  whether it arrived. These entries appear in your apps only while the phone's switch below is on.
+- **Phone to Mac:** Android does not let an app read the clipboard in the background, so sending from the phone is
+  something you do, in any of four places. **Send to Mac** in the text-selection menu (select text, it sits next to
+  Copy, and the text is sent without copying first) and **Share › Send to Mac** ask first, because any app can hand text
+  to them: a dialog shows the start of the text, says how much more there is that it does not show, and sends it when
+  you tap **Send to Mac** there (the button works after half a second). A **Send to Mac** tile (add it under Quick
+  Settings › Edit) and the **Send to Mac** button on the app's "sharing the clipboard" notification are one tap and send
+  what is on the clipboard straight away. A short message says whether it arrived. These entries appear in your apps
+  only while the phone's switch below is on.
 - **On the phone:** open the page overview (long-press the page dots) and tap **Phone bridge**, then turn on **Share
   the clipboard with the Mac**. Both switches, this one and the Mac's, must be on; the screen says whether it is
   connected, the Mac's switch is off, the computer has no bridge, the phone must be paired again (the Mac was paired

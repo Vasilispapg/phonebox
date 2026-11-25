@@ -32,9 +32,16 @@ class AgentStream(
     private val deliver: (event: String, data: String) -> Unit,
 ) {
 
-    /** The last event id received; written only for an event delivered while its stream was current. */
+    /**
+     * The last event id received from each computer; written only for an event delivered while its stream was current. An id
+     * numbers the events of one computer's agent, so it is only ever sent back to that computer: a USB cable can lead to one
+     * Mac while Wi-Fi is paired with another, and the other would replay what it copied meanwhile.
+     */
     class EventIds {
-        @Volatile var last: String? = null
+        private val ids = java.util.concurrent.ConcurrentHashMap<String, String>()
+        fun get(computer: String): String? = ids[computer]
+        fun set(computer: String, id: String) { ids[computer] = id }
+        fun clear() = ids.clear()
     }
 
     private val gate = Any()
@@ -85,11 +92,11 @@ class AgentStream(
      * is never kept for an event that was not handed over (the agent would not replay it). A frame with an id and no data
      * still moves the id on, as in the SSE spec.
      */
-    private fun endFrame(gen: Int, event: String, data: String?, id: String?) {
+    private fun endFrame(gen: Int, computer: String, event: String, data: String?, id: String?) {
         synchronized(gate) {
             if (!running || gen != generation) return
             if (data != null) deliver(event, data)
-            if (id != null) eventIds?.last = id
+            if (id != null) eventIds?.set(computer, id)
         }
     }
 
@@ -102,9 +109,11 @@ class AgentStream(
             var failed = false
             var body: Closeable? = null
             try {
-                val resumeFrom = eventIds?.last
-                val headers = if (resumeFrom != null) mapOf("Last-Event-ID" to resumeFrom) else emptyMap()
-                val (route, reply) = link.stream(path, readTimeoutMs, headers) ?: run { failed = true; throw java.io.IOException("offline") }
+                // the link asks for the id of the computer each attempt reaches (USB first, then Wi-Fi): they can differ
+                val reached = link.stream(path, readTimeoutMs) { computer -> eventIds?.get(computer) } ?: run { failed = true; throw java.io.IOException("offline") }
+                val route = reached.route
+                val reply = reached.reply
+                val computer = reached.computer
                 if (reply.code != 200) {
                     failed = true
                     failedWith = reply.code
@@ -133,7 +142,7 @@ class AgentStream(
                         if (!alive()) break
                         when {
                             line.isEmpty() -> {
-                                if (data.isNotEmpty() || id != null) endFrame(gen, event, data.takeIf { it.isNotEmpty() }?.toString(), id)
+                                if (data.isNotEmpty() || id != null) endFrame(gen, computer, event, data.takeIf { it.isNotEmpty() }?.toString(), id)
                                 event = "message"
                                 data.setLength(0)
                                 id = null

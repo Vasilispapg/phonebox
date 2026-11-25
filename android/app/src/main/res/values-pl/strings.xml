@@ -31,6 +31,7 @@
     <string name="bridge_state_unsupported">Ten komputer nie może udostępniać schowka: most telefonu wymaga agenta PhoneBox na Macu</string>
     <string name="bridge_state_stopped">Zatrzymane przez Androida. Otwórz ten ekran ponownie lub uruchom PhoneBox od nowa, aby się połączyć</string>
     <string name="bridge_confirm_title">Wysłać ten tekst do schowka Maca?</string>
-    <string name="bridge_pair_again">Mac nie akceptuje już klucza tego telefonu: został ponownie sparowany lub dostał nowy klucz. Podłącz telefon raz przez USB albo sparuj go ponownie przez Wi-Fi.</string>
+    <string name="bridge_confirm_more">Dalej jest tekst, który nie jest pokazany (znaki: %1$s, wiersze: %2$s).</string>
+    <string name="bridge_pair_again">Mac nie rozpoznaje już tego telefonu: podłącz go raz przez USB lub sparuj ponownie.</string>
     <string name="bridge_send_unknown">Brak odpowiedzi z Maca: tekst mógł dotrzeć. Sprawdź na Macu, zanim wyślesz go ponownie.</string>
 </resources>

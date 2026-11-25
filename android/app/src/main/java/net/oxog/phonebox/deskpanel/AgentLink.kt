@@ -133,14 +133,23 @@ class AgentLink(private val context: Context) {
     @Volatile private var factory: Pair<String, SSLSocketFactory>? = null
     @Volatile private var usbFactory: Pair<String, SSLSocketFactory>? = null // its own: the USB agent's pin may differ from the Wi-Fi PC's
 
+    /** An open stream: its [route], the [reply] and which computer answered ([computer]: the certificate it was pinned to). */
+    class Stream(val route: Route, val reply: Reply, val computer: String)
+
     /**
      * Opens a long-lived GET (the live stream) over the best route; null when the PC is unreachable. [readTimeoutMs]: how
-     * long a silent stream may stay open before the read gives up (the panel's stream sends every second). [headers]: extra
-     * request headers (the bridge stream's Last-Event-ID); the panel's stream sends none.
+     * long a silent stream may stay open before the read gives up (the panel's stream sends every second). [resumeFor]: the
+     * bridge stream's Last-Event-ID for the computer an attempt is about to reach (USB is tried first and may lead to a
+     * different computer than Wi-Fi does, so one id for both could be another computer's); null sends none, as the panel's does.
      */
-    fun stream(path: String, readTimeoutMs: Int = STREAM_READ_TIMEOUT, headers: Map<String, String> = emptyMap()): Pair<Route, Reply>? {
-        usb("GET", path, readTimeoutMs, null, null, headers)?.let { route = Route.USB; return Route.USB to it }
-        wifi("GET", path, readTimeoutMs, null, null, headers = headers)?.let { route = Route.WIFI; return Route.WIFI to it }
+    fun stream(path: String, readTimeoutMs: Int = STREAM_READ_TIMEOUT, resumeFor: (String) -> String? = { null }): Stream? {
+        fun resume(computer: String) = resumeFor(computer)?.let { mapOf("Last-Event-ID" to it) } ?: emptyMap()
+        UsbKey.pin(context)?.let { pin ->
+            usb("GET", path, readTimeoutMs, null, null, resume(pin))?.let { route = Route.USB; return Stream(Route.USB, it, pin) }
+        }
+        activePc()?.id?.let { pin ->
+            wifi("GET", path, readTimeoutMs, null, null, headers = resume(pin))?.let { route = Route.WIFI; return Stream(Route.WIFI, it, pin) }
+        }
         return null
     }
 

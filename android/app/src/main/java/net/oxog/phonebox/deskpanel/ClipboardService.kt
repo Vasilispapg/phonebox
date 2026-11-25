@@ -68,9 +68,10 @@ class ClipboardService : Service() {
         }
         BridgePrefs.lastError = null
         // the panel calls this on every resume: a connected stream is kept (cutting it would lose what is copied meanwhile and cost
-        // a new TLS handshake each time); one that is not connected starts over at once instead of finishing a long back-off.
+        // a new TLS handshake each time); one that is unreachable starts over at once instead of finishing a long back-off, but
+        // a refusal that retries by itself once a minute is not poked on every resume (see BridgeClip.restartOnResume).
         // Pairing changes restart it through [pairingChanged].
-        if (stream == null || BridgePrefs.clipboardState != ClipboardState.RUNNING) restartStream()
+        if (BridgeClip.restartOnResume(stream != null, BridgePrefs.clipboardState)) restartStream()
         return START_STICKY
     }
 
@@ -99,7 +100,7 @@ class ClipboardService : Service() {
 
     private fun startStream(mine: Int, fresh: AgentLink, active: String?) {
         // another computer was chosen or paired: its seq numbers are its own, so it hears only new events
-        if (active != activePc) eventIds.last = null
+        if (active != activePc) eventIds.clear()
         activePc = active
         val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         link = fresh
@@ -172,7 +173,7 @@ class ClipboardService : Service() {
         wanted = false
         stopStream()
         // a new start hears only new events: a replay could bring back what was copied on the Mac while the phone's switch was off
-        eventIds.last = null
+        eventIds.clear()
         builder.shutdown() // a link still being built is closed by its post, which sees !wanted
         BridgePrefs.clipboardState = ClipboardState.STOPPED
         super.onDestroy()
@@ -195,11 +196,21 @@ class ClipboardService : Service() {
             val app = context.applicationContext
             val intent = Intent(app, ClipboardService::class.java)
             val on = BridgePrefs.clipboardEnabled(app)
-            // "Send to Mac" shows in other apps' menus only while the bridge is on (a no-op when nothing changes)
-            BridgeEntryPoints.setEnabled(app, on)
-            if (!on) {
-                app.stopService(intent) // nothing happens when it is not running
-                return
+            when (BridgeClip.syncAction(on, BridgePrefs.live(app))) {
+                // for everyone who never turned the bridge on, and after the clean-up, "off" is nothing at all: no component is
+                // looked at and no service is stopped, on any of the panel's resumes
+                BridgeClip.SyncAction.NOTHING -> return
+                BridgeClip.SyncAction.CLEAN_UP -> {
+                    app.stopService(intent) // nothing happens when it is not running
+                    BridgeEntryPoints.setEnabled(app, false)
+                    BridgePrefs.setLive(app, false)
+                    return
+                }
+                BridgeClip.SyncAction.START -> {
+                    // "Send to Mac" shows in other apps' menus only while the bridge is on (a no-op when nothing changes)
+                    BridgeEntryPoints.setEnabled(app, true)
+                    if (!BridgePrefs.live(app)) BridgePrefs.setLive(app, true)
+                }
             }
             try {
                 if (Build.VERSION.SDK_INT >= 26) app.startForegroundService(intent) else app.startService(intent)

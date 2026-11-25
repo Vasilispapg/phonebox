@@ -2055,9 +2055,10 @@ export function openOverview() {
   };
   $('ovGrid').replaceChildren(...pages.map(tile));
   renderRulesBtn();
-  // the phone's own Phone bridge screen (clipboard sharing with a Mac): only inside the Android app
+  // the phone's own Phone bridge screen (clipboard sharing with a Mac): only inside the Android app, and only when the agent
+  // says it has a bridge (macOS). A Windows or Linux agent, or one from before the bridge, sends no such flag: no button.
   const ob = $('ovBridge');
-  ob.hidden = PREVIEW || !bridge?.openBridge;
+  ob.hidden = PREVIEW || !bridge?.openBridge || cfg.bridge?.supported !== true;
   ob.replaceChildren(icon('smartphone', 'm'), t('s.bridge.title'));
   // several paired computers: switch between them here (a USB cable always wins)
   const pcs = pairedPcs();

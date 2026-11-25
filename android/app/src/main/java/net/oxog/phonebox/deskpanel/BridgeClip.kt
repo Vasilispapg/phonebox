@@ -62,6 +62,24 @@ object BridgeClip {
         else -> ClipboardState.WAITING
     }
 
+    /** What [ClipboardService.sync] does for the switch's state: [wasLive] is whether the bridge's pieces were switched on before. */
+    enum class SyncAction { START, CLEAN_UP, NOTHING }
+
+    /** A phone whose bridge was never turned on (or has been cleaned up since) does nothing at all, however often this is asked. */
+    fun syncAction(switchOn: Boolean, wasLive: Boolean): SyncAction = when {
+        switchOn -> SyncAction.START
+        wasLive -> SyncAction.CLEAN_UP
+        else -> SyncAction.NOTHING
+    }
+
+    /**
+     * Whether the panel coming back to the front starts the stream over. Yes with no stream, or one still connecting or
+     * backing off after "unreachable" (the phone may have just come back to the Wi-Fi); no for a connected one, and no for
+     * the refusals that retry on their own once a minute (the Mac's switch is off, the phone must be paired again, the agent
+     * has no bridge): starting over each time would skip that wait.
+     */
+    fun restartOnResume(hasStream: Boolean, state: ClipboardState): Boolean = !hasStream || state == ClipboardState.WAITING
+
     /** What the agent's answer to a send means. */
     fun resultFor(code: Int): SendResult = when (code) {
         200 -> SendResult.OK
@@ -76,15 +94,49 @@ object BridgeClip {
     /** How much of a shared text the confirmation shows. The whole text is sent; this only keeps the dialog small. */
     const val PREVIEW_CHARS = 600
 
+    /** How long Send to Mac stays disabled after the confirmation appears: a tap meant for what was on screen before cannot confirm it. */
+    const val CONFIRM_DELAY_MS = 500L
+
+    /** What the confirmation shows: [shown], and what [shown] leaves out ([moreChars] characters on [moreLines] lines; 0 when nothing). */
+    class Preview(val shown: String, val moreChars: Int, val moreLines: Int)
+
     /**
-     * The start of [text] for the confirmation before Send to Mac, never longer than [max] characters plus an ellipsis, and
-     * never cut inside a surrogate pair (half an emoji would show as a box). Only for display: it is not sent or logged.
+     * What the owner sees before Send to Mac, for a text any app can hand over. The whole text is sent, so the preview must not let
+     * a sender hide the end of it behind its start: runs of spaces and blank lines are collapsed (600 newlines would push the real
+     * text out of sight), characters that draw nothing or reorder the text (zero-width, right-to-left overrides) are left out, and
+     * when the text is longer than [max] the rest is counted, so the dialog can say plainly that there is more. Never cut inside a
+     * surrogate pair (half an emoji would show as a box). Only for display: it is not sent or logged.
      */
-    fun preview(text: String, max: Int = PREVIEW_CHARS): String {
-        if (text.length <= max) return text
+    fun preview(text: String, max: Int = PREVIEW_CHARS): Preview {
+        val tidy = tidy(text)
+        if (tidy.length <= max) return Preview(tidy, 0, 0)
         var end = max
-        if (end > 0 && Character.isHighSurrogate(text[end - 1]) && Character.isLowSurrogate(text[end])) end--
-        return text.substring(0, end).trimEnd() + "…"
+        if (end > 0 && Character.isHighSurrogate(tidy[end - 1]) && Character.isLowSurrogate(tidy[end])) end--
+        val rest = tidy.substring(end)
+        return Preview(tidy.substring(0, end).trimEnd() + "…", rest.length, rest.lineSequence().count { it.isNotBlank() })
+    }
+
+    /** One line break for any run of blank lines, one space for any run of spaces, nothing for invisible characters, no edges. */
+    private fun tidy(text: String): String {
+        val out = StringBuilder(minOf(text.length, 4096))
+        var pendingSpace = false
+        var pendingBreak = false
+        var i = 0
+        while (i < text.length) {
+            val cp = text.codePointAt(i)
+            i += Character.charCount(cp)
+            when {
+                cp == '\n'.code || cp == '\r'.code || cp == 0x2028 || cp == 0x2029 || cp == 0x85 -> pendingBreak = true
+                Character.isWhitespace(cp) || Character.isSpaceChar(cp) -> pendingSpace = true
+                Character.getType(cp) == Character.FORMAT.toInt() -> {} // zero-width and direction controls: they draw nothing, or draw the text out of order
+                else -> {
+                    if (out.isNotEmpty()) { if (pendingBreak) out.append('\n') else if (pendingSpace) out.append(' ') }
+                    pendingSpace = false; pendingBreak = false
+                    out.appendCodePoint(cp)
+                }
+            }
+        }
+        return out.toString()
     }
 
     /** A strict reader for one flat JSON object; any problem makes [parseObject] return null. */
