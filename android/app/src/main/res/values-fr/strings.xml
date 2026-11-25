@@ -35,7 +35,7 @@
     <string name="bridge_pair_again">Le Mac ne reconnaît plus ce téléphone : branchez-le une fois en USB ou jumelez-le à nouveau.</string>
     <string name="bridge_send_unknown">Pas de réponse du Mac : le texte est peut-être arrivé. Vérifiez sur le Mac avant de le renvoyer.</string>
     <string name="bridge_notifications_switch">Afficher les notifications sur le Mac</string>
-    <string name="bridge_notifications_help">Les appels, les messages et les applications choisies ci-dessous apparaissent comme notifications sur le Mac, avec leur texte (un code de connexion, par exemple). Seules les applications activées sont envoyées. L\'interrupteur du Mac (Réglages › Passerelle téléphone dans PhoneBox sur l\'ordinateur) doit aussi être activé.</string>
+    <string name="bridge_notifications_help">Les appels, les messages et les notifications d’applications s’affichent sur le Mac avec leur texte. Sélectionnez les applications une par une ou activez Toutes les applications. Activez aussi les notifications du téléphone dans les réglages du pont sur le Mac.</string>
     <string name="bridge_access_missing">L\'accès aux notifications n\'est pas encore autorisé. PhoneBox en a besoin pour voir vos notifications.</string>
     <string name="bridge_access_granted">L\'accès aux notifications est autorisé.</string>
     <string name="bridge_access_button">Autoriser l\'accès aux notifications</string>

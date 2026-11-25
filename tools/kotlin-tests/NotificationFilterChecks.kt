@@ -206,6 +206,18 @@ private fun queueChecks() {
     check("a batch taken before a clear is no longer current", !r.isCurrent(mark2))
     check("and cannot be put back", !r.restore(batch2, mark2) && r.isEmpty())
 
+    val late = DeliveryQueue<String>(max = 2, ttlMs = 120_000) { now }
+    late.add("newer", now - 40)
+    late.add("newest", now - 10)
+    late.addIfCurrent("oldest", late.mark(), now - 90)
+    check("a late insertion evicts the entry with the earliest timestamp",
+        late.take().map { it.item } == listOf("newer", "newest"))
+    late.add("in flight", now - 30)
+    val (pendingMark, inFlight) = late.takeBatch()
+    late.add("arrived late", now - 40)
+    check("restoring a batch still orders by timestamp",
+        late.restore(inFlight, pendingMark) && late.take().map { it.item } == listOf("arrived late", "in flight"))
+
     val beforeLookup = q.mark()
     q.clear()
     q.add("new computer")

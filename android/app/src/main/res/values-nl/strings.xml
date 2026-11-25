@@ -35,7 +35,7 @@
     <string name="bridge_pair_again">De Mac herkent deze telefoon niet meer: sluit hem één keer aan via USB of koppel opnieuw.</string>
     <string name="bridge_send_unknown">Geen antwoord van de Mac: de tekst is misschien aangekomen. Controleer het op de Mac voordat je hem opnieuw stuurt.</string>
     <string name="bridge_notifications_switch">Meldingen op de Mac tonen</string>
-    <string name="bridge_notifications_help">Gesprekken, berichten en de apps die je hieronder kiest verschijnen als meldingen op de Mac, met hun tekst (bijvoorbeeld een inlogcode). Alleen apps die je aanzet worden verstuurd. De schakelaar van de Mac (Instellingen › Telefoonbrug in PhoneBox op de computer) moet ook aan staan.</string>
+    <string name="bridge_notifications_help">Oproepen, berichten en appmeldingen verschijnen met hun tekst op de Mac. Kies afzonderlijke apps of schakel Alle apps in. Schakel telefoonmeldingen ook in bij de instellingen van de telefoonbrug op de Mac.</string>
     <string name="bridge_access_missing">Toegang tot meldingen is nog niet toegestaan. PhoneBox heeft die nodig om je meldingen te zien.</string>
     <string name="bridge_access_granted">Toegang tot meldingen is toegestaan.</string>
     <string name="bridge_access_button">Toegang tot meldingen toestaan</string>

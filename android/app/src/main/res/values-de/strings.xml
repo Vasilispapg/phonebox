@@ -35,7 +35,7 @@
     <string name="bridge_pair_again">Der Mac kennt dieses Handy nicht mehr: einmal per USB verbinden oder neu koppeln.</string>
     <string name="bridge_send_unknown">Keine Antwort vom Mac: Der Text ist vielleicht angekommen. Prüfen Sie es am Mac, bevor Sie ihn erneut senden.</string>
     <string name="bridge_notifications_switch">Benachrichtigungen am Mac anzeigen</string>
-    <string name="bridge_notifications_help">Anrufe, Nachrichten und die Apps, die du unten auswählst, erscheinen als Benachrichtigungen am Mac, mit ihrem Text (zum Beispiel einem Anmeldecode). Nur Apps, die du einschaltest, werden gesendet. Der Schalter des Macs (Einstellungen › Telefonbrücke in PhoneBox am Computer) muss ebenfalls an sein.</string>
+    <string name="bridge_notifications_help">Anrufe, Nachrichten und App-Mitteilungen erscheinen mit ihrem Text auf dem Mac. Wähle einzelne Apps oder aktiviere Alle Apps. Aktiviere auch die Telefonmitteilungen in den Einstellungen der Telefonbrücke auf dem Mac.</string>
     <string name="bridge_access_missing">Der Zugriff auf Benachrichtigungen ist noch nicht erlaubt. PhoneBox braucht ihn, um deine Benachrichtigungen zu sehen.</string>
     <string name="bridge_access_granted">Der Zugriff auf Benachrichtigungen ist erlaubt.</string>
     <string name="bridge_access_button">Zugriff auf Benachrichtigungen erlauben</string>
