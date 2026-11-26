@@ -204,6 +204,7 @@ window.PhoneBoxLocaleData = Object.assign(window.PhoneBoxLocaleData || {}, {
       "s.js.immichFailed": "Tak dapat memeriksa",
       "w.upNext": "Berikutnya",
       "w.nowPlaying": "Sekarang bermain",
+      "w.mediaSwitch": "Beralih antara komputer dan ponsel",
       "w.nothingPlaying": "Tidak ada yang dimainkan",
       "w.feeds.addInSettings": "Tambahkan suplai di Pengaturan › Umum",
       "w.feeds.noneFrom": "Tidak ada judul dari \"{name}\"",

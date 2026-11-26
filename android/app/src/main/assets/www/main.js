@@ -984,9 +984,17 @@ export function effectiveMedia(fromAgentState, fresh = true) {
 }
 export const phoneMediaControl = (action, ms) => { try { return !!bridge?.phoneMediaControl?.(action, ms || 0); } catch (_) { return false; } };
 // the volume row follows the song shown: the phone's own media volume for the phone's song, the computer's otherwise
-export const phoneAudio = () => { try { const j = bridge?.phoneAudio?.(); return j && j !== 'null' ? JSON.parse(j) : null; } catch (_) { return null; } };
-export const phoneVolume = (percent) => { try { return !!bridge?.phoneVolume?.(percent); } catch (_) { return false; } };
-export const phoneMute = () => { try { return !!bridge?.phoneMute?.(); } catch (_) { return false; } };
+// a bridge call every second the widget redraws would be wasteful: the reading is kept for a few seconds, and dropped when the panel changes it
+let audioAt = -1e9, audioNow = null;
+export const phoneAudio = () => {
+  const now = performance.now();
+  if (now - audioAt < 3000 && now >= audioAt) return audioNow;
+  try { const j = bridge?.phoneAudio?.(); audioNow = j && j !== 'null' ? JSON.parse(j) : null; } catch (_) { audioNow = null; }
+  audioAt = now;
+  return audioNow;
+};
+export const phoneVolume = (percent) => { audioAt = -1e9; try { return !!bridge?.phoneVolume?.(percent); } catch (_) { return false; } };
+export const phoneMute = () => { audioAt = -1e9; try { return !!bridge?.phoneMute?.(); } catch (_) { return false; } };
 export const phoneMediaArt = (id) => { try { return bridge?.phoneMediaArt?.(id) || ''; } catch (_) { return ''; } };
 window.onPhoneMedia = (json) => {
   const next = json && json !== 'null' ? json : 'null';
@@ -1050,7 +1058,7 @@ export const setAmbient = (rgb) => document.documentElement.style.setProperty('-
 
 /** The empty media card. A function, not a constant: its texts are translated when the widget is built. */
 export const mediaHtml = () => `
-  <button class="m-swap" hidden aria-label="Switch between computer and phone" title="Computer / Phone"><svg class="sw-pc" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v11H3zm5 13h8v2H8z"/></svg><svg class="sw-ph" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm4 17a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/></svg></button>
+  <button class="m-swap" hidden aria-label="${t('w.mediaSwitch')}" title="${t('w.mediaSwitch')}" data-i18n-aria="w.mediaSwitch" data-i18n-title="w.mediaSwitch"><svg class="sw-pc" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v11H3zm5 13h8v2H8z"/></svg><svg class="sw-ph" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm4 17a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/></svg></button>
   <div class="m-top">
     <div class="art-wrap"><img class="art" alt=""><div class="art-ph">♪</div></div>
     <div class="m-text"><div class="m-app"><span class="m-source-icon" aria-hidden="true"></span><span class="m-app-name">Media</span></div><div class="m-title">${t('w.nothingPlaying')}</div><div class="m-artist">${t('w.startOnPc')}</div></div>
@@ -3025,6 +3033,9 @@ document.addEventListener('visibilitychange', () => {
     $('nClock').textContent = fmtNightClock(new Date());
   }
 });
+// the phone's song at once: with the computer off no state frame comes to ask for it, and the push from onResume runs before this
+// page has loaded
+window.onPhoneMedia(bridge?.phoneMedia?.() ?? 'null');
 poll();
 
 if (PREVIEW) {

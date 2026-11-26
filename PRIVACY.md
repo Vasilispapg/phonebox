@@ -4,7 +4,7 @@ PhoneBox has no accounts, no servers of its own, no telemetry, no analytics and 
 receives any data from you. This page lists every place the agent (on your computer) and the Android app (on your
 phone) connect to, so you can see exactly what leaves your machine and turn it off.
 
-Last updated: 2026-11-20 (PhoneBox 0.9.6).
+Last updated: 2026-11-26 (PhoneBox 0.9.30).
 
 ## What stays on your devices
 

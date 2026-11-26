@@ -204,6 +204,7 @@ window.PhoneBoxLocaleData = Object.assign(window.PhoneBoxLocaleData || {}, {
       "s.js.immichFailed": "검사할 수 없음",
       "w.upNext": "다음으로",
       "w.nowPlaying": "재생 중",
+      "w.mediaSwitch": "컴퓨터와 휴대전화 전환",
       "w.nothingPlaying": "재생 중인 항목 없음",
       "w.feeds.addInSettings": "설정 › 일반에서 피드 추가",
       "w.feeds.noneFrom": "헤드라인이 없습니다.{name}\"",

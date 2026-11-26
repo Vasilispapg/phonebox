@@ -280,3 +280,69 @@ test('lyrics are not looked up for the phone\'s songs (the agent only knows the 
   const key = await page.evaluate(async () => (await import('/panel/main.js')).media?.phone);
   expect(key).toBe(true);
 });
+
+test('with the switch turned off while the panel was paused, the next resume takes the song away', async ({ page }) => {
+  await open(page, song());
+  await frame(page, null);
+  await expect(page.locator('.m-title').first()).toHaveText('Phone song');
+  await expect(page.locator('.m-swap').first()).toBeVisible();
+  // the Phone bridge screen was on top: the switch went off there (its "null" reached nobody), and the panel resumes
+  await page.evaluate(() => { window.__phone = null; });
+  await phoneSays(page, null); // what onResume pushes whatever the switch says
+  await expect(page.locator('.m-title').first()).toHaveText('Nothing playing');
+  await expect(page.locator('.m-swap').first()).toBeHidden();
+  await page.locator('[data-media="next"]').first().click();
+  expect(await page.evaluate(() => window.__calls.length)).toBe(0); // nothing goes to the phone any more
+});
+
+test('a null after a null (the switch was off all along) changes nothing on the page', async ({ page }) => {
+  await open(page, null);
+  await frame(page, mac({ posMs: 10_000 }));
+  await page.clock.runFor(60_000);
+  const before = await page.evaluate(async () => { const m = await import('/panel/main.js'); return Math.round(m.mediaPosMs(m.media)); });
+  await phoneSays(page, null);
+  await phoneSays(page, null);
+  const after = await page.evaluate(async () => { const m = await import('/panel/main.js'); return Math.round(m.mediaPosMs(m.media)); });
+  expect(after).toBe(before); // the old agent sample was not taken for a new one
+  await expect(page.locator('.m-title').first()).toHaveText('Mac song');
+});
+
+/** The computer is off: the demo answers everything except the state, which fails as it does when the agent is unreachable. */
+async function computerOff(page) {
+  await page.addInitScript(() => {
+    let inner = window.fetch.bind(window);
+    const url = (i) => (typeof i === 'string' ? i : i?.url || '');
+    const wrapped = (input, init) => (/\/api\/(state|media)/.test(url(input)) ? Promise.reject(new TypeError('Failed to fetch')) : inner(input, init));
+    Object.defineProperty(window, 'fetch', { configurable: true, get: () => wrapped, set: (f) => { inner = f.bind(window); } });
+  });
+}
+
+test('with the computer off the page reads the phone once at start, shows its song, and no offline message covers it', async ({ page }) => {
+  await computerOff(page);
+  await open(page, song());
+  await page.evaluate(async () => { (await import('/panel/main.js')).setOnline(false); });
+  await expect(page.locator('body')).toHaveClass(/offline/);
+  expect(await page.evaluate(async () => (await import('/panel/main.js')).D.state)).toBeNull(); // no state frame ever came
+  await expect(page.locator('.m-title').first()).toHaveText('Phone song'); // read at start, not through a frame or a push
+  await expect(page.locator('.offline-msg').first()).toBeHidden();
+  await expect(page.locator('.m-swap').first()).toBeVisible();
+  await page.locator('[data-media="next"]').first().click(); // reaches the button, not an overlay
+  expect(await page.evaluate(() => window.__calls.map((c) => c[0]))).toEqual(['next']);
+});
+
+test('offline with nothing on the phone the media card still says the computer is not connected', async ({ page }) => {
+  await computerOff(page);
+  await open(page, null);
+  await page.evaluate(async () => { (await import('/panel/main.js')).setOnline(false); });
+  await expect(page.locator('.offline-msg').first()).toBeVisible();
+});
+
+test('the phone\'s volume is read from the bridge at most every few seconds, and again after the panel changes it', async ({ page }) => {
+  await open(page, song());
+  await frame(page, null);
+  await page.evaluate(() => { window.__audioReads = 0; const a = window.Android.phoneAudio; window.Android.phoneAudio = (...x) => { window.__audioReads++; return a(...x); }; });
+  await page.evaluate(async () => { const m = await import('/panel/main.js'); for (let i = 0; i < 5; i++) m.phoneAudio(); });
+  expect(await page.evaluate(() => window.__audioReads)).toBeLessThanOrEqual(1);
+  await page.evaluate(async () => { const m = await import('/panel/main.js'); m.phoneVolume(10); m.phoneAudio(); });
+  expect(await page.evaluate(() => window.__audioReads)).toBeLessThanOrEqual(2);
+});

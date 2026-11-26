@@ -255,6 +255,7 @@ W.media = {
           if (!volDragging) { vol.value = a.volume; paintVol(a.volume); }
         } else q('.vol-val').textContent = 'n/a';
         box.classList.toggle('idle', !m);
+        box.classList.toggle('phone-song', !!m?.phone); // its own song needs no computer: the offline message stays off it
         q('.m-swap').hidden = !swapOn; // while the phone has a song, also when the computer shows nothing
         q('.m-swap').classList.toggle('phone', swapPhone);
         if (!m) {

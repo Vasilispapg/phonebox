@@ -204,6 +204,7 @@ window.PhoneBoxLocaleData = Object.assign(window.PhoneBoxLocaleData || {}, {
       "s.js.immichFailed": "無法檢查",
       "w.upNext": "接下來播放",
       "w.nowPlaying": "正在播放",
+      "w.mediaSwitch": "在電腦與手機之間切換",
       "w.nothingPlaying": "沒有正在播放的內容",
       "w.feeds.addInSettings": "請在 設定 › 一般 中新增訂閱源",
       "w.feeds.noneFrom": "\"{name}\" 暫無標題",

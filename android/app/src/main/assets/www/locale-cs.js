@@ -204,6 +204,7 @@ window.PhoneBoxLocaleData = Object.assign(window.PhoneBoxLocaleData || {}, {
       "s.js.immichFailed": "Nelze zkontrolovat",
       "w.upNext": "Up next",
       "w.nowPlaying": "Nyní hraje:",
+      "w.mediaSwitch": "Přepnout mezi počítačem a telefonem",
       "w.nothingPlaying": "Nic se nehraje",
       "w.feeds.addInSettings": "Přidání zdroje v Nastavení › Obecné",
       "w.feeds.noneFrom": "Žádné titulky od \" {name} \"",

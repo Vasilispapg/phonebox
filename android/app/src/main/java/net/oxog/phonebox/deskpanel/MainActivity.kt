@@ -668,8 +668,9 @@ class MainActivity : Activity(), SensorEventListener {
         // the phone's own music for the Now playing widget: told about every change while the panel is on screen, and
         // handed what is playing now (the page also asks once when it starts)
         PhoneMediaMonitor.onChange = { json -> pushPhoneMedia(json) }
-        // nothing at all while the switch is off: the page has nothing to learn, and an extra message would only make it redraw
-        if (BridgePrefs.phoneMediaEnabled(applicationContext)) pushPhoneMedia(PhoneMediaMonitor.current())
+        // always, whatever the switch says: turning it off on the Phone bridge screen (this activity paused, so no onChange) published
+        // "null" to nobody, and the panel would keep showing the song. The page ignores a null after a null, so it costs no redraw.
+        pushPhoneMedia(if (BridgePrefs.phoneMediaEnabled(applicationContext)) PhoneMediaMonitor.current() else "null")
         hideSystemUi()
         sensors?.getDefaultSensor(Sensor.TYPE_LIGHT)?.let { sensors?.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL) }
         sensors?.getDefaultSensor(Sensor.TYPE_PROXIMITY)?.let { sensors?.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL) }

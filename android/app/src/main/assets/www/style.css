@@ -478,6 +478,7 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px;
 }
 .offline-msg b { font-size: 15px; color: var(--text); font-weight: 600; }
 body.offline .offline-msg { display: flex; }
+body.offline .w-media.phone-song .offline-msg { display: none; }
 @container (max-height: 150px) { .w-media .m-progress { display: none; } }
 @container (max-height: 110px) { .w-media .m-top { display: none; } .w-media { justify-content: center; } }
 @container (max-width: 250px) { .w-media .vol { display: none; } }

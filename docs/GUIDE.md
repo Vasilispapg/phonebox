@@ -379,6 +379,12 @@ Share what you copy between the Mac and the phone. It starts with the clipboard.
   copy. If PhoneBox is denied, macOS gives it no text, nothing you copy reaches the phone, and the Phone bridge card says
   so (the log gets one line too, without the text).
 - Needs macOS: on Windows and Linux the card is hidden and the agent answers the phone with 501.
+- **The phone's music in Now playing (Android):** on the Phone bridge screen turn on **Show the phone's music in Now
+  playing**. It is off by default and needs the app's **Notification access** (it reads the phone's media sessions, not
+  your notifications). The widget then shows what the phone plays while the computer plays nothing, and its buttons
+  (previous, play/pause, next, seek, volume) control that app on the phone. When the phone has a song a small
+  computer | phone switch sits top right of the widget to pick which side to follow. The song stays on the phone: it is
+  not sent to the computer and Custom HTML widgets never see it. It also works while the computer is off.
 
 ## AI agent permission prompts
 
