@@ -172,6 +172,44 @@ test('the volume row shows and drives the phone\'s volume while the phone\'s son
   await expect(page.locator('.w-media').first()).not.toHaveClass(/muted-on/);
 });
 
+test('a volume level moved on the phone\'s song is not sent to the computer when the source changes before it is sent', async ({ page }) => {
+  await open(page, song());
+  await frame(page, null);
+  await page.evaluate(() => { // the demo answers the agent's API inside window.fetch, so what the panel POSTs is counted there
+    const inner = window.fetch;
+    window.__posts = [];
+    window.fetch = (input, init = {}) => {
+      if ((init.method || 'GET').toUpperCase() === 'POST') window.__posts.push(new URL(typeof input === 'string' ? input : input.url, location.href).pathname);
+      return inner(input, init);
+    };
+  });
+  await page.locator('.volr').first().fill('70');
+  await frame(page, mac()); // the computer starts to play within the 120 ms wait: it is shown now
+  await expect(page.locator('.m-title').first()).toHaveText('Mac song');
+  await page.clock.runFor(300);
+  expect(await page.evaluate(() => window.__calls.filter((c) => c[0] === 'volume'))).toEqual([]);
+  expect(await page.evaluate(() => window.__posts.filter((p) => p.endsWith('/volume')))).toEqual([]); // nor to the computer
+});
+
+test('a keyboard seek begun on the phone\'s song is dropped when the source changes, even for the same title', async ({ page }) => {
+  await open(page, song());
+  await frame(page, null);
+  await page.evaluate(() => { // the demo answers the agent's API inside window.fetch, so what the panel POSTs is counted there
+    const inner = window.fetch;
+    window.__posts = [];
+    window.fetch = (input, init = {}) => {
+      if ((init.method || 'GET').toUpperCase() === 'POST') window.__posts.push(new URL(typeof input === 'string' ? input : input.url, location.href).pathname);
+      return inner(input, init);
+    };
+  });
+  await page.locator('.bar').first().focus();
+  await page.keyboard.press('ArrowRight'); // starts a seek that goes out after 350 ms
+  await frame(page, mac({ app: 'Spotify', title: 'Phone song', durMs: 200000 })); // the computer plays the same song: shown now
+  await page.clock.runFor(600);
+  expect(await page.evaluate(() => window.__calls.filter((c) => c[0] === 'seek'))).toEqual([]);
+  expect(await page.evaluate(() => window.__posts.filter((p) => p.includes('/media/seek')))).toEqual([]); // nor to the computer
+});
+
 test('lyrics are not looked up for the phone\'s songs (the agent only knows the computer\'s)', async ({ page }) => {
   await open(page, song());
   await frame(page, null);

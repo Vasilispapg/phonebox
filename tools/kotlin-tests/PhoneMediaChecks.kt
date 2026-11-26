@@ -68,6 +68,14 @@ fun main() {
         !PhoneMediaModel.validAction("") && !PhoneMediaModel.validAction("stop") && !PhoneMediaModel.validAction("PLAYPAUSE"))
     check("a cover id never equals an agent id", PhoneMediaModel.ART_ID_BASE > 100_000)
 
+    // a reading that waited: the position as of now
+    val played = track(pos = 10_000)
+    check("a playing song has moved on by the time since it was read", PhoneMediaModel.advance(played, 1_000, 6_000)?.posMs == 15_000L)
+    check("the playback speed counts when it moves on", PhoneMediaModel.advance(track(rate = 2.0), 0, 3_000)?.posMs == 16_000L)
+    check("it never moves past the length", PhoneMediaModel.advance(track(pos = 199_000), 0, 9_000)?.posMs == 200_000L)
+    check("a paused song stays where it was", PhoneMediaModel.advance(track(playing = false), 0, 9_000)?.posMs == 10_000L)
+    check("no song stays no song, and a clock that went back changes nothing", PhoneMediaModel.advance(null, 0, 5) == null && PhoneMediaModel.advance(played, 9_000, 1_000)?.posMs == 10_000L)
+
     // the phone's media volume
     check("the phone's 15 steps map onto 0-100", PhoneMediaModel.volumePercent(0, 15) == 0 && PhoneMediaModel.volumePercent(15, 15) == 100 && PhoneMediaModel.volumePercent(8, 15) == 53)
     check("a level goes to the nearest step and back", PhoneMediaModel.volumeStep(50, 15) == 8 && PhoneMediaModel.volumeStep(100, 15) == 15 && PhoneMediaModel.volumeStep(0, 15) == 0)

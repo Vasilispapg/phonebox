@@ -31,20 +31,19 @@ object PhoneMediaMonitor {
     private var manager: MediaSessionManager? = null
     private var sessionsListener: MediaSessionManager.OnActiveSessionsChangedListener? = null
     private var held: List<Held> = emptyList()
-    private var last: PhoneTrack? = null
-    private var lastAt = 0L
+    private class Reading(val track: PhoneTrack?, val at: Long)
+    @Volatile private var reading = Reading(null, 0)
     private var artKey = ""
     private var artData: String? = null
     private var artSeq = 0
     @Volatile private var chosen: MediaController? = null
-    @Volatile private var json = "null"
     @Volatile private var artId = 0
 
     /** Called on the main thread with the song as JSON ("null" for none) whenever the panel should update. */
     @Volatile var onChange: ((String) -> Unit)? = null
 
     /** The song now, as the panel's media object, or "null". */
-    fun current(): String = json
+    fun current(): String = PhoneMediaModel.json(PhoneMediaModel.advance(reading.track, reading.at, SystemClock.elapsedRealtime())) // its position as of now, not as of the last event
 
     /** The cover picture of song [id] as a data URL, or "" (it is gone or never existed). */
     fun art(id: Int): String = if (id != 0 && id == artId) artData.orEmpty() else ""
@@ -83,7 +82,7 @@ object PhoneMediaMonitor {
         context = null
         release()
         chosen = null
-        last = null
+        reading = Reading(null, 0)
         artKey = ""; artData = null; artId = 0
         publish("null")
     }
@@ -122,14 +121,13 @@ object PhoneMediaMonitor {
         chosen = controller
         val track = controller?.let { try { build(app, it) } catch (_: Exception) { null } }
         val now = SystemClock.elapsedRealtime()
-        if (!PhoneMediaModel.worthSending(last, lastAt, track, now)) return
-        last = track
-        lastAt = now
+        val before = reading
+        if (!PhoneMediaModel.worthSending(before.track, before.at, track, now)) return
+        reading = Reading(track, now)
         publish(PhoneMediaModel.json(track))
     }
 
     private fun publish(next: String) {
-        json = next
         onChange?.invoke(next)
     }
 

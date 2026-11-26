@@ -146,7 +146,7 @@ W.media = {
     let scrub = null, seekTimer = 0, ariaSec = -1; // scrub: { id, ms, key } while held
     const canScrub = () => !!(media && media.durMs > 0 && media.canSeek);
     // which song a held bar belongs to: a different one underneath (next track) cancels the scrub instead of seeking it
-    const trackKey = () => (media ? [media.app, media.title, media.durMs].join('\n') : '');
+    const trackKey = () => (media ? [media.phone ? 'phone' : 'computer', media.app, media.title, media.durMs].join('\n') : ''); // the source too: a pending seek must not follow a switch to the other one
     const paintAria = (ms) => {
       bar.setAttribute('aria-valuenow', Math.round(ms / 1000));
       bar.setAttribute('aria-valuetext', fmtTime(ms));
@@ -211,7 +211,11 @@ W.media = {
       setVolDragging(vol, true);
       paintVol(vol.value);
       clearTimeout(volTimer);
-      volTimer = setTimeout(() => { if (media?.phone) phoneVolume(Number(vol.value)); else api('/volume?level=' + vol.value, 'POST').catch(() => {}); }, 120);
+      const toPhone = !!media?.phone, level = vol.value; // bound to what the slider showed when it moved
+      volTimer = setTimeout(() => {
+        if (!!media?.phone !== toPhone) return; // the source changed meanwhile: this level was not meant for the other device
+        if (toPhone) phoneVolume(Number(level)); else api('/volume?level=' + level, 'POST').catch(() => {});
+      }, 120);
     });
     vol.addEventListener('change', () => {
       clearTimeout(volumeRelease);
