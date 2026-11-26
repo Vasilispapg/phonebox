@@ -131,17 +131,28 @@ test('when both play, the computer\'s song is shown with a switch, and the switc
   await expect(page.locator('.m-title').first()).toHaveText('Mac song');
 });
 
-test('there is no switch while only one of them plays, and the choice is forgotten once one stops', async ({ page }) => {
+test('the switch is there while both have a song, even a paused one, and the choice is forgotten when one has nothing left', async ({ page }) => {
   await open(page, song());
   await frame(page, null);
-  await expect(page.locator('.m-swap').first()).toBeHidden();
+  await expect(page.locator('.m-swap').first()).toBeHidden(); // only the phone has a song
   await frame(page, mac());
   await page.locator('.m-swap').first().click();
   await expect(page.locator('.m-title').first()).toHaveText('Phone song');
-  await frame(page, mac({ playing: false })); // the computer stops: the phone stays
+  await frame(page, mac({ playing: false })); // the computer pauses: the chosen one stays, and so does the switch
+  await expect(page.locator('.m-title').first()).toHaveText('Phone song');
+  await expect(page.locator('.m-swap').first()).toBeVisible();
+  await frame(page, null); // the computer has nothing left
   await expect(page.locator('.m-swap').first()).toBeHidden();
-  await frame(page, mac()); // and when it plays again, the computer is first again
+  await frame(page, mac()); // when it comes back the computer is first again
   await expect(page.locator('.m-title').first()).toHaveText('Mac song');
+});
+
+test('a paused computer song and a paused phone song can both be picked', async ({ page }) => {
+  await open(page, song({ playing: false }));
+  await frame(page, mac({ playing: false }));
+  await expect(page.locator('.m-title').first()).toHaveText('Mac song');
+  await page.locator('.m-swap').first().click();
+  await expect(page.locator('.m-title').first()).toHaveText('Phone song');
 });
 
 test('the volume row shows and drives the phone\'s volume while the phone\'s song is shown, and the computer\'s otherwise', async ({ page }) => {
