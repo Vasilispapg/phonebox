@@ -131,19 +131,22 @@ test('when both play, the computer\'s song is shown with a switch, and the switc
   await expect(page.locator('.m-title').first()).toHaveText('Mac song');
 });
 
-test('the switch is there while both have a song, even a paused one, and the choice is forgotten when one has nothing left', async ({ page }) => {
+test('the switch is there while the phone has a song, also when the computer shows nothing, and the choice lasts until the phone has none', async ({ page }) => {
   await open(page, song());
   await frame(page, null);
-  await expect(page.locator('.m-swap').first()).toBeHidden(); // only the phone has a song
+  const swap = page.locator('.m-swap').first();
+  await expect(swap).toBeVisible(); // only the phone has a song: one can still look at the computer's side
+  await swap.click();
+  await expect(page.locator('.m-title').first()).not.toHaveText('Phone song');
+  await expect(swap).toBeVisible(); // and come back from it
+  await swap.click();
+  await expect(page.locator('.m-title').first()).toHaveText('Phone song');
   await frame(page, mac());
-  await page.locator('.m-swap').first().click();
-  await expect(page.locator('.m-title').first()).toHaveText('Phone song');
-  await frame(page, mac({ playing: false })); // the computer pauses: the chosen one stays, and so does the switch
-  await expect(page.locator('.m-title').first()).toHaveText('Phone song');
-  await expect(page.locator('.m-swap').first()).toBeVisible();
-  await frame(page, null); // the computer has nothing left
-  await expect(page.locator('.m-swap').first()).toBeHidden();
-  await frame(page, mac()); // when it comes back the computer is first again
+  await expect(page.locator('.m-title').first()).toHaveText('Phone song'); // the choice stays while the computer plays
+  await swap.click();
+  await expect(page.locator('.m-title').first()).toHaveText('Mac song');
+  await phoneSays(page, null); // the phone has nothing left: no switch, the computer's song
+  await expect(swap).toBeHidden();
   await expect(page.locator('.m-title').first()).toHaveText('Mac song');
 });
 
