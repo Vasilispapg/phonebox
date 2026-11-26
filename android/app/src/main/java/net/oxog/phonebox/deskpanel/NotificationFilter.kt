@@ -140,6 +140,8 @@ class CallLifetimes {
         call.title = title
         return call.start
     }
+    /** The calls found posted when the notification switch was turned on (or the listener connected): as [running], for each. */
+    @Synchronized fun seed(keys: List<String>, now: Long) { for (k in keys) if (k !in live) live[k] = Call(now, null) }
     @Synchronized fun ended(key: String) { live.remove(key) }
     @Synchronized fun clear() = live.clear()
 }
