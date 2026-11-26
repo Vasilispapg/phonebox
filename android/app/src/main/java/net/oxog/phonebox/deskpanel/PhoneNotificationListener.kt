@@ -176,6 +176,13 @@ class PhoneNotificationListener : NotificationListenerService() {
         private val retryPending = AtomicBoolean(false)
         @Volatile private var cache: BridgeConfigCache? = null
 
+        /**
+         * Forgets the calls being tracked. With the notification switch off the listener may stay bound (for the phone's music)
+         * and then ignores removals, so a call that ends meanwhile would stay in the list and a later call under the same key
+         * would be taken for a repeat: the list is emptied when the switch goes off.
+         */
+        fun forgetCalls() = calls.execute { try { callLifetimes.clear() } catch (_: Exception) {} }
+
         /** Forgets what waits for the Mac: called when the switch is turned off, so nothing is sent afterwards. */
         fun clearPending() = queue.clear()
 
