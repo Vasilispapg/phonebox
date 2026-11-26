@@ -512,8 +512,7 @@ test('the idle media widget uses the Arabic no-audio label', async ({ page }) =>
   await expect(page.locator('.w-media')).toBeVisible();
   const label = await page.evaluate(async () => {
     const main = await import('/panel/main.js');
-    main.D.state = { ...main.D.state, media: null };
-    main.emit('state');
+    main.setMediaState(null); // the widget reads the panel's merged song, not D.state.media (that stays the agent's, see main.js)
     return document.querySelector('.w-media .m-title').textContent;
   });
   expect(label).toBe('لا يوجد صوت');
