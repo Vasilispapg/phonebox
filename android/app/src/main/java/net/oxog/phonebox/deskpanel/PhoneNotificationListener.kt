@@ -23,6 +23,8 @@ class PhoneNotificationListener : NotificationListenerService() {
     override fun onListenerConnected() {
         connected = true
         PhoneMediaMonitor.sync(applicationContext) // the phone's own music for the Now playing widget, when its switch is on
+        // the phone's music alone must not read any notification (PRIVACY.md says so): the calls below are only looked up for the notification switch
+        if (!BridgePrefs.notificationsEnabled(this)) return
         // a call that is already ringing or running when the listener (re)connects must not be sent again, as a new call or as a
         // rename of the one the Mac may already show
         try {
@@ -37,6 +39,7 @@ class PhoneNotificationListener : NotificationListenerService() {
             n.extras?.getString(Notification.EXTRA_TEMPLATE) == "android.app.Notification\$CallStyle"
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
+        if (!BridgePrefs.notificationsEnabled(this)) return // nothing is read of a notification for the phone's music alone
         if (sbn.packageName !in NotificationFilter.IN_CALL_UIS) return
         val key = sbn.key ?: "${sbn.packageName}|${sbn.id}|${sbn.tag}"
         // the call ended: the next one is a new call. On the calls thread, after the updates still waiting there: one handled after

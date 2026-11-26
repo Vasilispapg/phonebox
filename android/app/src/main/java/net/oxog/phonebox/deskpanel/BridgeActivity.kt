@@ -103,8 +103,15 @@ class BridgeActivity : Activity() {
             appInfoButton.visibility = if (needHelp) View.VISIBLE else View.GONE
             // the phone's music uses the same listener: off, or the access state in the words of the notification card
             val mediaOn = BridgePrefs.phoneMediaEnabled(this@BridgeActivity)
-            mediaStatus.text = if (mediaOn) access.text else getString(R.string.bridge_state_off)
-            paint(mediaDot, if (mediaOn) (when (accessText) { R.string.bridge_access_granted -> good; R.string.bridge_access_idle -> wait; else -> bad }) else grey)
+            // access missing first; then whether Android has bound the listener (which the media monitor needs, whatever the notification switch says)
+            val mediaText = when {
+                !mediaOn -> R.string.bridge_state_off
+                !notificationAccessAllowed() -> R.string.bridge_access_missing
+                !PhoneNotificationListener.connected -> R.string.bridge_access_idle
+                else -> R.string.bridge_access_granted
+            }
+            mediaStatus.text = getString(mediaText)
+            paint(mediaDot, when (mediaText) { R.string.bridge_access_granted -> good; R.string.bridge_access_idle -> wait; R.string.bridge_state_off -> grey; else -> bad })
             val outcome = BridgePrefs.notificationOutcome
             last.text = getString(when (outcome) {
                 NotificationOutcome.NONE -> R.string.bridge_last_none

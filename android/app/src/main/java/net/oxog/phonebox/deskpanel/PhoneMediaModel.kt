@@ -52,6 +52,13 @@ object PhoneMediaModel {
         return if (durMs > 0) minOf(durMs, maxOf(0L, pos)) else maxOf(0L, pos)
     }
 
+    /** The track as it is [nowMs] - [atMs] after it was read: a playing song has moved on at its speed (never past its length). */
+    fun advance(t: PhoneTrack?, atMs: Long, nowMs: Long): PhoneTrack? {
+        if (t == null || !t.playing || nowMs <= atMs) return t
+        val pos = t.posMs + ((nowMs - atMs) * t.rate).toLong()
+        return t.copy(posMs = if (t.durMs > 0) minOf(t.durMs, pos) else pos)
+    }
+
     /** A length of 0 or less means unknown (a live stream); the panel then shows no seek bar. */
     fun duration(durMs: Long): Long = if (durMs > 0) durMs else 0
 
