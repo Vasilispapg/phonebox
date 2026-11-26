@@ -40,6 +40,7 @@ object BridgePrefs {
         val edit = p.edit().putBoolean("notifications", on)
         if (on && !p.contains("apps")) edit.putStringSet("apps", defaultApps(context))
         edit.apply()
+        if (on) PhoneNotificationListener.seedCalls() // a listener kept bound by the phone's music has not looked for calls in progress
         if (!on) {
             PhoneNotificationListener.clearPending() // what was waiting for the Mac must not be sent after the switch is off
             PhoneNotificationListener.forgetCalls()  // and no call is tracked while nothing is read

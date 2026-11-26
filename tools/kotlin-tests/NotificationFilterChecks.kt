@@ -135,6 +135,21 @@ private fun callerNameChecks() {
     calls.ended("c")
     check("after the call ended nothing is renamed", calls.renamed("c", "Anna") == null)
 
+    // the notification switch is turned on while a call is in progress and the listener was already bound (kept by the phone's music)
+    val late = CallLifetimes()
+    late.seed(listOf("live"), 5000L)
+    check("a call in progress when the switch went on is not begun again by its next update", late.begin("live", 6000L, "Maria") == null)
+    check("nor renamed by a name that arrives later", late.renamed("live", "Anna") == null)
+    check("another call is still a new one", late.begin("other", 6000L, "Bob") == 6000L)
+    late.ended("live")
+    check("when it ends, a later call under the same key is new again", late.begin("live", 9000L, "Maria") == 9000L)
+    val unseeded = CallLifetimes()
+    check("without seeding, the same update would have been sent as a new call", unseeded.begin("live", 6000L, "Maria") == 6000L)
+    val twice = CallLifetimes()
+    twice.begin("k", 1000L, "x")
+    twice.seed(listOf("k"), 2000L)
+    check("seeding does not replace a call that is already tracked", twice.renamed("k", "y") == 1000L)
+
     // the listener reconnects while a call is posted: the Mac may show it already, under the start time it had then
     calls.running("r", 2000L)
     check("a call already running at reconnect is not sent at its next update", calls.begin("r", 2500L, "6940931040") == null)

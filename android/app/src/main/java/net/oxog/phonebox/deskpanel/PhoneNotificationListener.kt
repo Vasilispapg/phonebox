@@ -22,15 +22,22 @@ class PhoneNotificationListener : NotificationListenerService() {
 
     override fun onListenerConnected() {
         connected = true
+        bound = this
         PhoneMediaMonitor.sync(applicationContext) // the phone's own music for the Now playing widget, when its switch is on
-        // the phone's music alone must not read any notification (PRIVACY.md says so): the calls below are only looked up for the notification switch
+        seedRunningCalls() // only with the notification switch on: the phone's music alone must not read any notification (PRIVACY.md)
+    }
+
+    /**
+     * A call that is already ringing or running when the notifications start (the listener connects, or the switch is turned on while
+     * the phone's music keeps the listener bound) must not be sent again, as a new call or as a rename of the one the Mac may already
+     * show. Reads nothing while the notification switch is off: the phone's music alone must not read any notification (PRIVACY.md).
+     */
+    private fun seedRunningCalls() {
         if (!BridgePrefs.notificationsEnabled(this)) return
-        // a call that is already ringing or running when the listener (re)connects must not be sent again, as a new call or as a
-        // rename of the one the Mac may already show
         try {
             val running = activeNotifications?.filter { isLifetimeCall(it.packageName, it.notification) }
                 ?.map { it.key ?: "${it.packageName}|${it.id}|${it.tag}" }.orEmpty()
-            onCalls { running.forEach { callLifetimes.running(it, System.currentTimeMillis()) } }
+            onCalls { callLifetimes.seed(running, System.currentTimeMillis()) }
         } catch (_: Exception) {}
     }
 
@@ -61,12 +68,14 @@ class PhoneNotificationListener : NotificationListenerService() {
     // never below Android 7): without this the screen would say "allowed" after the switch comes back but before a rebind
     override fun onDestroy() {
         connected = false
+        if (bound === this) bound = null
         PhoneMediaMonitor.stop()
         super.onDestroy()
     }
 
     override fun onListenerDisconnected() {
         connected = false
+        if (bound === this) bound = null
         PhoneMediaMonitor.stop()
         onCalls { callLifetimes.clear(); contacts.forget() }
         // Android may drop the listener; ask to be bound again while a switch that needs it is on
@@ -181,6 +190,12 @@ class PhoneNotificationListener : NotificationListenerService() {
          * and then ignores removals, so a call that ends meanwhile would stay in the list and a later call under the same key
          * would be taken for a repeat: the list is emptied when the switch goes off.
          */
+        /** The connected listener, for the switch to ask it to look for the calls already in progress. */
+        @Volatile private var bound: PhoneNotificationListener? = null
+
+        /** The notification switch was turned on while the listener was already bound (for the phone's music): note the calls in progress. */
+        fun seedCalls() { bound?.seedRunningCalls() }
+
         fun forgetCalls() = calls.execute { try { callLifetimes.clear() } catch (_: Exception) {} }
 
         /** Forgets what waits for the Mac: called when the switch is turned off, so nothing is sent afterwards. */
