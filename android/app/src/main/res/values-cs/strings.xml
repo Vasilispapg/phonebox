@@ -53,6 +53,8 @@
     <string name="bridge_send_unknown">Mac neodpověděl: text možná dorazil. Než ho pošlete znovu, zkontrolujte to na Macu.</string>
     <string name="bridge_notifications_switch">Zobrazovat oznámení v Macu</string>
     <string name="bridge_notifications_help">Hovory, zprávy a aplikace, které vyberete níže, se v Macu zobrazí jako oznámení s textem (například přihlašovacím kódem). Odesílají se jen aplikace, které zapnete. Přepínač v Macu (Nastavení › Most k telefonu v PhoneBoxu v počítači) musí být také zapnutý.</string>
+    <string name="bridge_media_switch">Zobrazit hudbu z telefonu v Právě hraje</string>
+    <string name="bridge_media_help">Skladba, která hraje v tomto telefonu, se zobrazí ve widgetu Právě hraje, když počítač nic nehraje, a tlačítka widgetu ji ovládají. Telefon neopouští. Vyžaduje přístup k oznámením.</string>
     <string name="bridge_access_missing">Přístup k oznámením zatím není povolen. PhoneBox ho potřebuje, aby viděl vaše oznámení.</string>
     <string name="bridge_access_granted">Přístup k oznámením je povolen.</string>
     <string name="bridge_access_button">Povolit přístup k oznámením</string>

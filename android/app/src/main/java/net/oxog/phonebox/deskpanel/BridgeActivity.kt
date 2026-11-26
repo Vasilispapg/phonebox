@@ -35,6 +35,8 @@ class BridgeActivity : Activity() {
     private lateinit var access: TextView
     private lateinit var accessDot: View
     private lateinit var last: TextView
+    private lateinit var mediaStatus: TextView
+    private lateinit var mediaDot: View
     private lateinit var lastDot: View
     private lateinit var restrictedHelp: TextView
     private lateinit var appInfoButton: Button
@@ -99,6 +101,10 @@ class BridgeActivity : Activity() {
             val needHelp = accessText == R.string.bridge_access_missing
             restrictedHelp.visibility = if (needHelp) View.VISIBLE else View.GONE
             appInfoButton.visibility = if (needHelp) View.VISIBLE else View.GONE
+            // the phone's music uses the same listener: off, or the access state in the words of the notification card
+            val mediaOn = BridgePrefs.phoneMediaEnabled(this@BridgeActivity)
+            mediaStatus.text = if (mediaOn) access.text else getString(R.string.bridge_state_off)
+            paint(mediaDot, if (mediaOn) (when (accessText) { R.string.bridge_access_granted -> good; R.string.bridge_access_idle -> wait; else -> bad }) else grey)
             val outcome = BridgePrefs.notificationOutcome
             last.text = getString(when (outcome) {
                 NotificationOutcome.NONE -> R.string.bridge_last_none
@@ -244,6 +250,17 @@ class BridgeActivity : Activity() {
         val apps = BridgeAppsCard(this, theme)
         add(apps.view, 12)
         apps.load()
+        // ---- the phone's own music in the panel's Now playing widget (it never leaves the phone)
+        add(card(
+            switchRow(getString(R.string.bridge_media_switch), BridgePrefs.phoneMediaEnabled(this)) { on ->
+                BridgePrefs.setPhoneMediaEnabled(this, on)
+                BridgeEntryPoints.update(this) // the listener shows in the system's Notification access list only now
+                ClipboardService.sync(this)    // and the clean-up of a phone whose last switch was just turned off
+            },
+            label(getString(R.string.bridge_media_help), 13f, mutedColor),
+            statusRow({ mediaDot = it }, { mediaStatus = it }),
+            primaryButton(getString(R.string.bridge_access_button)) { openNotificationAccess() },
+        ), 12)
         // the scroll view, not the column, keeps clear of the bars: with the padding on the column the cards scroll up under the clock
         val scroll = ScrollView(this).apply { setBackgroundColor(theme.page); isFillViewport = true; addView(column) }
         theme.keepClearOfSystemBars(scroll)

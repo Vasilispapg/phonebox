@@ -415,6 +415,12 @@ body.night #navCard, body.night #navChip { display: none; }
 .art-ph { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: grid; place-items: center; font-size: 34px; color: rgba(255, 255, 255, .5); }
 .m-text { min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 3px; }
 .m-app { display: flex; align-items: center; gap: 5px; font-size: clamp(9px, 4.5cqh, 13px); letter-spacing: .12em; text-transform: uppercase; color: rgb(var(--ambient)); font-weight: 600; }
+.m-swap { display: inline-flex; margin-inline-start: auto; padding: 2px; gap: 2px; border: 1px solid rgba(var(--ambient), .45); border-radius: 999px; background: rgba(255,255,255,.06); color: rgb(var(--ambient)); cursor: pointer; }
+.m-swap[hidden] { display: none; }
+.m-swap svg { width: 1.5em; height: 1.5em; padding: .25em; border-radius: 999px; fill: currentColor; opacity: .55; box-sizing: content-box; }
+.m-swap .sw-pc { background: rgb(var(--ambient)); color: #000; opacity: 1; }
+.m-swap.phone .sw-pc { background: none; color: inherit; opacity: .55; }
+.m-swap.phone .sw-ph { background: rgb(var(--ambient)); color: #000; opacity: 1; }
 .m-source-icon { display: inline-flex; flex: 0 0 auto; }
 .m-source-icon:empty { display: none; }
 .m-source-icon svg { width: 1.25em; height: 1.25em; display: block; }

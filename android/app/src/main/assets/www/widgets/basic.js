@@ -1,4 +1,4 @@
-import { $, API, D, LEVEL_COLOR, LOCALE, mediaHtml, METRICS, PANEL_HEADERS, PREVIEW, Q_STYLE, S_ORDER, ago, api, averageColor, buildLayout, buzz, cfg, chime, cfgVersion, chart, color, cssVar, currentProcessesSort, emit, fillIcon, fmtClock, clockPeriod, fmtDur, fmtHM, fmtMem, fmtReset, fmtTime, fmtValue, gotoProcesses, gpuMem, gpusOf, h, en, haptic, hasProcessesPage, hist, hour12, icon, keyButton, setKeyFace, labelled, levelOf, media, metricText, online, openSheet, paceInfo, pad, prRow, pushView, quotaProviders, r1, registerProcessesSorter, renderStatus, ringSvg, setArtColor, configMark, configReadSince, localWriteStored, setMediaState, setVolDragging, shortDur, shortGpu, store, t, tick, toast, volDragging, wxBlock, wxDeg, wxIcon, emo, rich, tp, tpv, quotaText, pages, curPage, gotoPageRef } from '../main.js';
+import { $, API, D, LEVEL_COLOR, phoneMediaArt, phoneMediaControl, setMediaChoice, LOCALE, mediaHtml, METRICS, PANEL_HEADERS, PREVIEW, Q_STYLE, S_ORDER, ago, api, averageColor, buildLayout, buzz, cfg, chime, cfgVersion, chart, color, cssVar, currentProcessesSort, emit, fillIcon, fmtClock, clockPeriod, fmtDur, fmtHM, fmtMem, fmtReset, fmtTime, fmtValue, gotoProcesses, gpuMem, gpusOf, h, en, haptic, hasProcessesPage, hist, hour12, icon, keyButton, setKeyFace, labelled, levelOf, media, metricText, online, openSheet, paceInfo, pad, prRow, pushView, quotaProviders, r1, registerProcessesSorter, renderStatus, ringSvg, setArtColor, configMark, configReadSince, localWriteStored, setMediaState, setVolDragging, shortDur, shortGpu, store, t, tick, toast, volDragging, wxBlock, wxDeg, wxIcon, emo, rich, tp, tpv, quotaText, pages, curPage, gotoPageRef } from '../main.js';
 import { W } from '../registry.js';
 import { invalidateDeckState } from './controls.js';
 
@@ -127,6 +127,7 @@ W.media = {
         media.at = performance.now();
         box.classList.toggle('playing', media.playing);
       }
+      if (media?.phone) { phoneMediaControl(action); return; } // the phone's own song: its buttons drive the phone, and it tells the panel back
       try {
         const res = await api('/media/' + action, 'POST');
         if (res && typeof res === 'object' && 'media' in res) setMediaState(res.media);
@@ -134,6 +135,8 @@ W.media = {
         emit('tick');
       } catch (_) {}
     }));
+    // both the computer and the phone play: a two-sided switch shows which one the widget follows
+    q('.m-swap').addEventListener('click', () => { haptic(); setMediaChoice(media?.phone ? 'mac' : 'phone'); });
     // The position bar is a slider. Holding it (touch, mouse) or moving it with the arrow keys shows a bubble with the time
     // the song will continue from; it seeks on release, not while moving. Meanwhile the once-a-second state and the 250 ms
     // refresh leave the bar alone (see update()).
@@ -168,7 +171,8 @@ W.media = {
       haptic();
       // the bar stays where it was put until the agent has caught up: its next samples still hold the old position
       media.posMs = ms; media.at = performance.now(); media.hold = performance.now() + 2500;
-      api('/media/seek?ms=' + ms, 'POST').catch(() => {});
+      if (media.phone) phoneMediaControl('seek', ms);
+      else api('/media/seek?ms=' + ms, 'POST').catch(() => {});
     };
     const startScrub = (id, ms) => { scrub = { id, ms, key: trackKey() }; bar.classList.add('scrubbing'); paintScrub(ms); };
     bar.addEventListener('pointerdown', (e) => {
@@ -245,6 +249,7 @@ W.media = {
         } else q('.vol-val').textContent = 'n/a';
         box.classList.toggle('idle', !m);
         if (!m) {
+          q('.m-swap').hidden = true;
           endScrub(false);
           box.classList.remove('playing');
           q('.m-app-name').textContent = tp('Media');
@@ -258,6 +263,8 @@ W.media = {
           return;
         }
         box.classList.toggle('playing', m.playing);
+        q('.m-swap').hidden = !m.both;
+        q('.m-swap').classList.toggle('phone', !!m.phone);
         q('.m-app-name').textContent = m.app || tp('Media');
         sourceIcon.innerHTML = sourceIcons[m.app] || '';
         q('.m-title').textContent = m.title || tp('Unknown track');
@@ -282,7 +289,8 @@ W.media = {
         }
         if (m.artId !== artId) {
           artId = m.artId;
-          if (m.artId) img.src = `${API}/art?id=${m.artId}`;
+          const phoneArt = m.artId && m.phone ? phoneMediaArt(m.artId) : '';
+          if (phoneArt || (m.artId && !m.phone)) img.src = phoneArt || `${API}/art?id=${m.artId}`;
           else { img.classList.remove('on'); setArtColor(null); }
         }
       },

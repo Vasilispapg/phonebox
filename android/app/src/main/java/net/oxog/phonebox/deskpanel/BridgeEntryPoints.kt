@@ -8,7 +8,7 @@ import android.os.Build
 /**
  * "Send to Mac" appears in the text-selection menu, the Share sheet and the Quick Settings tile list, and a long press on a
  * PhoneBox tile comes to the app, only while the phone's clipboard switch is on; PhoneBox appears in the system's
- * Notification access list only while the notification switch is on; and the app starts at boot only while either one is on:
+ * Notification access list only while the notification switch or the phone's-music switch is on; and the app starts at boot only while either one is on:
  * for everyone else the phone behaves as before. All of these are android:enabled="false" in the manifest. The panel's
  * overview button and the service's notification open the Phone bridge screen, which is where the switches are.
  */
@@ -24,7 +24,7 @@ object BridgeEntryPoints {
         // by name, and only from Android 7: the tile class extends TileService, which older systems do not have
         if (Build.VERSION.SDK_INT >= 24) names += "net.oxog.phonebox.deskpanel.SendClipboardTile"
         apply(context, names, clipboard)
-        apply(context, listOf(PhoneNotificationListener::class.java.name), notifications)
+        apply(context, listOf(PhoneNotificationListener::class.java.name), notifications || BridgePrefs.phoneMediaEnabled(context))
         apply(context, listOf(SendFilesToMacActivity::class.java.name), BridgePrefs.filesFromPhoneEnabled(context))
         apply(context, listOf(BridgeBootReceiver::class.java.name), clipboard || notifications || BridgePrefs.filesToPhoneEnabled(context))
     }

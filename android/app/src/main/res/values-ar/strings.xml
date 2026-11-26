@@ -53,6 +53,8 @@
     <string name="bridge_send_unknown">لم يصل رد من Mac: ربما وصل النص. تحقّق على Mac قبل إرساله مجددًا.</string>
     <string name="bridge_notifications_switch">عرض الإشعارات على Mac</string>
     <string name="bridge_notifications_help">تظهر المكالمات والرسائل والتطبيقات التي تختارها أدناه كإشعارات على Mac مع نصها (مثل رمز تسجيل الدخول). تُرسل فقط التطبيقات التي تشغّلها. ويجب أيضًا تشغيل مفتاح Mac (الإعدادات › جسر الهاتف في PhoneBox على الكمبيوتر).</string>
+    <string name="bridge_media_switch">عرض موسيقى الهاتف في «قيد التشغيل»</string>
+    <string name="bridge_media_help">تظهر الأغنية التي تُشغَّل على هذا الهاتف في أداة «قيد التشغيل» عندما لا يشغّل الكمبيوتر شيئًا، وتتحكم بها أزرار الأداة. لا تغادر الهاتف أبدًا. تحتاج إلى إذن الوصول إلى الإشعارات.</string>
     <string name="bridge_access_missing">لم يُسمح بالوصول إلى الإشعارات بعد. يحتاج PhoneBox إليه لرؤية إشعاراتك.</string>
     <string name="bridge_access_granted">الوصول إلى الإشعارات مسموح.</string>
     <string name="bridge_access_button">السماح بالوصول إلى الإشعارات</string>

@@ -53,6 +53,8 @@
     <string name="bridge_send_unknown">Mac 沒有回應：文字可能已經送達。再次傳送前，請先在 Mac 上確認。</string>
     <string name="bridge_notifications_switch">在 Mac 上顯示通知</string>
     <string name="bridge_notifications_help">來電、訊息以及你在下方選擇的 App 會以通知形式顯示在 Mac 上，並附帶文字（例如登入驗證碼）。只有你開啟的 App 才會被傳送。Mac 上的開關（電腦上 PhoneBox 的「設定 › 手機橋接」）也必須開啟。</string>
+    <string name="bridge_media_switch">在「正在播放」中顯示手機的音樂</string>
+    <string name="bridge_media_help">當電腦沒有播放任何內容時，這支手機正在播放的歌曲會顯示在「正在播放」小工具中，小工具的按鈕可控制它。它不會離開手機。需要通知存取權限。</string>
     <string name="bridge_access_missing">尚未允許通知存取權。PhoneBox 需要它才能看到你的通知。</string>
     <string name="bridge_access_granted">已允許通知存取權。</string>
     <string name="bridge_access_button">允許通知存取權</string>

@@ -53,6 +53,8 @@
     <string name="bridge_send_unknown">Nessuna risposta dal Mac: il testo potrebbe essere arrivato. Controlla sul Mac prima di inviarlo di nuovo.</string>
     <string name="bridge_notifications_switch">Mostra le notifiche sul Mac</string>
     <string name="bridge_notifications_help">Chiamate, messaggi e le app che scegli qui sotto compaiono come notifiche sul Mac, con il loro testo (un codice di accesso, per esempio). Vengono inviate solo le app che attivi. Anche l\'interruttore del Mac (Impostazioni › Ponte telefono in PhoneBox sul computer) deve essere attivo.</string>
+    <string name="bridge_media_switch">Mostra la musica del telefono in In riproduzione</string>
+    <string name="bridge_media_help">Il brano in riproduzione su questo telefono appare nel widget In riproduzione quando il computer non riproduce nulla, e i pulsanti del widget lo controllano. Non lascia mai il telefono. Richiede l’accesso alle notifiche.</string>
     <string name="bridge_access_missing">L\'accesso alle notifiche non è ancora consentito. PhoneBox ne ha bisogno per vedere le tue notifiche.</string>
     <string name="bridge_access_granted">L\'accesso alle notifiche è consentito.</string>
     <string name="bridge_access_button">Consenti l\'accesso alle notifiche</string>
