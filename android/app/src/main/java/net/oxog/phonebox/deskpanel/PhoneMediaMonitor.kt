@@ -3,10 +3,12 @@ package net.oxog.phonebox.deskpanel
 import android.content.ComponentName
 import android.content.Context
 import android.graphics.Bitmap
+import android.media.AudioManager
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -176,6 +178,29 @@ object PhoneMediaMonitor {
     private fun label(app: Context, pkg: String): String = try {
         app.packageManager.getApplicationLabel(app.packageManager.getApplicationInfo(pkg, 0)).toString()
     } catch (_: Exception) { pkg }
+
+    private fun audio(app: Context) = app.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+
+    /** The phone's media volume and mute, in the shape of the agent's audio state: what the widget shows while the phone's song is shown. */
+    fun audioJson(app: Context): String = try {
+        val am = audio(app)
+        val volume = am.getStreamVolume(AudioManager.STREAM_MUSIC)
+        val muted = if (Build.VERSION.SDK_INT >= 23) am.isStreamMute(AudioManager.STREAM_MUSIC) else volume == 0
+        PhoneMediaModel.audioJson(volume, am.getStreamMaxVolume(AudioManager.STREAM_MUSIC), muted)
+    } catch (_: Exception) { "null" }
+
+    /** Sets the phone's media volume to [percent] (0-100), without the system's volume panel. */
+    fun setVolume(app: Context, percent: Int): Boolean = try {
+        val am = audio(app)
+        am.setStreamVolume(AudioManager.STREAM_MUSIC, PhoneMediaModel.volumeStep(percent, am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)), 0)
+        true
+    } catch (_: Exception) { false }
+
+    /** Mutes or unmutes the phone's media (Android 6 and later; older systems have no such call that works for an app). */
+    fun toggleMute(app: Context): Boolean = try {
+        if (Build.VERSION.SDK_INT < 23) false
+        else { audio(app).adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_TOGGLE_MUTE, 0); true }
+    } catch (_: Exception) { false }
 
     /** A button of the Now playing widget pressed while the phone's song is shown. False when nothing is there to control. */
     fun control(action: String, ms: Long): Boolean {

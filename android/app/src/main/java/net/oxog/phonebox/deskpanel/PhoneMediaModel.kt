@@ -106,6 +106,16 @@ object PhoneMediaModel {
         return sb.append('"').toString()
     }
 
+    /** The phone's media volume as the widget's 0-100 (the system has a few steps, usually 15). */
+    fun volumePercent(volume: Int, max: Int): Int = if (max <= 0) 0 else Math.round(volume.coerceIn(0, max) * 100f / max)
+
+    /** The system step nearest to a 0-100 level. */
+    fun volumeStep(percent: Int, max: Int): Int = if (max <= 0) 0 else Math.round(percent.coerceIn(0, 100) * max / 100f).coerceIn(0, max)
+
+    /** The same fields the agent's audio state has, so the widget's volume row can show the phone's instead. */
+    fun audioJson(volume: Int, max: Int, muted: Boolean): String =
+        "{\"volume\":${volumePercent(volume, max)},\"muted\":$muted,\"canControl\":true,\"phone\":true}"
+
     /** The buttons the page may press; anything else is ignored. */
     fun validAction(action: String) = action == "playpause" || action == "next" || action == "prev" || action == "seek"
 }

@@ -18,6 +18,9 @@ async function open(page, initial = null) {
       phoneMedia: () => JSON.stringify(window.__phone),
       phoneMediaArt: () => '',
       phoneMediaControl: (key, action, ms) => { window.__calls.push([action, ms]); return true; },
+      phoneAudio: () => JSON.stringify({ volume: 40, muted: true, canControl: true, phone: true }),
+      phoneVolume: (key, percent) => { window.__calls.push(['volume', percent]); return true; },
+      phoneMute: () => { window.__calls.push(['mute']); return true; },
     };
   }, initial);
   await page.clock.install({ time: new Date('2026-01-01T12:00:00Z') });
@@ -139,6 +142,20 @@ test('there is no switch while only one of them plays, and the choice is forgott
   await expect(page.locator('.m-swap').first()).toBeHidden();
   await frame(page, mac()); // and when it plays again, the computer is first again
   await expect(page.locator('.m-title').first()).toHaveText('Mac song');
+});
+
+test('the volume row shows and drives the phone\'s volume while the phone\'s song is shown, and the computer\'s otherwise', async ({ page }) => {
+  await open(page, song());
+  await frame(page, null);
+  await expect(page.locator('.volr').first()).toHaveValue('40');
+  await expect(page.locator('.w-media').first()).toHaveClass(/muted-on/);
+  await page.locator('.mute').first().click();
+  await page.locator('.volr').first().fill('70');
+  await page.clock.runFor(300);
+  expect(await page.evaluate(() => window.__calls.filter((c) => c[0] === 'mute' || c[0] === 'volume'))).toEqual([['mute'], ['volume', 70]]);
+  await frame(page, mac()); // the computer plays: its own volume, not the phone's 40
+  await expect(page.locator('.volr').first()).not.toHaveValue('40');
+  await expect(page.locator('.w-media').first()).not.toHaveClass(/muted-on/);
 });
 
 test('lyrics are not looked up for the phone\'s songs (the agent only knows the computer\'s)', async ({ page }) => {
