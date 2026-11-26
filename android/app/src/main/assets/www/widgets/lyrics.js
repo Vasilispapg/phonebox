@@ -133,7 +133,7 @@ W.lyrics = {
     paint(); // nothing playing yet: the idle note until the first update brings a track
     return {
       update(kind) {
-        const key = trackKey(D.state?.media);
+        const key = trackKey(media);
         if (key !== track) {
           track = key;
           if (key) fetchFor(key); else { result = null; lines = []; paint(); }

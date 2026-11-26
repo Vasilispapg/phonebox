@@ -82,6 +82,11 @@ fun main() {
     check("advance() with a speed of 0 or NaN still moves at normal speed", PhoneMediaModel.advance(track(rate = 0.0), 0, 4_000)?.posMs == 14_000L &&
         PhoneMediaModel.advance(track(rate = Double.NaN), 0, 4_000)?.posMs == 14_000L)
 
+    // seeking
+    check("a seek goes to where it was asked, within the song", PhoneMediaModel.seekTarget(5_000, 200_000) == 5_000L)
+    check("a seek is held at the start and at the end", PhoneMediaModel.seekTarget(-3, 200_000) == 0L && PhoneMediaModel.seekTarget(900_000, 200_000) == 200_000L)
+    check("with no known length a seek is only held at the start", PhoneMediaModel.seekTarget(900_000, 0) == 900_000L && PhoneMediaModel.seekTarget(-1, 0) == 0L)
+
     // the phone's media volume
     check("the phone's 15 steps map onto 0-100", PhoneMediaModel.volumePercent(0, 15) == 0 && PhoneMediaModel.volumePercent(15, 15) == 100 && PhoneMediaModel.volumePercent(8, 15) == 53)
     check("a level goes to the nearest step and back", PhoneMediaModel.volumeStep(50, 15) == 8 && PhoneMediaModel.volumeStep(100, 15) == 15 && PhoneMediaModel.volumeStep(0, 15) == 0)

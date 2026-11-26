@@ -244,7 +244,7 @@ W.media = {
           }
           return;
         }
-        const m = D.state?.media, a = m?.phone ? phoneAudio() : D.state?.audio; // the volume row follows the song shown
+        const m = media, a = m?.phone ? phoneAudio() : D.state?.audio; // the volume row follows the song shown
         vol.disabled = (!a || a.canControl === false);
         box.classList.toggle('volume-unavailable', (!a || a.canControl === false));
         q('.mute').disabled = (!a || a.canControl === false);

@@ -925,35 +925,49 @@ export function mediaFrom(prev, m) {
 }
 // The phone's own music (Android's media sessions, read by the app; it never leaves the phone). It is shown only while the
 // computer plays nothing, so a song on the computer always wins; its buttons then go to the phone, not the agent.
+// D.state.media stays the agent's own reading: the whole of D.state is handed to Custom HTML widgets, and the phone's song must
+// not reach their scripts. The widgets read the merged song from `media` (below), which is only for the panel's own code.
 let agentMedia = null;   // what the agent said last
+let agentAt = 0;         // when that was true (its age counted in), so it can be counted on without taking it for a new reading
 let phoneMedia = null;   // what the phone plays (the app's media object, with phone: true), or null
 let phoneAt = 0;         // when it arrived: its position was true then, and is counted on from there
+let phoneJson = 'null';  // the last message from the phone, to tell a repeat from a change
 let phoneMediaRead = false;
 // the phone's song with its position counted up to now, so every state frame (each second) restates it without a jump back
-const phoneNow = (both) => {
-  const pos = phoneMedia.posMs + (phoneMedia.playing ? performance.now() - phoneAt : 0);
-  return { ...phoneMedia, posMs: phoneMedia.durMs > 0 ? Math.min(phoneMedia.durMs, pos) : pos, ageMs: 0, both };
-};
+// this panel counts a playing song's position at normal speed from when it was true (no playback-rate support here)
+const countedOn = (m, at) => { const pos = m.posMs + (m.playing ? performance.now() - at : 0); return m.durMs > 0 ? Math.min(m.durMs, pos) : pos; };
+const phoneNow = (both) => ({ ...phoneMedia, posMs: countedOn(phoneMedia, phoneAt), ageMs: 0, both });
+// the agent's last song counted up to now: used when the phone changed and the agent has said nothing new (not a fresh sample)
+const agentNow = (both) => (agentMedia ? { ...agentMedia, posMs: countedOn(agentMedia, agentAt), ageMs: 0, both } : null);
 // While the phone has a song the widget offers a switch (computer | phone), so one can look at, or go back to, the computer even
-// when it plays nothing. Without a choice the one that plays is shown (the computer's first when both play); a tap picks one
-// and keeps it until the phone has no song left, and then the next time it has one the widget starts by itself again.
+// when it plays nothing. Without a choice the one that plays is shown (the computer's first when both play); when neither plays
+// the one that was shown stays shown (Play then starts that one). A tap picks one and keeps it until the phone has no song
+// left, and then the next time it has one the widget starts by itself again.
 let mediaChoice = null; // 'phone' | 'mac' | null
+let lastShown = 'mac';  // which side the widget showed last
 export let swapOn = false;    // the switch is shown
 export let swapPhone = false; // and it points at the phone's side
-export const setMediaChoice = (choice) => { mediaChoice = choice === 'phone' ? 'phone' : 'mac'; setMediaState(agentMedia); };
-export function effectiveMedia(fromAgentState) {
-  agentMedia = fromAgentState || null;
+export const setMediaChoice = (choice) => { mediaChoice = choice === 'phone' ? 'phone' : 'mac'; setMediaState(agentMedia, false); };
+/** The song the widgets show. [fresh]: [fromAgentState] is a new reading of the agent's; else the last one is counted on. */
+export function effectiveMedia(fromAgentState, fresh = true) {
+  if (fresh) {
+    agentMedia = fromAgentState || null;
+    if (agentMedia) agentAt = mediaSampleAt(agentMedia);
+  }
   if (!phoneMediaRead) {
     phoneMediaRead = true;
-    try { const j = bridge?.phoneMedia?.(); if (j && j !== 'null') { phoneMedia = JSON.parse(j); phoneAt = performance.now(); } } catch (_) {}
+    try { const j = bridge?.phoneMedia?.(); if (j && j !== 'null') { phoneMedia = JSON.parse(j); phoneAt = performance.now(); phoneJson = j; } } catch (_) {}
   }
   if (!phoneMedia) mediaChoice = null;
-  const computers = () => (phoneMedia && agentMedia ? { ...agentMedia, both: true } : agentMedia);
+  const both = !!(phoneMedia && agentMedia);
+  const computers = () => (fresh ? (both ? { ...agentMedia, both: true } : agentMedia) : agentNow(both));
   let out;
   if (phoneMedia && mediaChoice) out = mediaChoice === 'phone' ? phoneNow(true) : computers();
   else if (agentMedia?.playing) out = computers();
-  else if (phoneMedia && (phoneMedia.playing || !agentMedia)) out = phoneNow(!!agentMedia);
-  else out = computers();
+  else if (phoneMedia?.playing) out = phoneNow(both);
+  else if (both) out = lastShown === 'phone' ? phoneNow(true) : computers(); // neither plays: what was shown stays
+  else out = phoneMedia ? phoneNow(false) : computers();
+  if (out) lastShown = out.phone ? 'phone' : 'mac';
   swapOn = !!phoneMedia;
   swapPhone = !!out?.phone;
   return out;
@@ -965,15 +979,22 @@ export const phoneVolume = (percent) => { try { return !!bridge?.phoneVolume?.(p
 export const phoneMute = () => { try { return !!bridge?.phoneMute?.(); } catch (_) { return false; } };
 export const phoneMediaArt = (id) => { try { return bridge?.phoneMediaArt?.(id) || ''; } catch (_) { return ''; } };
 window.onPhoneMedia = (json) => {
-  try { phoneMedia = json && json !== 'null' ? JSON.parse(json) : null; } catch (_) { phoneMedia = null; }
+  const next = json && json !== 'null' ? json : 'null';
+  if (phoneMediaRead && next === phoneJson) return; // the same message again (null after null, with the switch off): nothing to do
+  phoneJson = next;
+  try { phoneMedia = next === 'null' ? null : JSON.parse(next); } catch (_) { phoneMedia = null; }
   phoneAt = performance.now();
   phoneMediaRead = true;
-  setMediaState(agentMedia);
-};
-export const setMediaState = (m) => {
-  const shown = effectiveMedia(m);
-  if (D.state) D.state.media = shown;
+  const wasPhone = !!media?.phone, wasSwap = swapOn;
+  const shown = effectiveMedia(agentMedia, false);
+  // the computer's song stays what is shown and nothing about the switch changed: no redraw, and no old agent sample taken for a new one
+  if (!shown?.phone && !wasPhone && swapOn === wasSwap) return;
   media = mediaFrom(media, shown);
+  emit('state');
+};
+export const setMediaState = (m, fresh = true) => {
+  if (fresh && D.state) D.state.media = m || null; // the agent's own reading, never the phone's
+  media = mediaFrom(media, effectiveMedia(m, fresh));
   emit('state');
 };
 // The state frame carries the agent's last media reading; it reads the players every second only while someone asks.
@@ -2761,9 +2782,9 @@ export function applyState(s, replayGen = null) {
   // they go through evOffer like live ones: while a replay is armed the queue merges them before dispatch
   if (fresh || replayGen === evGen) for (const e of s.events || []) evOffer(e);
   if (!fresh) return replayGen === evGen;
-  s.media = effectiveMedia(s.media);
+  const shownMedia = effectiveMedia(s.media); // s.media stays the agent's own reading (see above)
   D.state = s;
-  media = mediaFrom(media, s.media);
+  media = mediaFrom(media, shownMedia);
   setOnline(true);
   if (s.cfgVersion !== undefined && cfgVersion !== null && s.cfgVersion !== cfgVersion) loadConfig();
   if (s.pushVersion !== undefined && s.pushVersion !== pushVersion) loadPush();
