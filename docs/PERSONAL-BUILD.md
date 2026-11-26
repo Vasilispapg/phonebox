@@ -33,6 +33,14 @@ screen): the share sheet's **Send file to Mac**, the Finder Quick Action **Send 
 zone. The design is in `docs/GUIDE.md` (Phone bridge) and `PRIVACY.md`. Received files are saved with the quarantine mark.
 An update of the agent can change its signature (always with an ad hoc one), so macOS may ask again for access to the Downloads folder.
 
+## Login codes ("Sensitive notification content hidden")
+
+Android 15 and later hide the text of sensitive notifications (login codes, one-time passwords) from notification
+listeners, so the Mac shows "Sensitive notification content hidden" instead of the code and the code cannot be copied.
+`scripts/personal-allow-sensitive.sh` sets the app op `RECEIVE_SENSITIVE_NOTIFICATIONS` to `allow` for PhoneBox over adb
+(only adb can; the app cannot ask for it). It survives updates of the app and is lost on an uninstall, so run it again
+after one. Not part of the upstream pull requests.
+
 ## Keeping it up to date
 
 ```bash
