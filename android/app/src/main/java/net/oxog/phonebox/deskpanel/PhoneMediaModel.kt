@@ -46,7 +46,7 @@ object PhoneMediaModel {
      */
     fun position(positionMs: Long, updatedAtMs: Long, nowMs: Long, speed: Float, playing: Boolean, durMs: Long): Long {
         if (positionMs < 0) return 0
-        val rate = if (speed > 0f && speed.isFinite()) speed.toDouble() else 1.0
+        val rate = rate(speed)
         val since = if (playing && updatedAtMs > 0 && nowMs > updatedAtMs) (nowMs - updatedAtMs) * rate else 0.0
         val pos = positionMs + since.toLong()
         return if (durMs > 0) minOf(durMs, maxOf(0L, pos)) else maxOf(0L, pos)
@@ -55,9 +55,12 @@ object PhoneMediaModel {
     /** The track as it is [nowMs] - [atMs] after it was read: a playing song has moved on at its speed (never past its length). */
     fun advance(t: PhoneTrack?, atMs: Long, nowMs: Long): PhoneTrack? {
         if (t == null || !t.playing || nowMs <= atMs) return t
-        val pos = t.posMs + ((nowMs - atMs) * t.rate).toLong()
+        val pos = t.posMs + ((nowMs - atMs) * rate(t.rate.toFloat())).toLong()
         return t.copy(posMs = if (t.durMs > 0) minOf(t.durMs, pos) else pos)
     }
+
+    /** A session's playback speed as the song moves on at it: a speed of 0, below 0 or not a number counts as normal speed. */
+    fun rate(speed: Float): Double = if (speed > 0f && speed.isFinite()) speed.toDouble() else 1.0
 
     /** A length of 0 or less means unknown (a live stream); the panel then shows no seek bar. */
     fun duration(durMs: Long): Long = if (durMs > 0) durMs else 0

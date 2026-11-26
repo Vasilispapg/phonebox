@@ -76,6 +76,12 @@ fun main() {
     check("a paused song stays where it was", PhoneMediaModel.advance(track(playing = false), 0, 9_000)?.posMs == 10_000L)
     check("no song stays no song, and a clock that went back changes nothing", PhoneMediaModel.advance(null, 0, 5) == null && PhoneMediaModel.advance(played, 9_000, 1_000)?.posMs == 10_000L)
 
+    // a speed that makes no sense counts as normal speed, in position() and in advance() alike
+    check("a zero, negative or non-finite speed is 1.0", PhoneMediaModel.rate(0f) == 1.0 && PhoneMediaModel.rate(-2f) == 1.0 &&
+        PhoneMediaModel.rate(Float.NaN) == 1.0 && PhoneMediaModel.rate(Float.POSITIVE_INFINITY) == 1.0 && PhoneMediaModel.rate(1.5f) == 1.5)
+    check("advance() with a speed of 0 or NaN still moves at normal speed", PhoneMediaModel.advance(track(rate = 0.0), 0, 4_000)?.posMs == 14_000L &&
+        PhoneMediaModel.advance(track(rate = Double.NaN), 0, 4_000)?.posMs == 14_000L)
+
     // the phone's media volume
     check("the phone's 15 steps map onto 0-100", PhoneMediaModel.volumePercent(0, 15) == 0 && PhoneMediaModel.volumePercent(15, 15) == 100 && PhoneMediaModel.volumePercent(8, 15) == 53)
     check("a level goes to the nearest step and back", PhoneMediaModel.volumeStep(50, 15) == 8 && PhoneMediaModel.volumeStep(100, 15) == 15 && PhoneMediaModel.volumeStep(0, 15) == 0)

@@ -43,7 +43,10 @@ object PhoneMediaMonitor {
     @Volatile var onChange: ((String) -> Unit)? = null
 
     /** The song now, as the panel's media object, or "null". */
-    fun current(): String = PhoneMediaModel.json(PhoneMediaModel.advance(reading.track, reading.at, SystemClock.elapsedRealtime())) // its position as of now, not as of the last event
+    fun current(): String {
+        val r = reading // once: the track and the moment it was read belong together
+        return PhoneMediaModel.json(PhoneMediaModel.advance(r.track, r.at, SystemClock.elapsedRealtime())) // its position as of now, not as of the last event
+    }
 
     /** The cover picture of song [id] as a data URL, or "" (it is gone or never existed). */
     fun art(id: Int): String = if (id != 0 && id == artId) artData.orEmpty() else ""
@@ -146,7 +149,7 @@ object PhoneMediaMonitor {
             st?.playbackSpeed ?: 1f, playing, dur)
         val canSeek = dur > 0 && known && (st!!.actions and PlaybackState.ACTION_SEEK_TO) != 0L
         return PhoneTrack(c.packageName, label(app, c.packageName), title, artist, album, playing, pos, dur, canSeek,
-            (st?.playbackSpeed ?: 1f).toDouble(), coverFor(c.packageName, title, artist, album, md))
+            PhoneMediaModel.rate(st?.playbackSpeed ?: 1f), coverFor(c.packageName, title, artist, album, md))
     }
 
     /** The id of the cover picture for this song (0 for none); the picture is encoded once per song, and again only if it arrives late. */
