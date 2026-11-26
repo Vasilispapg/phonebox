@@ -790,6 +790,16 @@ class MainActivity : Activity(), SensorEventListener {
         @JavascriptInterface
         fun phoneMediaArt(key: String, id: Int): String = if (ok(key)) PhoneMediaMonitor.art(id) else ""
 
+        /** The phone's media volume and mute as the agent's audio state ("null" when it cannot be read). */
+        @JavascriptInterface
+        fun phoneAudio(key: String): String = if (ok(key)) PhoneMediaMonitor.audioJson(applicationContext) else "null"
+
+        @JavascriptInterface
+        fun phoneVolume(key: String, percent: Int): Boolean = ok(key) && PhoneMediaMonitor.setVolume(applicationContext, percent)
+
+        @JavascriptInterface
+        fun phoneMute(key: String): Boolean = ok(key) && PhoneMediaMonitor.toggleMute(applicationContext)
+
         /** A button of the Now playing widget pressed while the phone's song is shown: playpause, next, prev or seek (to [ms]). */
         @JavascriptInterface
         fun phoneMediaControl(key: String, action: String, ms: Double): Boolean =

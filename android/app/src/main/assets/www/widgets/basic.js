@@ -1,4 +1,4 @@
-import { $, API, D, LEVEL_COLOR, phoneMediaArt, phoneMediaControl, setMediaChoice, LOCALE, mediaHtml, METRICS, PANEL_HEADERS, PREVIEW, Q_STYLE, S_ORDER, ago, api, averageColor, buildLayout, buzz, cfg, chime, cfgVersion, chart, color, cssVar, currentProcessesSort, emit, fillIcon, fmtClock, clockPeriod, fmtDur, fmtHM, fmtMem, fmtReset, fmtTime, fmtValue, gotoProcesses, gpuMem, gpusOf, h, en, haptic, hasProcessesPage, hist, hour12, icon, keyButton, setKeyFace, labelled, levelOf, media, mediaPosMs, metricText, online, openSheet, paceInfo, pad, prRow, pushView, quotaProviders, quotaWanted, r1, registerProcessesSorter, renderStatus, ringSvg, setArtColor, configMark, configReadSince, localWriteStored, setMediaState, setVolDragging, shortDur, shortGpu, store, t, tick, toast, volDragging, wxBlock, wxDeg, wxIcon, emo, rich, tp, tpv, quotaText, pages, curPage, gotoPageRef } from '../main.js';
+import { $, API, D, LEVEL_COLOR, phoneMediaArt, phoneMediaControl, phoneAudio, phoneMute, phoneVolume, setMediaChoice, LOCALE, mediaHtml, METRICS, PANEL_HEADERS, PREVIEW, Q_STYLE, S_ORDER, ago, api, averageColor, buildLayout, buzz, cfg, chime, cfgVersion, chart, color, cssVar, currentProcessesSort, emit, fillIcon, fmtClock, clockPeriod, fmtDur, fmtHM, fmtMem, fmtReset, fmtTime, fmtValue, gotoProcesses, gpuMem, gpusOf, h, en, haptic, hasProcessesPage, hist, hour12, icon, keyButton, setKeyFace, labelled, levelOf, media, mediaPosMs, metricText, online, openSheet, paceInfo, pad, prRow, pushView, quotaProviders, quotaWanted, r1, registerProcessesSorter, renderStatus, ringSvg, setArtColor, configMark, configReadSince, localWriteStored, setMediaState, setVolDragging, shortDur, shortGpu, store, t, tick, toast, volDragging, wxBlock, wxDeg, wxIcon, emo, rich, tp, tpv, quotaText, pages, curPage, gotoPageRef } from '../main.js';
 import { W } from '../registry.js';
 import { weekStartDay } from './time.js';
 import { invalidateDeckState } from './controls.js';
@@ -211,7 +211,7 @@ W.media = {
       setVolDragging(vol, true);
       paintVol(vol.value);
       clearTimeout(volTimer);
-      volTimer = setTimeout(() => api('/volume?level=' + vol.value, 'POST').catch(() => {}), 120);
+      volTimer = setTimeout(() => { if (media?.phone) phoneVolume(Number(vol.value)); else api('/volume?level=' + vol.value, 'POST').catch(() => {}); }, 120);
     });
     vol.addEventListener('change', () => {
       clearTimeout(volumeRelease);
@@ -220,6 +220,7 @@ W.media = {
     vol.addEventListener('pointercancel', cancelVolumeDrag);
     q('.mute').addEventListener('click', async () => {
       haptic();
+      if (media?.phone) { phoneMute(); setTimeout(() => emit('state'), 150); return; } // the phone's own media volume
       if ((!D.state?.audio || D.state.audio.canControl === false)) return;
       try { const a = await api('/volume?op=mute', 'POST'); D.state.audio = a; emit('state'); } catch (_) {}
     });
@@ -241,7 +242,7 @@ W.media = {
           }
           return;
         }
-        const m = D.state?.media, a = D.state?.audio;
+        const m = D.state?.media, a = m?.phone ? phoneAudio() : D.state?.audio; // the volume row follows the song shown
         vol.disabled = (!a || a.canControl === false);
         box.classList.toggle('volume-unavailable', (!a || a.canControl === false));
         q('.mute').disabled = (!a || a.canControl === false);

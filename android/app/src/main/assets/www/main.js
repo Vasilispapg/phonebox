@@ -63,7 +63,7 @@ export const $ = (id) => document.getElementById(id);
 // The native bridge (window.Android) is in every frame, sandboxed widgets included, so each call carries a key that only
 // the panel's own frames receive (MainActivity.bridgeKey). This wrapper adds it.
 const BRIDGE = ['battery', 'buzz', 'haptic', 'is24Hour', 'pcs', 'selectPc', 'forgetPc', 'setBrightness', 'setHomeScreen', 'setOrientation',
-  'setPinned', 'setVolumeKeys', 'setStandby', 'setLanguage', 'transport', 'sensors', 'version', 'canListen', 'listen', 'stopListening', 'cancelListening', 'trackpad', 'canWake', 'wakePc', 'openBridge', 'phoneMedia', 'phoneMediaArt', 'phoneMediaControl'];
+  'setPinned', 'setVolumeKeys', 'setStandby', 'setLanguage', 'transport', 'sensors', 'version', 'canListen', 'listen', 'stopListening', 'cancelListening', 'trackpad', 'canWake', 'wakePc', 'openBridge', 'phoneMedia', 'phoneMediaArt', 'phoneMediaControl', 'phoneAudio', 'phoneVolume', 'phoneMute'];
 export const bridge = typeof Android === 'undefined' ? null : Object.fromEntries(BRIDGE.filter((m) => typeof Android[m] === 'function')
   .map((m) => [m, (...args) => Android[m](window.__phoneboxKey || '', ...args)]));
 // Live preview inside the agent's layout editor: the layout comes from the editor (unsaved), not from the agent.
@@ -963,6 +963,10 @@ export function effectiveMedia(fromAgent) {
   return agentMedia;
 }
 export const phoneMediaControl = (action, ms) => { try { return !!bridge?.phoneMediaControl?.(action, ms || 0); } catch (_) { return false; } };
+// the volume row follows the song shown: the phone's own media volume for the phone's song, the computer's otherwise
+export const phoneAudio = () => { try { const j = bridge?.phoneAudio?.(); return j && j !== 'null' ? JSON.parse(j) : null; } catch (_) { return null; } };
+export const phoneVolume = (percent) => { try { return !!bridge?.phoneVolume?.(percent); } catch (_) { return false; } };
+export const phoneMute = () => { try { return !!bridge?.phoneMute?.(); } catch (_) { return false; } };
 export const phoneMediaArt = (id) => { try { return bridge?.phoneMediaArt?.(id) || ''; } catch (_) { return ''; } };
 window.onPhoneMedia = (json) => {
   try { phoneMedia = json && json !== 'null' ? JSON.parse(json) : null; } catch (_) { phoneMedia = null; }

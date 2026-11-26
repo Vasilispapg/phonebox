@@ -68,5 +68,13 @@ fun main() {
         !PhoneMediaModel.validAction("") && !PhoneMediaModel.validAction("stop") && !PhoneMediaModel.validAction("PLAYPAUSE"))
     check("a cover id never equals an agent id", PhoneMediaModel.ART_ID_BASE > 100_000)
 
+    // the phone's media volume
+    check("the phone's 15 steps map onto 0-100", PhoneMediaModel.volumePercent(0, 15) == 0 && PhoneMediaModel.volumePercent(15, 15) == 100 && PhoneMediaModel.volumePercent(8, 15) == 53)
+    check("a level goes to the nearest step and back", PhoneMediaModel.volumeStep(50, 15) == 8 && PhoneMediaModel.volumeStep(100, 15) == 15 && PhoneMediaModel.volumeStep(0, 15) == 0)
+    check("out-of-range levels are held in range", PhoneMediaModel.volumeStep(250, 15) == 15 && PhoneMediaModel.volumeStep(-5, 15) == 0 && PhoneMediaModel.volumePercent(99, 15) == 100)
+    check("no steps (max 0) is 0, not a division by zero", PhoneMediaModel.volumePercent(3, 0) == 0 && PhoneMediaModel.volumeStep(50, 0) == 0)
+    check("the audio JSON has the agent's fields", PhoneMediaModel.audioJson(15, 15, false) == "{\"volume\":100,\"muted\":false,\"canControl\":true,\"phone\":true}" &&
+        PhoneMediaModel.audioJson(0, 15, true).contains("\"muted\":true"))
+
     println("$passed phone media checks passed")
 }
