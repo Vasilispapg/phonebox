@@ -943,24 +943,29 @@ let phoneAt = 0;         // when it arrived: its position was true then, and is 
 let phoneMediaRead = false;
 // the phone's song with its position counted up to now, so every state frame (each second) restates it without a jump back
 const phoneNow = (both) => ({ ...phoneMedia, posMs: mediaPosMs({ ...phoneMedia, at: phoneAt }), ageMs: 0, both });
-// While both the computer and the phone have a song (even a paused one) the widget offers a switch (computer | phone). Without a
-// choice the one that plays is shown (the computer's first when both play); a tap on the switch picks one and keeps it until
-// one of them has nothing left, and then the next time both exist the widget starts by itself again.
+// While the phone has a song the widget offers a switch (computer | phone), so one can look at, or go back to, the computer even
+// when it plays nothing. Without a choice the one that plays is shown (the computer's first when both play); a tap picks one
+// and keeps it until the phone has no song left, and then the next time it has one the widget starts by itself again.
 let mediaChoice = null; // 'phone' | 'mac' | null
+export let swapOn = false;    // the switch is shown
+export let swapPhone = false; // and it points at the phone's side
 export const setMediaChoice = (choice) => { mediaChoice = choice === 'phone' ? 'phone' : 'mac'; setMediaState(agentMedia); };
-export function effectiveMedia(fromAgent) {
-  agentMedia = fromAgent || null;
+export function effectiveMedia(fromAgentState) {
+  agentMedia = fromAgentState || null;
   if (!phoneMediaRead) {
     phoneMediaRead = true;
     try { const j = bridge?.phoneMedia?.(); if (j && j !== 'null') { phoneMedia = JSON.parse(j); phoneAt = performance.now(); } } catch (_) {}
   }
-  const both = !!(agentMedia && phoneMedia); // two songs to choose between
-  if (!both) mediaChoice = null;
-  const computers = () => (both ? { ...agentMedia, both: true } : agentMedia);
-  if (both && mediaChoice) return mediaChoice === 'phone' ? phoneNow(true) : computers();
-  if (agentMedia?.playing) return computers();
-  if (phoneMedia && (phoneMedia.playing || !agentMedia)) return phoneNow(both);
-  return computers();
+  if (!phoneMedia) mediaChoice = null;
+  const computers = () => (phoneMedia && agentMedia ? { ...agentMedia, both: true } : agentMedia);
+  let out;
+  if (phoneMedia && mediaChoice) out = mediaChoice === 'phone' ? phoneNow(true) : computers();
+  else if (agentMedia?.playing) out = computers();
+  else if (phoneMedia && (phoneMedia.playing || !agentMedia)) out = phoneNow(!!agentMedia);
+  else out = computers();
+  swapOn = !!phoneMedia;
+  swapPhone = !!out?.phone;
+  return out;
 }
 export const phoneMediaControl = (action, ms) => { try { return !!bridge?.phoneMediaControl?.(action, ms || 0); } catch (_) { return false; } };
 // the volume row follows the song shown: the phone's own media volume for the phone's song, the computer's otherwise
