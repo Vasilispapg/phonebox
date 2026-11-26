@@ -242,11 +242,11 @@ test('a Custom HTML widget never gets the phone\'s song: its frame sees the agen
 test('with the switch off the page is left alone: a null from the phone changes nothing and an old agent sample is not taken for a new one', async ({ page }) => {
   await open(page, null);
   await frame(page, mac());
-  const before = await page.evaluate(async () => { const m = await import('/panel/main.js'); window.__m = m.media; return Math.round(m.mediaPosMs(m.media)); });
+  const before = await page.evaluate(async () => { const m = await import('/panel/main.js'); window.__m = m.media; return Math.round(m.media.posMs + (m.media.playing ? performance.now() - m.media.at : 0)); });
   await page.clock.runFor(300_000); // five minutes in the background
   await page.evaluate(() => window.onPhoneMedia('null'));
   await page.evaluate(() => window.onPhoneMedia('null'));
-  const after = await page.evaluate(async () => { const m = await import('/panel/main.js'); return { same: m.media === window.__m, pos: Math.round(m.mediaPosMs(m.media)) }; });
+  const after = await page.evaluate(async () => { const m = await import('/panel/main.js'); return { same: m.media === window.__m, pos: Math.round(m.media.posMs + (m.media.playing ? performance.now() - m.media.at : 0)) }; });
   expect(after.same, 'the media object is the one it was').toBe(true);
   expect(after.pos).toBeGreaterThan(before + 90_000); // it kept counting; it did not go back to the old sample's position
 });
@@ -259,7 +259,7 @@ test('going back to the computer\'s song counts on from its last sample, not fro
   await page.clock.runFor(60_000);
   await page.locator('.m-swap').first().click(); // and back
   await expect(page.locator('.m-title').first()).toHaveText('Mac song');
-  const pos = await page.evaluate(async () => { const m = await import('/panel/main.js'); return Math.round(m.mediaPosMs(m.media)); });
+  const pos = await page.evaluate(async () => { const m = await import('/panel/main.js'); return Math.round(m.media.posMs + (m.media.playing ? performance.now() - m.media.at : 0)); });
   expect(pos).toBeGreaterThan(69_000);
   expect(pos).toBeLessThan(72_000);
 });
