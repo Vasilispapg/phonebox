@@ -36,6 +36,8 @@
     <string name="bridge_send_unknown">Немає відповіді від Mac: можливо, текст дійшов. Перевірте на Mac, перш ніж надсилати знову.</string>
     <string name="bridge_notifications_switch">Показувати сповіщення на Mac</string>
     <string name="bridge_notifications_help">Виклики, повідомлення та сповіщення застосунків відображаються на Mac разом із текстом. Виберіть окремі застосунки або ввімкніть «Усі застосунки». Увімкніть сповіщення з телефона також у налаштуваннях мосту на Mac.</string>
+    <string name="bridge_media_switch">Показувати музику телефона в «Зараз грає»</string>
+    <string name="bridge_media_help">Пісня, що грає на цьому телефоні, з’являється у віджеті «Зараз грає», коли комп’ютер нічого не відтворює, а кнопки віджета керують нею. Вона ніколи не залишає телефон. Потрібен доступ до сповіщень.</string>
     <string name="bridge_access_missing">Доступ до сповіщень ще не дозволено. PhoneBox потрібен він, щоб бачити ваші сповіщення.</string>
     <string name="bridge_access_granted">Доступ до сповіщень дозволено.</string>
     <string name="bridge_access_button">Дозволити доступ до сповіщень</string>

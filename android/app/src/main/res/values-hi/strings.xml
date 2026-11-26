@@ -36,6 +36,8 @@
     <string name="bridge_send_unknown">Mac से कोई जवाब नहीं आया: टेक्स्ट शायद पहुँच गया है। दोबारा भेजने से पहले Mac पर देख लें।</string>
     <string name="bridge_notifications_switch">Mac पर सूचनाएँ दिखाएँ</string>
     <string name="bridge_notifications_help">कॉल, मैसेज और ऐप की सूचनाएँ उनके टेक्स्ट के साथ Mac पर दिखती हैं। अलग-अलग ऐप चुनें या सभी ऐप चालू करें। Mac की फ़ोन ब्रिज सेटिंग में भी फ़ोन की सूचनाएँ चालू करें।</string>
+    <string name="bridge_media_switch">फ़ोन का संगीत «अभी चल रहा है» में दिखाएँ</string>
+    <string name="bridge_media_help">जब कंप्यूटर कुछ नहीं बजा रहा हो, तब इस फ़ोन पर चल रहा गाना «अभी चल रहा है» विजेट में दिखता है और विजेट के बटन उसे नियंत्रित करते हैं। यह फ़ोन से बाहर कभी नहीं जाता। सूचना एक्सेस ज़रूरी है।</string>
     <string name="bridge_access_missing">सूचना एक्सेस की अनुमति अभी नहीं दी गई है। आपकी सूचनाएँ देखने के लिए PhoneBox को इसकी ज़रूरत है।</string>
     <string name="bridge_access_granted">सूचना एक्सेस की अनुमति है।</string>
     <string name="bridge_access_button">सूचना एक्सेस की अनुमति दें</string>

@@ -36,6 +36,8 @@
     <string name="bridge_send_unknown">Tidak ada jawaban dari Mac: teks mungkin sudah sampai. Periksa di Mac sebelum mengirim lagi.</string>
     <string name="bridge_notifications_switch">Tampilkan notifikasi di Mac</string>
     <string name="bridge_notifications_help">Panggilan, pesan, dan notifikasi aplikasi muncul di Mac beserta teksnya. Pilih aplikasi satu per satu atau aktifkan Semua aplikasi. Aktifkan juga notifikasi ponsel di pengaturan Jembatan ponsel pada Mac.</string>
+    <string name="bridge_media_switch">Tampilkan musik ponsel di Sedang diputar</string>
+    <string name="bridge_media_help">Lagu yang diputar di ponsel ini muncul di widget Sedang diputar saat komputer tidak memutar apa pun, dan tombol widget mengendalikannya. Tidak pernah keluar dari ponsel. Memerlukan akses notifikasi.</string>
     <string name="bridge_access_missing">Akses notifikasi belum diizinkan. PhoneBox membutuhkannya untuk melihat notifikasi Anda.</string>
     <string name="bridge_access_granted">Akses notifikasi diizinkan.</string>
     <string name="bridge_access_button">Izinkan akses notifikasi</string>

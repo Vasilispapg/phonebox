@@ -63,7 +63,7 @@ export const $ = (id) => document.getElementById(id);
 // The native bridge (window.Android) is in every frame, sandboxed widgets included, so each call carries a key that only
 // the panel's own frames receive (MainActivity.bridgeKey). This wrapper adds it.
 const BRIDGE = ['battery', 'buzz', 'haptic', 'is24Hour', 'pcs', 'selectPc', 'forgetPc', 'setBrightness', 'setHomeScreen', 'setOrientation',
-  'setPinned', 'setVolumeKeys', 'setStandby', 'setLanguage', 'transport', 'sensors', 'version', 'canListen', 'listen', 'stopListening', 'cancelListening', 'trackpad', 'canWake', 'wakePc', 'openBridge'];
+  'setPinned', 'setVolumeKeys', 'setStandby', 'setLanguage', 'transport', 'sensors', 'version', 'canListen', 'listen', 'stopListening', 'cancelListening', 'trackpad', 'canWake', 'wakePc', 'openBridge', 'phoneMedia', 'phoneMediaArt', 'phoneMediaControl'];
 export const bridge = typeof Android === 'undefined' ? null : Object.fromEntries(BRIDGE.filter((m) => typeof Android[m] === 'function')
   .map((m) => [m, (...args) => Android[m](window.__phoneboxKey || '', ...args)]));
 // Live preview inside the agent's layout editor: the layout comes from the editor (unsaved), not from the agent.
@@ -935,9 +935,45 @@ export function mediaFrom(prev, m) {
   if (Math.abs(off) < 1500) return { ...next, posMs: shown + off * 0.3, at: now };
   return next;
 }
+// The phone's own music (Android's media sessions, read by the app; it never leaves the phone). It is shown only while the
+// computer plays nothing, so a song on the computer always wins; its buttons then go to the phone, not the agent.
+let agentMedia = null;   // what the agent said last
+let phoneMedia = null;   // what the phone plays (the app's media object, with phone: true), or null
+let phoneAt = 0;         // when it arrived: its position was true then, and is counted on from there
+let phoneMediaRead = false;
+// the phone's song with its position counted up to now, so every state frame (each second) restates it without a jump back
+const phoneNow = (both) => ({ ...phoneMedia, posMs: mediaPosMs({ ...phoneMedia, at: phoneAt }), ageMs: 0, both });
+// When the computer and the phone both play, the computer's song is shown first and the widget offers a switch (computer | phone).
+// The choice lasts while both keep playing; once one stops, the other is shown and the next time both play starts at the computer again.
+let mediaChoice = null; // 'phone' | 'mac' | null
+export const setMediaChoice = (choice) => { mediaChoice = choice === 'phone' ? 'phone' : 'mac'; setMediaState(agentMedia); };
+export function effectiveMedia(fromAgent) {
+  agentMedia = fromAgent || null;
+  if (!phoneMediaRead) {
+    phoneMediaRead = true;
+    try { const j = bridge?.phoneMedia?.(); if (j && j !== 'null') { phoneMedia = JSON.parse(j); phoneAt = performance.now(); } } catch (_) {}
+  }
+  if (agentMedia?.playing && phoneMedia?.playing) {
+    mediaChoice = mediaChoice || 'mac';
+    return mediaChoice === 'phone' ? phoneNow(true) : { ...agentMedia, both: true };
+  }
+  mediaChoice = null;
+  if (agentMedia?.playing) return agentMedia;
+  if (phoneMedia && (phoneMedia.playing || !agentMedia)) return phoneNow(false);
+  return agentMedia;
+}
+export const phoneMediaControl = (action, ms) => { try { return !!bridge?.phoneMediaControl?.(action, ms || 0); } catch (_) { return false; } };
+export const phoneMediaArt = (id) => { try { return bridge?.phoneMediaArt?.(id) || ''; } catch (_) { return ''; } };
+window.onPhoneMedia = (json) => {
+  try { phoneMedia = json && json !== 'null' ? JSON.parse(json) : null; } catch (_) { phoneMedia = null; }
+  phoneAt = performance.now();
+  phoneMediaRead = true;
+  setMediaState(agentMedia);
+};
 export const setMediaState = (m) => {
-  if (D.state) D.state.media = m || null;
-  media = mediaFrom(media, m);
+  const shown = effectiveMedia(m);
+  if (D.state) D.state.media = shown;
+  media = mediaFrom(media, shown);
   emit('state');
 };
 // The state frame carries the agent's last media reading; it reads the players every second only while someone asks.
@@ -985,7 +1021,8 @@ export const setAmbient = (rgb) => document.documentElement.style.setProperty('-
 export const mediaHtml = () => `
   <div class="m-top">
     <div class="art-wrap"><img class="art" alt=""><div class="art-ph">♪</div></div>
-    <div class="m-text"><div class="m-app"><span class="m-source-icon" aria-hidden="true"></span><span class="m-app-name">Media</span></div><div class="m-title">${t('w.nothingPlaying')}</div><div class="m-artist">${t('w.startOnPc')}</div></div>
+    <div class="m-text"><div class="m-app"><span class="m-source-icon" aria-hidden="true"></span><span class="m-app-name">Media</span>
+        <button class="m-swap" hidden aria-label="Switch between computer and phone" title="Computer / Phone"><svg class="sw-pc" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v11H3zm5 13h8v2H8z"/></svg><svg class="sw-ph" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm4 17a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/></svg></button></div><div class="m-title">${t('w.nothingPlaying')}</div><div class="m-artist">${t('w.startOnPc')}</div></div>
   </div>
   <div class="m-progress"><div class="bar" role="slider" tabindex="0" aria-label="Position" aria-valuemin="0"><div class="fill"></div><div class="scrub-tip" aria-hidden="true">0:00</div></div><div class="times"><span class="m-pos">0:00</span><span class="m-dur">0:00</span></div></div>
   <div class="m-controls">
@@ -2824,6 +2861,7 @@ export function applyState(s, replayGen = null) {
   // they go through evOffer like live ones: while a replay is armed the queue merges them before dispatch
   if (fresh || replayGen === evGen) for (const e of s.events || []) evOffer(e);
   if (!fresh) return replayGen === evGen;
+  s.media = effectiveMedia(s.media);
   D.state = s;
   media = mediaFrom(media, s.media);
   setOnline(true);

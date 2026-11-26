@@ -196,7 +196,7 @@ class ClipboardService : Service() {
             val app = context.applicationContext
             val intent = Intent(app, ClipboardService::class.java)
             val clipOn = BridgePrefs.clipboardEnabled(app)
-            val anyOn = clipOn || BridgePrefs.notificationsEnabled(app)
+            val anyOn = clipOn || BridgePrefs.notificationsEnabled(app) || BridgePrefs.phoneMediaEnabled(app)
             when (BridgeClip.syncAction(anyOn, BridgePrefs.live(app))) {
                 // for everyone who never turned the bridge on, and after the clean-up, "off" is nothing at all: no component is
                 // looked at and no service is stopped, on any of the panel's resumes

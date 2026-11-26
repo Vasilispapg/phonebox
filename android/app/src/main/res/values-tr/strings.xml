@@ -36,6 +36,8 @@
     <string name="bridge_send_unknown">Mac\'ten yanıt gelmedi: metin ulaşmış olabilir. Yeniden göndermeden önce Mac\'te kontrol edin.</string>
     <string name="bridge_notifications_switch">Bildirimleri Mac\'te göster</string>
     <string name="bridge_notifications_help">Aramalar, mesajlar ve uygulama bildirimleri metinleriyle birlikte Mac’te görünür. Uygulamaları tek tek seçin veya Tüm uygulamalar’ı açın. Mac’teki Telefon köprüsü ayarlarından telefon bildirimlerini de açın.</string>
+    <string name="bridge_media_switch">Telefonun müziğini Şimdi çalıyor’da göster</string>
+    <string name="bridge_media_help">Bu telefonda çalan şarkı, bilgisayar hiçbir şey çalmıyorken Şimdi çalıyor bileşeninde görünür ve bileşenin düğmeleri onu denetler. Telefondan asla çıkmaz. Bildirim erişimi gerekir.</string>
     <string name="bridge_access_missing">Bildirim erişimine henüz izin verilmedi. PhoneBox\'ın bildirimlerinizi görmesi için buna ihtiyacı var.</string>
     <string name="bridge_access_granted">Bildirim erişimine izin verildi.</string>
     <string name="bridge_access_button">Bildirim erişimine izin ver</string>

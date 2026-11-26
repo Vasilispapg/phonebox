@@ -25,6 +25,7 @@ class PhoneNotificationListener : NotificationListenerService() {
 
     override fun onListenerConnected() {
         connected = true
+        PhoneMediaMonitor.sync(applicationContext) // the phone's own music for the Now playing widget, when its switch is on
         // a call that is already ringing or running when the listener (re)connects must not be sent again, as a new call or as a
         // rename of the one the Mac may already show
         try {
@@ -60,15 +61,17 @@ class PhoneNotificationListener : NotificationListenerService() {
     // never below Android 7): without this the screen would say "allowed" after the switch comes back but before a rebind
     override fun onDestroy() {
         connected = false
+        PhoneMediaMonitor.stop()
         clearCallState()
         super.onDestroy()
     }
 
     override fun onListenerDisconnected() {
         connected = false
+        PhoneMediaMonitor.stop()
         clearCallState()
-        // Android may drop the listener; ask to be bound again while the switch is on
-        if (Build.VERSION.SDK_INT >= 24 && BridgePrefs.notificationsEnabled(this))
+        // Android may drop the listener; ask to be bound again while a switch that needs it is on
+        if (Build.VERSION.SDK_INT >= 24 && (BridgePrefs.notificationsEnabled(this) || BridgePrefs.phoneMediaEnabled(this)))
             requestRebind(ComponentName(this, PhoneNotificationListener::class.java))
     }
 

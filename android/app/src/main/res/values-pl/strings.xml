@@ -36,6 +36,8 @@
     <string name="bridge_send_unknown">Brak odpowiedzi z Maca: tekst mógł dotrzeć. Sprawdź na Macu, zanim wyślesz go ponownie.</string>
     <string name="bridge_notifications_switch">Pokazuj powiadomienia na Macu</string>
     <string name="bridge_notifications_help">Połączenia, wiadomości i powiadomienia aplikacji pojawiają się na Macu wraz z tekstem. Wybierz poszczególne aplikacje lub włącz Wszystkie aplikacje. Włącz też powiadomienia z telefonu w ustawieniach mostu na Macu.</string>
+    <string name="bridge_media_switch">Pokazuj muzykę z telefonu w Teraz odtwarzane</string>
+    <string name="bridge_media_help">Utwór odtwarzany na tym telefonie pojawia się w widżecie Teraz odtwarzane, gdy komputer nic nie gra, a przyciski widżetu nim sterują. Nigdy nie opuszcza telefonu. Wymaga dostępu do powiadomień.</string>
     <string name="bridge_access_missing">Dostęp do powiadomień nie jest jeszcze dozwolony. PhoneBox potrzebuje go, aby widzieć Twoje powiadomienia.</string>
     <string name="bridge_access_granted">Dostęp do powiadomień jest dozwolony.</string>
     <string name="bridge_access_button">Zezwól na dostęp do powiadomień</string>

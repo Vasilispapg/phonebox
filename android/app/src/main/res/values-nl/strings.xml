@@ -36,6 +36,8 @@
     <string name="bridge_send_unknown">Geen antwoord van de Mac: de tekst is misschien aangekomen. Controleer het op de Mac voordat je hem opnieuw stuurt.</string>
     <string name="bridge_notifications_switch">Meldingen op de Mac tonen</string>
     <string name="bridge_notifications_help">Oproepen, berichten en appmeldingen verschijnen met hun tekst op de Mac. Kies afzonderlijke apps of schakel Alle apps in. Schakel telefoonmeldingen ook in bij de instellingen van de telefoonbrug op de Mac.</string>
+    <string name="bridge_media_switch">Muziek van de telefoon tonen in Nu aan het spelen</string>
+    <string name="bridge_media_help">Het nummer dat op deze telefoon speelt, verschijnt in de widget Nu aan het spelen als de computer niets afspeelt, en de knoppen van de widget bedienen het. Het verlaat de telefoon nooit. Vereist toegang tot meldingen.</string>
     <string name="bridge_access_missing">Toegang tot meldingen is nog niet toegestaan. PhoneBox heeft die nodig om je meldingen te zien.</string>
     <string name="bridge_access_granted">Toegang tot meldingen is toegestaan.</string>
     <string name="bridge_access_button">Toegang tot meldingen toestaan</string>

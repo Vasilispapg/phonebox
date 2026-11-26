@@ -113,6 +113,11 @@ Last updated: 2026-11-20 (PhoneBox 0.9.6).
   clipboard event in memory (not the text) and sends it when it reconnects. **On Android 9 and older, every app on the
   phone can read the clipboard at any time**, not only the app in front: there, text you copy on the Mac is readable
   by all apps installed on the phone. Android 10 and later let only the app in front (and the keyboard) read it.
+- **The phone's own music in Now playing** (Android, off by default; **Phone bridge › Show the phone's music in Now
+  playing**): while it is on, the app reads the title, artist, album, position and cover picture of the song another app
+  is playing on the phone (Android's media sessions, which needs Notification access to PhoneBox) and shows it in the
+  panel's Now playing widget when the computer plays nothing; its buttons then control that app on the phone. The song
+  stays on the phone: it is not sent to the computer, stored, or logged, and nothing is read from notifications for it.
 - **Phone notifications on the computer, the phone bridge** (macOS only, off by default; **Settings › Phone bridge ›
   Show phone notifications on this Mac**): while it is on, the agent shows the call, message and app notifications your
   phone sends it, as ordinary macOS notifications: the app's name, the title (who is calling or who wrote) and the text. Only the apps you allow on the phone are sent, and only to this computer over the same USB / paired Wi-Fi

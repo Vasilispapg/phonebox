@@ -36,6 +36,8 @@
     <string name="bridge_send_unknown">Sem resposta do Mac: o texto pode ter chegado. Verifique no Mac antes de o enviar de novo.</string>
     <string name="bridge_notifications_switch">Mostrar notificações no Mac</string>
     <string name="bridge_notifications_help">Chamadas, mensagens e notificações de aplicações aparecem no Mac com o respetivo texto. Escolhe aplicações individuais ou ativa Todas as aplicações. Ativa também as notificações do telefone nas definições da ponte no Mac.</string>
+    <string name="bridge_media_switch">Mostrar a música do telemóvel em A reproduzir</string>
+    <string name="bridge_media_help">A música que está a tocar neste telemóvel aparece no widget A reproduzir quando o computador não reproduz nada, e os botões do widget controlam-na. Nunca sai do telemóvel. Requer acesso às notificações.</string>
     <string name="bridge_access_missing">O acesso às notificações ainda não está permitido. O PhoneBox precisa dele para ver as suas notificações.</string>
     <string name="bridge_access_granted">O acesso às notificações está permitido.</string>
     <string name="bridge_access_button">Permitir o acesso às notificações</string>

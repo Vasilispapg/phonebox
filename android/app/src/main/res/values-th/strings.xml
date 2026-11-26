@@ -36,6 +36,8 @@
     <string name="bridge_send_unknown">ไม่มีการตอบกลับจาก Mac ข้อความอาจไปถึงแล้ว ตรวจสอบที่ Mac ก่อนส่งอีกครั้ง</string>
     <string name="bridge_notifications_switch">แสดงการแจ้งเตือนบน Mac</string>
     <string name="bridge_notifications_help">สายเรียกเข้า ข้อความ และการแจ้งเตือนของแอปจะแสดงพร้อมข้อความบน Mac เลือกแอปทีละรายการหรือเปิดแอปทั้งหมด เปิดการแจ้งเตือนจากโทรศัพท์ในการตั้งค่าบริดจ์บน Mac ด้วย</string>
+    <string name="bridge_media_switch">แสดงเพลงของโทรศัพท์ใน “กำลังเล่น”</string>
+    <string name="bridge_media_help">เพลงที่เล่นบนโทรศัพท์เครื่องนี้จะแสดงในวิดเจ็ต “กำลังเล่น” เมื่อคอมพิวเตอร์ไม่ได้เล่นอะไร และปุ่มของวิดเจ็ตจะควบคุมเพลงนั้น ข้อมูลไม่ออกจากโทรศัพท์ ต้องได้รับสิทธิ์เข้าถึงการแจ้งเตือน</string>
     <string name="bridge_access_missing">ยังไม่ได้อนุญาตการเข้าถึงการแจ้งเตือน PhoneBox ต้องใช้เพื่อดูการแจ้งเตือนของคุณ</string>
     <string name="bridge_access_granted">อนุญาตการเข้าถึงการแจ้งเตือนแล้ว</string>
     <string name="bridge_access_button">อนุญาตการเข้าถึงการแจ้งเตือน</string>

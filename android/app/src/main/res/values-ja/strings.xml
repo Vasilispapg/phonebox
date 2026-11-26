@@ -36,6 +36,8 @@
     <string name="bridge_send_unknown">Mac から応答がありません。テキストは届いている可能性があります。もう一度送る前に Mac で確認してください。</string>
     <string name="bridge_notifications_switch">Mac に通知を表示</string>
     <string name="bridge_notifications_help">通話、メッセージ、アプリの通知が本文とともにMacに表示されます。アプリを個別に選ぶか、「すべてのアプリ」をオンにしてください。Macの電話ブリッジ設定でも電話の通知をオンにしてください。</string>
+    <string name="bridge_media_switch">スマホの音楽を「再生中」に表示</string>
+    <string name="bridge_media_help">パソコンが何も再生していないとき、このスマホで再生中の曲が「再生中」ウィジェットに表示され、ウィジェットのボタンで操作できます。スマホの外には出ません。通知へのアクセスが必要です。</string>
     <string name="bridge_access_missing">通知へのアクセスがまだ許可されていません。PhoneBox が通知を見るために必要です。</string>
     <string name="bridge_access_granted">通知へのアクセスは許可されています。</string>
     <string name="bridge_access_button">通知へのアクセスを許可</string>

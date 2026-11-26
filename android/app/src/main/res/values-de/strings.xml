@@ -36,6 +36,8 @@
     <string name="bridge_send_unknown">Keine Antwort vom Mac: Der Text ist vielleicht angekommen. Prüfen Sie es am Mac, bevor Sie ihn erneut senden.</string>
     <string name="bridge_notifications_switch">Benachrichtigungen am Mac anzeigen</string>
     <string name="bridge_notifications_help">Anrufe, Nachrichten und App-Mitteilungen erscheinen mit ihrem Text auf dem Mac. Wähle einzelne Apps oder aktiviere Alle Apps. Aktiviere auch die Telefonmitteilungen in den Einstellungen der Telefonbrücke auf dem Mac.</string>
+    <string name="bridge_media_switch">Musik des Telefons unter „Wiedergabe“ anzeigen</string>
+    <string name="bridge_media_help">Der Song, der auf diesem Telefon läuft, erscheint im Wiedergabe-Widget, wenn der Computer nichts abspielt, und die Tasten des Widgets steuern ihn. Er verlässt das Telefon nie. Benötigt Zugriff auf Mitteilungen.</string>
     <string name="bridge_access_missing">Der Zugriff auf Benachrichtigungen ist noch nicht erlaubt. PhoneBox braucht ihn, um deine Benachrichtigungen zu sehen.</string>
     <string name="bridge_access_granted">Der Zugriff auf Benachrichtigungen ist erlaubt.</string>
     <string name="bridge_access_button">Zugriff auf Benachrichtigungen erlauben</string>

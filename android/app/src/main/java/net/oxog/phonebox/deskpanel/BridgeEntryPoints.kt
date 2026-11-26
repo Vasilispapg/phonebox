@@ -8,7 +8,7 @@ import android.os.Build
 /**
  * "Send to Mac" appears in the text-selection menu, the Share sheet and the Quick Settings tile list, a long press on a
  * PhoneBox tile comes to the app, and the app starts at boot, only while the phone's clipboard switch is on; PhoneBox
- * appears in the system's Notification access list only while the notification switch is on. All of these are
+ * appears in the system's Notification access list only while the notification switch or the phone's-music switch is on. All of these are
  * android:enabled="false" in the manifest: for everyone else the phone behaves as before.
  */
 object BridgeEntryPoints {
@@ -18,7 +18,8 @@ object BridgeEntryPoints {
     /** Syncs both clipboard entry points and the notification listener to their switches. Safe to call often. */
     fun update(context: Context) {
         setEnabled(context, BridgePrefs.clipboardEnabled(context))
-        setComponent(context.packageManager, ComponentName(context, PhoneNotificationListener::class.java), BridgePrefs.notificationsEnabled(context))
+        setComponent(context.packageManager, ComponentName(context, PhoneNotificationListener::class.java),
+            BridgePrefs.notificationsEnabled(context) || BridgePrefs.phoneMediaEnabled(context))
     }
 
     /** Safe to call on every resume: a component already in the wanted state is not touched (each change is written to disk). */

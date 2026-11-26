@@ -36,6 +36,8 @@
     <string name="bridge_send_unknown">Mac 没有响应：文字可能已经送达。再次发送前，请先在 Mac 上确认。</string>
     <string name="bridge_notifications_switch">在 Mac 上显示通知</string>
     <string name="bridge_notifications_help">来电、消息和应用通知会连同文本一起显示在 Mac 上。逐个选择应用，或开启“所有应用”。还需要在 Mac 的手机桥接设置中开启手机通知。</string>
+    <string name="bridge_media_switch">在“正在播放”中显示手机的音乐</string>
+    <string name="bridge_media_help">当电脑没有播放任何内容时，这部手机正在播放的歌曲会显示在“正在播放”小组件中，小组件的按钮可控制它。它不会离开手机。需要通知访问权限。</string>
     <string name="bridge_access_missing">尚未允许通知访问。PhoneBox 需要它才能看到你的通知。</string>
     <string name="bridge_access_granted">已允许通知访问。</string>
     <string name="bridge_access_button">允许通知访问</string>

@@ -36,6 +36,8 @@
     <string name="bridge_send_unknown">Нет ответа от Mac: возможно, текст дошёл. Проверьте на Mac, прежде чем отправлять снова.</string>
     <string name="bridge_notifications_switch">Показывать уведомления на Mac</string>
     <string name="bridge_notifications_help">Звонки, сообщения и уведомления приложений отображаются на Mac вместе с текстом. Выберите отдельные приложения или включите «Все приложения». В настройках моста на Mac тоже включите уведомления телефона.</string>
+    <string name="bridge_media_switch">Показывать музыку телефона в «Сейчас играет»</string>
+    <string name="bridge_media_help">Песня, которая играет на этом телефоне, появляется в виджете «Сейчас играет», когда компьютер ничего не воспроизводит, а кнопки виджета управляют ею. Она никогда не покидает телефон. Нужен доступ к уведомлениям.</string>
     <string name="bridge_access_missing">Доступ к уведомлениям ещё не разрешён. PhoneBox нужен он, чтобы видеть ваши уведомления.</string>
     <string name="bridge_access_granted">Доступ к уведомлениям разрешён.</string>
     <string name="bridge_access_button">Разрешить доступ к уведомлениям</string>

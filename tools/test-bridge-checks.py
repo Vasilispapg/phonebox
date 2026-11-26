@@ -14,8 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 NS = {"m": "http://maven.apache.org/POM/4.0.0"}
 APP = ROOT / "android/app/src/main/java/net/oxog/phonebox/deskpanel"
 # production files that must compile on a plain JVM (no Android types), then the stand-in link and the checks
-PRODUCTION = ["BridgeClip.kt", "AgentStream.kt", "NotificationFilter.kt", "DeliveryQueue.kt", "BridgeConfigCache.kt", "NotificationDelivery.kt"]
-CHECKS = ["AgentLink.kt", "BridgeChecks.kt", "NotificationFilterChecks.kt"]
+PRODUCTION = ["BridgeClip.kt", "AgentStream.kt", "NotificationFilter.kt", "DeliveryQueue.kt", "BridgeConfigCache.kt", "NotificationDelivery.kt", "PhoneMediaModel.kt"]
+CHECKS = ["AgentLink.kt", "BridgeChecks.kt", "NotificationFilterChecks.kt", "PhoneMediaChecks.kt"]
 
 
 def main():
@@ -46,7 +46,7 @@ def main():
         raise SystemExit("ERROR: missing source files: " + ", ".join(missing))
     subprocess.run(["java", "-cp", compiler_cp, "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler", "-no-stdlib", "-no-reflect",
                     "-jvm-target", "17", "-classpath", classpath, "-d", str(output), *map(str, sources)], check=True, timeout=120)
-    for main_class in ("net.oxog.phonebox.deskpanel.BridgeChecksKt", "net.oxog.phonebox.deskpanel.NotificationFilterChecksKt"):
+    for main_class in ("net.oxog.phonebox.deskpanel.BridgeChecksKt", "net.oxog.phonebox.deskpanel.NotificationFilterChecksKt", "net.oxog.phonebox.deskpanel.PhoneMediaChecksKt"):
         result = subprocess.run(["java", "-cp", str(output) + os.pathsep + classpath, main_class], timeout=120)
         if result.returncode != 0:
             raise SystemExit(result.returncode)

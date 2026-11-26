@@ -38,6 +38,8 @@
     <string name="bridge_send_unknown">Không có phản hồi từ Mac: văn bản có thể đã tới. Hãy kiểm tra trên Mac trước khi gửi lại.</string>
     <string name="bridge_notifications_switch">Hiện thông báo trên Mac</string>
     <string name="bridge_notifications_help">Cuộc gọi, tin nhắn và thông báo ứng dụng hiển thị trên Mac cùng với nội dung. Chọn từng ứng dụng hoặc bật Tất cả ứng dụng. Hãy bật cả thông báo điện thoại trong phần cài đặt cầu nối trên Mac.</string>
+    <string name="bridge_media_switch">Hiện nhạc của điện thoại trong Đang phát</string>
+    <string name="bridge_media_help">Bài hát đang phát trên điện thoại này hiện trong tiện ích Đang phát khi máy tính không phát gì, và các nút của tiện ích điều khiển nó. Nó không bao giờ rời khỏi điện thoại. Cần quyền truy cập thông báo.</string>
     <string name="bridge_access_missing">Chưa cho phép truy cập thông báo. PhoneBox cần quyền này để xem thông báo của bạn.</string>
     <string name="bridge_access_granted">Đã cho phép truy cập thông báo.</string>
     <string name="bridge_access_button">Cho phép truy cập thông báo</string>

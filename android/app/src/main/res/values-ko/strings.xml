@@ -36,6 +36,8 @@
     <string name="bridge_send_unknown">Mac에서 응답이 없습니다. 텍스트가 도착했을 수 있습니다. 다시 보내기 전에 Mac에서 확인하세요.</string>
     <string name="bridge_notifications_switch">Mac에 알림 표시</string>
     <string name="bridge_notifications_help">통화, 메시지, 앱 알림이 내용과 함께 Mac에 표시됩니다. 앱을 개별적으로 선택하거나 모든 앱을 켜세요. Mac의 전화 브리지 설정에서도 전화 알림을 켜세요.</string>
+    <string name="bridge_media_switch">휴대전화 음악을 ‘재생 중’에 표시</string>
+    <string name="bridge_media_help">컴퓨터가 아무것도 재생하지 않을 때 이 휴대전화에서 재생 중인 곡이 ‘재생 중’ 위젯에 표시되며 위젯 버튼으로 제어할 수 있습니다. 휴대전화 밖으로 나가지 않습니다. 알림 접근 권한이 필요합니다.</string>
     <string name="bridge_access_missing">알림 접근이 아직 허용되지 않았습니다. PhoneBox가 알림을 보려면 필요합니다.</string>
     <string name="bridge_access_granted">알림 접근이 허용되었습니다.</string>
     <string name="bridge_access_button">알림 접근 허용</string>
