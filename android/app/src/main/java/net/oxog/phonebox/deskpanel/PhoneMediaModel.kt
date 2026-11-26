@@ -62,6 +62,9 @@ object PhoneMediaModel {
     /** A session's playback speed as the song moves on at it: a speed of 0, below 0 or not a number counts as normal speed. */
     fun rate(speed: Float): Double = if (speed > 0f && speed.isFinite()) speed.toDouble() else 1.0
 
+    /** Where a seek goes: not before the start, and not past the end when the length is known. */
+    fun seekTarget(ms: Long, durMs: Long): Long = if (durMs > 0) ms.coerceIn(0L, durMs) else maxOf(0L, ms)
+
     /** A length of 0 or less means unknown (a live stream); the panel then shows no seek bar. */
     fun duration(durMs: Long): Long = if (durMs > 0) durMs else 0
 
@@ -110,7 +113,7 @@ object PhoneMediaModel {
             c == '\n' -> sb.append("\\n")
             c == '\r' -> sb.append("\\r")
             c == '\t' -> sb.append("\\t")
-            c < ' ' || c == ' ' || c == ' ' -> sb.append("\\u").append(String.format("%04x", c.code))
+            c < ' ' || c == '\u2028' || c == '\u2029' -> sb.append("\\u").append(String.format("%04x", c.code))
             else -> sb.append(c)
         }
         return sb.append('"').toString()

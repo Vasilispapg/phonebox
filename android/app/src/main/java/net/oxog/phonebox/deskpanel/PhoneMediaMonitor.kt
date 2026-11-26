@@ -14,17 +14,29 @@ import android.os.Looper
 import android.os.SystemClock
 import android.util.Base64
 import java.io.ByteArrayOutputStream
+import java.util.concurrent.Executors
 
 /**
  * Reads what the phone itself is playing (Spotify, YouTube Music, a browser...) from Android's media sessions, so the panel's
  * Now playing widget can show it and its buttons can drive it when the computer plays nothing. Reading sessions needs the
  * PhoneBox notification listener to be allowed (Android's rule), which is why it runs inside [PhoneNotificationListener].
  * Nothing here leaves the phone: the song goes to the panel's page in this app, never to the computer. It is off until the
- * "Show the phone's music" switch is on, and the cover picture is only encoded for the song being shown.
+ * "Show the phone's music" switch is on.
+ *
+ * It is cheap by design, because the session callbacks run on the main thread (a player may update its state every second):
+ * nothing is done while the panel is not on screen ([onChange] is null then), what the callbacks hand over is kept (no IPC
+ * to read a session again), and the cover picture is scaled and compressed on a background thread, once per song.
  */
 object PhoneMediaMonitor {
     private val main = Handler(Looper.getMainLooper())
-    private class Held(val controller: MediaController, val callback: MediaController.Callback)
+    private val encoder = Executors.newSingleThreadExecutor()
+
+    /** One active session with what Android last told us about it (from the callbacks, so it is never asked again). */
+    private class Held(val controller: MediaController) {
+        var state: PlaybackState? = null
+        var metadata: MediaMetadata? = null
+        lateinit var callback: MediaController.Callback
+    }
 
     // all of these change on the main thread only (onMain); the volatile ones are also read from the page's JavaScript thread
     private var context: Context? = null
@@ -33,14 +45,24 @@ object PhoneMediaMonitor {
     private var held: List<Held> = emptyList()
     private class Reading(val track: PhoneTrack?, val at: Long)
     @Volatile private var reading = Reading(null, 0)
+    private val labels = HashMap<String, String>()
     private var artKey = ""
-    private var artData: String? = null
+    private var artHadBitmap = false
     private var artSeq = 0
+    private var coverGen = 0
+    @Volatile private var artData: String? = null
     @Volatile private var chosen: MediaController? = null
     @Volatile private var artId = 0
 
-    /** Called on the main thread with the song as JSON ("null" for none) whenever the panel should update. */
+    /**
+     * Called on the main thread with the song as JSON ("null" for none) whenever the panel should update. Set only while the
+     * panel is on screen: setting it reads the sessions once, to catch up with what happened meanwhile.
+     */
     @Volatile var onChange: ((String) -> Unit)? = null
+        set(value) {
+            field = value
+            if (value != null) onMain { refresh() }
+        }
 
     /** The song now, as the panel's media object, or "null". */
     fun current(): String {
@@ -85,9 +107,11 @@ object PhoneMediaMonitor {
         context = null
         release()
         chosen = null
+        val hadSong = reading.track != null
         reading = Reading(null, 0)
-        artKey = ""; artData = null; artId = 0
-        publish("null")
+        coverGen++ // a cover still being encoded is dropped
+        artKey = ""; artHadBitmap = false; artData = null; artId = 0
+        if (hadSong) publish("null") // the page is told only when it had a song to forget
     }
 
     private fun release() {
@@ -98,13 +122,16 @@ object PhoneMediaMonitor {
     private fun adopt(controllers: List<MediaController>) {
         release()
         held = controllers.map { c ->
-            val callback = object : MediaController.Callback() {
-                override fun onPlaybackStateChanged(state: PlaybackState?) = refresh()
-                override fun onMetadataChanged(metadata: MediaMetadata?) = refresh()
-                override fun onSessionDestroyed() = refresh()
+            val h = Held(c)
+            // read once now; from here on the callbacks carry what changed
+            try { h.state = c.playbackState; h.metadata = c.metadata } catch (_: Exception) {}
+            h.callback = object : MediaController.Callback() {
+                override fun onPlaybackStateChanged(state: PlaybackState?) { h.state = state; refresh() }
+                override fun onMetadataChanged(metadata: MediaMetadata?) { h.metadata = metadata; refresh() }
+                override fun onSessionDestroyed() { h.state = null; h.metadata = null; refresh() }
             }
-            try { c.registerCallback(callback, main) } catch (_: Exception) {}
-            Held(c, callback)
+            try { c.registerCallback(h.callback, main) } catch (_: Exception) {}
+            h
         }
         refresh()
     }
@@ -114,15 +141,15 @@ object PhoneMediaMonitor {
 
     private fun refresh() {
         val app = context ?: return
+        if (onChange == null) return // the panel is not on screen: nothing is worked out (it catches up when it comes back)
         val facts = held.map { h ->
-            val state = try { h.controller.playbackState?.state ?: 0 } catch (_: Exception) { 0 }
-            val title = try { titleOf(h.controller.metadata) } catch (_: Exception) { "" }
-            SessionFacts(h.controller.packageName, PhoneMediaModel.isPlaying(state), PhoneMediaModel.isPaused(state), title.isNotEmpty())
+            val state = h.state?.state ?: 0
+            SessionFacts(h.controller.packageName, PhoneMediaModel.isPlaying(state), PhoneMediaModel.isPaused(state), titleOf(h.metadata).isNotEmpty())
         }
         val at = PhoneMediaModel.pick(app.packageName, facts)
-        val controller = if (at < 0) null else held[at].controller
-        chosen = controller
-        val track = controller?.let { try { build(app, it) } catch (_: Exception) { null } }
+        val picked = if (at < 0) null else held[at]
+        chosen = picked?.controller
+        val track = picked?.let { try { build(app, it) } catch (_: Exception) { null } }
         val now = SystemClock.elapsedRealtime()
         val before = reading
         if (!PhoneMediaModel.worthSending(before.track, before.at, track, now)) return
@@ -134,9 +161,9 @@ object PhoneMediaMonitor {
         onChange?.invoke(next)
     }
 
-    private fun build(app: Context, c: MediaController): PhoneTrack {
-        val md = c.metadata
-        val st = c.playbackState
+    private fun build(app: Context, h: Held): PhoneTrack {
+        val md = h.metadata
+        val st = h.state
         val title = titleOf(md)
         val artist = PhoneMediaModel.cut(md?.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: md?.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST)
             ?: md?.getString(MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE))
@@ -148,26 +175,43 @@ object PhoneMediaMonitor {
         val pos = PhoneMediaModel.position(st?.position ?: -1, st?.lastPositionUpdateTime ?: 0, SystemClock.elapsedRealtime(),
             st?.playbackSpeed ?: 1f, playing, dur)
         val canSeek = dur > 0 && known && (st!!.actions and PlaybackState.ACTION_SEEK_TO) != 0L
-        return PhoneTrack(c.packageName, label(app, c.packageName), title, artist, album, playing, pos, dur, canSeek,
-            PhoneMediaModel.rate(st?.playbackSpeed ?: 1f), coverFor(c.packageName, title, artist, album, md))
+        val pkg = h.controller.packageName
+        return PhoneTrack(pkg, label(app, pkg), title, artist, album, playing, pos, dur, canSeek,
+            PhoneMediaModel.rate(st?.playbackSpeed ?: 1f), coverFor(pkg, title, artist, album, md))
     }
 
-    /** The id of the cover picture for this song (0 for none); the picture is encoded once per song, and again only if it arrives late. */
+    /**
+     * The id of the cover picture for this song (0 while there is none). The picture is scaled and compressed on a background
+     * thread, once per song (and again only if it arrives after the first metadata); when it is ready the song is worked out
+     * again, which tells the page the new id.
+     */
     private fun coverFor(pkg: String, title: String, artist: String, album: String, md: MediaMetadata?): Int {
         val key = "$pkg|$title|$artist|$album"
-        if (key == artKey && (artData != null || md == null)) return artId
         val bitmap = try {
             md?.getBitmap(MediaMetadata.METADATA_KEY_ART) ?: md?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
                 ?: md?.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
         } catch (_: Exception) { null }
-        if (key == artKey && bitmap == null) return artId
+        if (key == artKey && (artHadBitmap || bitmap == null)) return artId // this song's cover is done, pending, or there is none
+        coverGen++
+        val gen = coverGen
         artKey = key
-        artData = bitmap?.let { encode(it) }
-        artId = if (artData == null) 0 else PhoneMediaModel.ART_ID_BASE + ++artSeq
-        return artId
+        artHadBitmap = bitmap != null
+        artData = null
+        artId = 0
+        if (bitmap == null) return 0
+        encoder.execute {
+            val data = encode(bitmap)
+            main.post {
+                if (gen != coverGen || key != artKey) return@post // another song since
+                artData = data
+                artId = if (data == null) 0 else PhoneMediaModel.ART_ID_BASE + ++artSeq
+                if (artId != 0) refresh()
+            }
+        }
+        return 0
     }
 
-    /** A small JPEG (at most 256 px) as a data URL: the panel shows it in a card a few centimetres wide. */
+    /** A small JPEG (at most 256 px) as a data URL: the panel shows it in a card a few centimetres wide. Runs off the main thread. */
     private fun encode(src: Bitmap): String? = try {
         val side = maxOf(src.width, src.height)
         val scaled = if (side > 256) Bitmap.createScaledBitmap(src, maxOf(1, src.width * 256 / side), maxOf(1, src.height * 256 / side), true) else src
@@ -176,9 +220,10 @@ object PhoneMediaMonitor {
         "data:image/jpeg;base64," + Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
     } catch (_: Exception) { null }
 
-    private fun label(app: Context, pkg: String): String = try {
-        app.packageManager.getApplicationLabel(app.packageManager.getApplicationInfo(pkg, 0)).toString()
-    } catch (_: Exception) { pkg }
+    /** The app's name, asked of the package manager once per app. */
+    private fun label(app: Context, pkg: String): String = labels.getOrPut(pkg) {
+        try { app.packageManager.getApplicationLabel(app.packageManager.getApplicationInfo(pkg, 0)).toString() } catch (_: Exception) { pkg }
+    }
 
     private fun audio(app: Context) = app.getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
@@ -213,7 +258,7 @@ object PhoneMediaMonitor {
                 "playpause" -> if (PhoneMediaModel.isPlaying(c.playbackState?.state ?: 0)) t.pause() else t.play()
                 "next" -> t.skipToNext()
                 "prev" -> t.skipToPrevious()
-                "seek" -> t.seekTo(maxOf(0L, ms))
+                "seek" -> t.seekTo(PhoneMediaModel.seekTarget(ms, reading.track?.durMs ?: 0))
             }
             true
         } catch (_: Exception) { false }

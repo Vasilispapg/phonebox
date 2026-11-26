@@ -10,7 +10,7 @@ const mac = (extra = {}) => ({ app: 'Music', title: 'Mac song', artist: 'Mac art
 
 const PAGES = [{ id: 'music', title: 'Music', icon: '', enabled: true, widgets: [{ id: 'm', type: 'media', x: 0, y: 0, w: 12, h: 6 }] }];
 
-async function open(page, initial = null) {
+async function open(page, initial = null, pages = PAGES) {
   await page.addInitScript((first) => {
     window.__calls = [];
     window.__phone = first;
@@ -28,7 +28,7 @@ async function open(page, initial = null) {
   await page.evaluate((pages) => {
     const cfg = JSON.parse(localStorage.getItem('pb-demo-config') || 'null') || {};
     localStorage.setItem('pb-demo-config', JSON.stringify({ ...cfg, pages, rules: [], shortcuts: cfg.shortcuts || [] }));
-  }, PAGES);
+  }, pages);
   await page.reload();
   await expect(page.locator('.m-title').first()).toBeVisible();
   await page.evaluate(() => window.onAppPause(true)); // the demo's own once-a-second state would replace the media
@@ -59,11 +59,21 @@ test('a song playing on the computer wins over the phone\'s', async ({ page }) =
   await expect(page.locator('.m-title').first()).toHaveText('Mac song');
 });
 
-test('a paused song on the computer gives way to the phone\'s playing one, and takes the widget back when the phone stops', async ({ page }) => {
+test('a paused song on the computer gives way to the phone\'s playing one, and when the phone pauses too the phone stays shown', async ({ page }) => {
   await open(page, song());
   await frame(page, mac({ playing: false }));
   await expect(page.locator('.m-title').first()).toHaveText('Phone song');
-  await phoneSays(page, song({ playing: false }));
+  await phoneSays(page, song({ playing: false })); // both are paused now: Play must start the one that was on screen
+  await expect(page.locator('.m-title').first()).toHaveText('Phone song');
+  await page.locator('[data-media="playpause"]').first().click();
+  expect(await page.evaluate(() => window.__calls.map((c) => c[0]))).toEqual(['playpause']);
+});
+
+test('when neither plays, the computer\'s song stays shown if it was the one on screen', async ({ page }) => {
+  await open(page, song({ playing: false }));
+  await frame(page, mac());
+  await expect(page.locator('.m-title').first()).toHaveText('Mac song');
+  await frame(page, mac({ playing: false })); // the computer pauses, the phone is paused too: still the computer's
   await expect(page.locator('.m-title').first()).toHaveText('Mac song');
 });
 
@@ -208,6 +218,60 @@ test('a keyboard seek begun on the phone\'s song is dropped when the source chan
   await page.clock.runFor(600);
   expect(await page.evaluate(() => window.__calls.filter((c) => c[0] === 'seek'))).toEqual([]);
   expect(await page.evaluate(() => window.__posts.filter((p) => p.includes('/media/seek')))).toEqual([]); // nor to the computer
+});
+
+const HTML_PAGES = [{ id: 'music', title: 'Music', icon: '', enabled: true, widgets: [
+  { id: 'm', type: 'media', x: 0, y: 0, w: 6, h: 6 },
+  { id: 'h', type: 'html', x: 6, y: 0, w: 6, h: 6, options: { html: '<script>addEventListener("message",function(e){var d=e.data;if(d&&d.phonebox==="data"&&d.kind==="state")parent.postMessage({probe:JSON.stringify(d.value&&d.value.media)},"*")})</script>' } },
+] }];
+
+test('a Custom HTML widget never gets the phone\'s song: its frame sees the agent\'s media only', async ({ page }) => {
+  await page.addInitScript(() => { window.__probes = []; addEventListener('message', (e) => { if (e.data && 'probe' in e.data) window.__probes.push(e.data.probe); }); });
+  await open(page, song(), HTML_PAGES);
+  await frame(page, null);
+  await expect(page.locator('.m-title').first()).toHaveText('Phone song'); // the Now playing widget shows it
+  await phoneSays(page, song({ title: 'Another phone song' }));
+  await frame(page, mac({ playing: false }));
+  await expect.poll(() => page.evaluate(() => window.__probes.length)).toBeGreaterThan(1);
+  await page.clock.runFor(500);
+  const probes = await page.evaluate(() => window.__probes);
+  expect(probes.some((p) => p.includes('song') && p.includes('Mac song')), 'the agent\'s own media does reach the frame').toBe(true);
+  expect(probes.filter((p) => p.includes('Phone song') || p.includes('Another phone song') || p.includes('Phone artist'))).toEqual([]);
+});
+
+test('with the switch off the page is left alone: a null from the phone changes nothing and an old agent sample is not taken for a new one', async ({ page }) => {
+  await open(page, null);
+  await frame(page, mac());
+  const before = await page.evaluate(async () => { const m = await import('/panel/main.js'); window.__m = m.media; return Math.round(m.mediaPosMs(m.media)); });
+  await page.clock.runFor(300_000); // five minutes in the background
+  await page.evaluate(() => window.onPhoneMedia('null'));
+  await page.evaluate(() => window.onPhoneMedia('null'));
+  const after = await page.evaluate(async () => { const m = await import('/panel/main.js'); return { same: m.media === window.__m, pos: Math.round(m.mediaPosMs(m.media)) }; });
+  expect(after.same, 'the media object is the one it was').toBe(true);
+  expect(after.pos).toBeGreaterThan(before + 90_000); // it kept counting; it did not go back to the old sample's position
+});
+
+test('going back to the computer\'s song counts on from its last sample, not from where that sample was', async ({ page }) => {
+  await open(page, song());
+  await frame(page, mac({ posMs: 10_000 }));
+  await page.locator('.m-swap').first().click(); // the phone
+  await expect(page.locator('.m-title').first()).toHaveText('Phone song');
+  await page.clock.runFor(60_000);
+  await page.locator('.m-swap').first().click(); // and back
+  await expect(page.locator('.m-title').first()).toHaveText('Mac song');
+  const pos = await page.evaluate(async () => { const m = await import('/panel/main.js'); return Math.round(m.mediaPosMs(m.media)); });
+  expect(pos).toBeGreaterThan(69_000);
+  expect(pos).toBeLessThan(72_000);
+});
+
+test('before the agent has answered (no state yet) the phone\'s song is still shown and its buttons work', async ({ page }) => {
+  await open(page, null);
+  await frame(page, null); // the computer says it plays nothing...
+  await page.evaluate(async () => { (await import('/panel/main.js')).D.state = null; }); // ...and there is no state at all (the PC is off)
+  await phoneSays(page, song());
+  await expect(page.locator('.m-title').first()).toHaveText('Phone song');
+  await page.locator('[data-media="next"]').first().click();
+  expect(await page.evaluate(() => window.__calls.map((c) => c[0]))).toEqual(['next']);
 });
 
 test('lyrics are not looked up for the phone\'s songs (the agent only knows the computer\'s)', async ({ page }) => {
